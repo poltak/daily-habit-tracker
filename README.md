@@ -65,7 +65,10 @@ The Setup screen manages groups, activities, and goals: rename, regroup,
 reorder, archive/restore, change Material Symbols Rounded icons, and cycle goal
 schedules. The Calendar screen loads filled days directly from D1; selecting a
 day opens its entry. The Entries screen paginates older records instead of
-loading the complete history into the first response.
+loading the complete history into the first response. The Log screen preserves
+unsaved drafts per logical date in device-local storage and clearly reports
+online, offline, and failed-save states; a successful save clears that local
+draft.
 
 ## Cloudflare deployment notes
 

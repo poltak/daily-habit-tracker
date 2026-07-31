@@ -13,7 +13,7 @@
     "dev:wrangler": "npm run build && npm run db:migrate:local && wrangler dev --config dist/server/wrangler.json --local --persist-to .wrangler/state --port 3000",
     "deploy": "npm run build && wrangler deploy --config dist/server/wrangler.json",
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
-    "test": "npm run build && npm run typecheck && npm run test:import && node --test --test-concurrency=1 tests/*.test.mjs",
+    "test": "npm run build && npm run typecheck && npm run test:import && node --experimental-strip-types --test --test-concurrency=1 tests/*.test.mjs",
     "test:import": "python3 -m unittest discover -s tests -p 'test_*.py'",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "typecheck": "tsc --noEmit",

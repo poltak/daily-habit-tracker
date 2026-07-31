@@ -21,7 +21,9 @@ button:disabled { cursor: wait; opacity: .68; }
 .brand { border: 0; background: none; display: inline-flex; align-items: center; gap: 10px; color: var(--ink); font-weight: 800; letter-spacing: -.04em; font-size: 20px; padding: 0; }
 .brand-mark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 12px 12px 12px 4px; color: #fff; background: var(--accent); font-weight: 900; font-size: 23px; box-shadow: 0 5px 12px rgba(231, 131, 99, .25); }
 .topbar-date { color: var(--muted); font-size: 14px; flex: 1; text-align: center; }
-.connection-pill { color: #65816f; background: #ecf5ef; border: 1px solid #d6e9dc; padding: 7px 11px; border-radius: 999px; font-size: 12px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+.connection-pill { color: #65816f; background: #ecf5ef; border: 1px solid #d6e9dc; padding: 7px 11px; border-radius: 999px; font-size: 12px; font-weight: 700; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.connection-pill.checking { color: #6d7480; background: #f0f1f3; border-color: #dfe2e6; }
+.connection-pill.offline, .connection-pill.error { color: #a34f3d; background: #fbe7df; border-color: #f1c8ba; }
 .status-dot { width: 7px; height: 7px; background: #6bb17f; border-radius: 50%; }
 .content-shell { width: min(100% - 32px, 760px); margin: 0 auto; padding: 38px 0 48px; }
 .hero-card { padding: 34px; border-radius: 28px; background: #e4eee5; display: flex; gap: 26px; align-items: flex-end; justify-content: space-between; box-shadow: var(--shadow); }
@@ -36,6 +38,7 @@ button:disabled { cursor: wait; opacity: .68; }
 .notice { margin: 18px 0 -2px; padding: 12px 15px; border-radius: 14px; font-size: 14px; font-weight: 700; }
 .notice.success { background: #e4f2e7; color: #3e7650; }
 .notice.error { background: #fbe7df; color: #a34f3d; }
+.notice.info { background: #e8f0f4; color: #456d80; }
 .panel, .settings-card { background: var(--card); border: 1px solid rgba(231, 227, 218, .88); border-radius: 24px; padding: 25px; margin-top: 18px; box-shadow: var(--shadow); }
 .section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 19px; }
 .section-heading h2 { margin: 5px 0 0; font-size: 21px; letter-spacing: -.035em; }
@@ -69,9 +72,11 @@ button:disabled { cursor: wait; opacity: .68; }
 .goal-copy strong { font-size: 14px; }
 .goal-copy small, .settings-row small { color: var(--muted); font-size: 12px; }
 .goal-arrow, .timeline-arrow { color: #a4b0a8; font-size: 22px; }
-.save-bar { margin-top: 18px; padding: 17px 20px; border-radius: 20px; background: var(--ink); color: #fff; display: flex; align-items: center; justify-content: space-between; gap: 16px; position: sticky; bottom: 16px; z-index: 5; box-shadow: 0 16px 36px rgba(38, 52, 46, .22); }
+.save-bar { margin-top: 18px; padding: 17px 20px; border-radius: 20px; background: var(--ink); color: #fff; display: flex; align-items: center; justify-content: space-between; gap: 16px; position: sticky; bottom: 92px; z-index: 11; box-shadow: 0 16px 36px rgba(38, 52, 46, .22); }
 .save-bar > div:first-child { display: grid; gap: 4px; }
 .save-bar span { color: #b8c7bc; font-size: 12px; }
+.save-bar .draft-status { color: #f4c3b3; font-size: 11px; display: inline-flex; align-items: center; gap: 4px; }
+.draft-status .material-symbols-rounded { font-size: 14px; }
 .save-actions { display: flex; align-items: center; gap: 8px; }
 .primary-button, .secondary-button, .ghost-button { border: 0; border-radius: 12px; padding: 11px 15px; font-weight: 800; font-size: 13px; }
 .primary-button { color: #fff; background: var(--accent); }
@@ -186,7 +191,7 @@ button:disabled { cursor: wait; opacity: .68; }
   .mood-emoji { font-size: 25px; }
   .activity-grid { grid-template-columns: 1fr 1fr; gap: 6px; }
   .activity-button { min-height: 51px; padding: 7px 8px; font-size: 12px; }
-  .save-bar { display: block; padding: 14px 15px; bottom: 84px; }
+  .save-bar { display: block; padding: 14px 15px; bottom: 92px; }
   .save-actions { margin-top: 11px; justify-content: flex-end; }
   .inline-form.stacked-mobile { display: grid; grid-template-columns: 1fr 1fr; }
   .inline-form.stacked-mobile input { grid-column: 1 / -1; }

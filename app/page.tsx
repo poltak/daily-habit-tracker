@@ -9,16 +9,12 @@ import {
   type Mood,
   isLogicalDate,
 } from "../lib/daylio";
+import { clearStoredDraft, readActiveStoredDraft, recoverStoredDraft, rememberDraftDate, type Draft, writeStoredDraft } from "../lib/draft-storage";
 import { ACTIVITY_ICON_CHOICES, UI_ICONS } from "../lib/icons";
 
 type View = "log" | "calendar" | "entries" | "settings";
-type Draft = {
-  moodId: string;
-  activityIds: string[];
-  completedGoalIds: string[];
-  localTime: string;
-  version?: number;
-};
+type ConnectionState = "checking" | "online" | "offline" | "error";
+type Notice = { kind: "success" | "error" | "info"; text: string };
 
 const EMPTY_DRAFT: Draft = { moodId: "", activityIds: [], completedGoalIds: [], localTime: "23:00" };
 
@@ -45,6 +41,11 @@ function draftFromEntry(entry: Entry | null): Draft {
   return { moodId: entry.moodId, activityIds: entry.activityIds, completedGoalIds: entry.completedGoalIds, localTime: entry.localTime, version: entry.version };
 }
 
+function draftForDate(logicalDate: string, serverEntry: Entry | null) {
+  const recovered = recoverStoredDraft(logicalDate, serverEntry);
+  return recovered ? { draft: recovered, restored: true } : { draft: draftFromEntry(serverEntry), restored: false };
+}
+
 function moodFor(moods: Mood[], id: string) {
   return moods.find((mood) => mood.id === id);
 }
@@ -66,17 +67,35 @@ export default function Home() {
   const [calendarMonth, setCalendarMonth] = useState("");
   const [calendarDates, setCalendarDates] = useState<string[]>([]);
   const [isLoadingCalendar, setIsLoadingCalendar] = useState(false);
-  const [message, setMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+  const [hasLocalDraft, setHasLocalDraft] = useState(false);
+  const [connectionState, setConnectionState] = useState<ConnectionState>("checking");
+  const [message, setMessage] = useState<Notice | null>(null);
+
+  function applyBootstrap(next: Bootstrap, preferredDate: string, announceRestore = false) {
+    const nextDate = preferredDate || readActiveStoredDraft()?.logicalDate || next.today;
+    const recovered = draftForDate(nextDate, getEntryForDate(next.entries, nextDate) ?? null);
+    rememberDraftDate(nextDate);
+    setData(next);
+    setSelectedDate(nextDate);
+    setCalendarMonth((current) => current || nextDate.slice(0, 7));
+    setHasMoreEntries(next.entries.length >= 30);
+    setDraft(recovered.draft);
+    setHasLocalDraft(recovered.restored);
+    if (announceRestore && recovered.restored) setMessage({ kind: "info", text: `Restored unsaved changes for ${shortDate(nextDate)}.` });
+  }
 
   async function loadBootstrap() {
-    const response = await fetch("/api/bootstrap", { cache: "no-store" });
-    if (!response.ok) throw new Error("Could not connect to your journal.");
-    const next = (await response.json()) as Bootstrap;
-    setData(next);
-    setSelectedDate((current) => current || next.today);
-    setCalendarMonth((current) => current || next.today.slice(0, 7));
-    setHasMoreEntries(next.entries.length >= 30);
-    setDraft(draftFromEntry(getEntryForDate(next.entries, next.today) ?? null));
+    setConnectionState("checking");
+    try {
+      const response = await fetch("/api/bootstrap", { cache: "no-store" });
+      if (!response.ok) throw new Error("Could not connect to your journal.");
+      const next = (await response.json()) as Bootstrap;
+      applyBootstrap(next, selectedDate || next.today);
+      setConnectionState("online");
+    } catch (error) {
+      setConnectionState(navigator.onLine ? "error" : "offline");
+      throw error;
+    }
   }
 
   useEffect(() => {
@@ -88,16 +107,29 @@ export default function Home() {
       })
       .then((next) => {
         if (cancelled) return;
-        setData(next);
-        setSelectedDate(next.today);
-        setCalendarMonth(next.today.slice(0, 7));
-        setHasMoreEntries(next.entries.length >= 30);
-        setDraft(draftFromEntry(getEntryForDate(next.entries, next.today) ?? null));
+        applyBootstrap(next, "", true);
+        setConnectionState("online");
       })
       .catch((error: Error) => {
-        if (!cancelled) setMessage({ kind: "error", text: error.message });
+        if (!cancelled) {
+          setConnectionState(navigator.onLine ? "error" : "offline");
+          setMessage({ kind: "error", text: error.message });
+        }
       });
     return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    function updateConnection() {
+      setConnectionState(navigator.onLine ? "online" : "offline");
+    }
+    updateConnection();
+    window.addEventListener("online", updateConnection);
+    window.addEventListener("offline", updateConnection);
+    return () => {
+      window.removeEventListener("online", updateConnection);
+      window.removeEventListener("offline", updateConnection);
+    };
   }, []);
 
   useEffect(() => {
@@ -117,29 +149,41 @@ export default function Home() {
       if (!response) return null;
       if (!response.ok) throw new Error("Could not load that month.");
       return (await response.json()) as { dates: string[] };
-    }).then((result) => { if (result && !cancelled) setCalendarDates(result.dates); })
-      .catch((error: Error) => { if (!cancelled) setMessage({ kind: "error", text: error.message }); })
+    }).then((result) => { if (result && !cancelled) { setCalendarDates(result.dates); setConnectionState("online"); } })
+      .catch((error: Error) => { if (!cancelled) { setConnectionState(navigator.onLine ? "error" : "offline"); setMessage({ kind: "error", text: error.message }); } })
       .finally(() => { if (!cancelled) setIsLoadingCalendar(false); });
     return () => { cancelled = true; };
   }, [calendarMonth, view]);
 
   async function chooseDate(nextDate: string) {
     if (!isLogicalDate(nextDate)) return;
+    rememberDraftDate(nextDate);
     setSelectedDate(nextDate);
     setCalendarMonth(nextDate.slice(0, 7));
     setMessage(null);
     const localEntry = data ? getEntryForDate(data.entries, nextDate) : null;
     if (localEntry) {
-      setDraft(draftFromEntry(localEntry));
+      const recovered = draftForDate(nextDate, localEntry);
+      setDraft(recovered.draft);
+      setHasLocalDraft(recovered.restored);
+      if (recovered.restored) setMessage({ kind: "info", text: `Restored unsaved changes for ${shortDate(nextDate)}.` });
       return;
     }
     setIsLoadingDate(true);
     try {
       const response = await fetch(`/api/entries/${nextDate}`, { cache: "no-store" });
-      if (response.status === 404) setDraft({ ...EMPTY_DRAFT });
-      else if (!response.ok) throw new Error("Could not load that date.");
-      else setDraft(draftFromEntry(((await response.json()) as { entry: Entry }).entry));
+      let serverEntry: Entry | null = null;
+      if (response.status !== 404) {
+        if (!response.ok) throw new Error("Could not load that date.");
+        serverEntry = ((await response.json()) as { entry: Entry }).entry;
+      }
+      const recovered = draftForDate(nextDate, serverEntry);
+      setDraft(recovered.draft);
+      setHasLocalDraft(recovered.restored);
+      setConnectionState("online");
+      if (recovered.restored) setMessage({ kind: "info", text: `Restored unsaved changes for ${shortDate(nextDate)}.` });
     } catch (error) {
+      setConnectionState(navigator.onLine ? "error" : "offline");
       setMessage({ kind: "error", text: (error as Error).message });
     } finally {
       setIsLoadingDate(false);
@@ -147,7 +191,10 @@ export default function Home() {
   }
 
   function updateDraft(patch: Partial<Draft>) {
-    setDraft((current) => ({ ...current, ...patch }));
+    const next = { ...draft, ...patch };
+    setDraft(next);
+    if (selectedDate) writeStoredDraft(selectedDate, next);
+    setHasLocalDraft(true);
     setMessage(null);
   }
 
@@ -164,7 +211,13 @@ export default function Home() {
       setMessage({ kind: "error", text: "Pick the mood that best sums up the day." });
       return;
     }
+    if (!navigator.onLine) {
+      setMessage({ kind: "error", text: "You’re offline. Your draft is safe on this device; reconnect to save it." });
+      setConnectionState("offline");
+      return;
+    }
     setIsSaving(true);
+    setConnectionState("checking");
     setMessage(null);
     try {
       const response = await fetch(`/api/entries/${selectedDate}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(draft) });
@@ -172,9 +225,13 @@ export default function Home() {
       if (!response.ok || !result.entry) throw new Error(result.error ?? "Could not save the entry.");
       setData((current) => current ? { ...current, entries: [result.entry!, ...current.entries.filter((entry) => entry.logicalDate !== selectedDate)] } : current);
       setDraft(draftFromEntry(result.entry));
+      clearStoredDraft(selectedDate);
+      setHasLocalDraft(false);
+      setConnectionState("online");
       setMessage({ kind: "success", text: `Saved ${shortDate(selectedDate)}.` });
     } catch (error) {
-      setMessage({ kind: "error", text: (error as Error).message });
+      setConnectionState(navigator.onLine ? "error" : "offline");
+      setMessage({ kind: "error", text: `${(error as Error).message} Your draft is still stored on this device.` });
     } finally {
       setIsSaving(false);
     }
@@ -182,13 +239,22 @@ export default function Home() {
 
   async function deleteSelectedEntry() {
     if (!draft.version || !window.confirm(`Delete the entry for ${friendlyDate(selectedDate)}?`)) return;
+    if (!navigator.onLine) {
+      setMessage({ kind: "error", text: "You’re offline. Reconnect before deleting an entry." });
+      setConnectionState("offline");
+      return;
+    }
     const response = await fetch(`/api/entries/${selectedDate}?expectedVersion=${draft.version}`, { method: "DELETE" });
     if (!response.ok) {
+      setConnectionState(navigator.onLine ? "error" : "offline");
       setMessage({ kind: "error", text: "Could not delete that entry." });
       return;
     }
     setData((current) => current ? { ...current, entries: current.entries.filter((entry) => entry.logicalDate !== selectedDate) } : current);
     setDraft({ ...EMPTY_DRAFT });
+    clearStoredDraft(selectedDate);
+    setHasLocalDraft(false);
+    setConnectionState("online");
     setMessage({ kind: "success", text: "Entry deleted." });
   }
 
@@ -201,7 +267,9 @@ export default function Home() {
       const result = (await response.json()) as { entries: Entry[]; hasMore: boolean };
       setData((current) => current ? { ...current, entries: [...current.entries, ...result.entries.filter((entry) => !current.entries.some((existing) => existing.id === entry.id))] } : current);
       setHasMoreEntries(result.hasMore);
+      setConnectionState("online");
     } catch (error) {
+      setConnectionState(navigator.onLine ? "error" : "offline");
       setMessage({ kind: "error", text: (error as Error).message });
     } finally {
       setIsLoadingMore(false);
@@ -215,12 +283,12 @@ export default function Home() {
       <header className="topbar">
         <button className="brand" onClick={() => setView("log")} aria-label="Go to log"><span className="brand-mark">d</span><span>daymark</span></button>
         <div className="topbar-date">{view === "log" ? friendlyDate(selectedDate) : view === "calendar" ? "Your calendar" : view === "entries" ? "Your entries" : "Your setup"}</div>
-        <div className="connection-pill"><Icon name={UI_ICONS.sync} /> synced</div>
+        <div className={`connection-pill ${connectionState}`} role="status"><Icon name={connectionState === "offline" ? "cloud_off" : connectionState === "error" ? "cloud_alert" : UI_ICONS.sync} /> {connectionState === "checking" ? "checking" : connectionState === "online" ? "online" : connectionState === "offline" ? "offline" : "save failed"}</div>
       </header>
 
       <main className="content-shell">
-        {message && view !== "log" && <div className={`notice ${message.kind}`} role="status">{message.kind === "success" ? "✓" : "!"} {message.text}</div>}
-        {view === "log" && <LogView data={data} selectedDate={selectedDate} draft={draft} activityQuery={activityQuery} isLoadingDate={isLoadingDate} onDate={chooseDate} onDraft={updateDraft} onActivityQuery={setActivityQuery} onToggleActivity={toggleActivity} onToggleGoal={toggleGoal} onSave={saveEntry} onDelete={deleteSelectedEntry} isSaving={isSaving} message={message} />}
+        {message && view !== "log" && <div className={`notice ${message.kind}`} role="status">{message.kind === "success" ? "✓" : message.kind === "info" ? "↻" : "!"} {message.text}</div>}
+        {view === "log" && <LogView data={data} selectedDate={selectedDate} draft={draft} hasLocalDraft={hasLocalDraft} activityQuery={activityQuery} isLoadingDate={isLoadingDate} onDate={chooseDate} onDraft={updateDraft} onActivityQuery={setActivityQuery} onToggleActivity={toggleActivity} onToggleGoal={toggleGoal} onSave={saveEntry} onDelete={deleteSelectedEntry} isSaving={isSaving} message={message} />}
         {view === "calendar" && <CalendarView month={calendarMonth} dates={calendarDates} today={data.today} isLoading={isLoadingCalendar} onMonth={setCalendarMonth} onOpenDate={(date) => { setView("log"); void chooseDate(date); }} />}
         {view === "entries" && <EntriesView data={data} onEdit={(date) => { setView("log"); void chooseDate(date); }} onLoadMore={loadOlderEntries} hasMore={hasMoreEntries} isLoadingMore={isLoadingMore} />}
         {view === "settings" && <SettingsView data={data} onRefresh={loadBootstrap} onMessage={setMessage} />}
@@ -236,10 +304,11 @@ export default function Home() {
   );
 }
 
-function LogView({ data, selectedDate, draft, activityQuery, isLoadingDate, onDate, onDraft, onActivityQuery, onToggleActivity, onToggleGoal, onSave, onDelete, isSaving, message }: {
+function LogView({ data, selectedDate, draft, hasLocalDraft, activityQuery, isLoadingDate, onDate, onDraft, onActivityQuery, onToggleActivity, onToggleGoal, onSave, onDelete, isSaving, message }: {
   data: Bootstrap;
   selectedDate: string;
   draft: Draft;
+  hasLocalDraft: boolean;
   activityQuery: string;
   isLoadingDate: boolean;
   onDate: (date: string) => void;
@@ -250,7 +319,7 @@ function LogView({ data, selectedDate, draft, activityQuery, isLoadingDate, onDa
   onSave: () => void;
   onDelete: () => void;
   isSaving: boolean;
-  message: { kind: "success" | "error"; text: string } | null;
+  message: Notice | null;
 }) {
   const existing = getEntryForDate(data.entries, selectedDate);
   const groups = useMemo(() => {
@@ -272,7 +341,7 @@ function LogView({ data, selectedDate, draft, activityQuery, isLoadingDate, onDa
       </div>
     </section>
 
-    {message && <div className={`notice ${message.kind}`} role="status">{message.kind === "success" ? "✓" : "!"} {message.text}</div>}
+    {message && <div className={`notice ${message.kind}`} role="status">{message.kind === "success" ? "✓" : message.kind === "info" ? "↻" : "!"} {message.text}</div>}
 
     <section className="panel mood-panel">
       <div className="section-heading"><div><p className="eyebrow">Overall mood</p><h2>Pick one</h2></div><span className="required-label">required</span></div>
@@ -291,7 +360,7 @@ function LogView({ data, selectedDate, draft, activityQuery, isLoadingDate, onDa
       <div className="goal-list">{data.goals.filter((goal) => !goal.archived).map((goal) => <GoalRow key={goal.id} goal={goal} activity={activityFor(data.activities, goal.activityId)} checked={draft.completedGoalIds.includes(goal.id)} onToggle={() => onToggleGoal(goal.id)} />)}</div>
     </section>
 
-    <div className="save-bar"><div><strong>{existing ? "Edit this entry" : "Ready to save?"}</strong><span>{friendlyDate(selectedDate)} · {draft.activityIds.length} activities</span></div><div className="save-actions">{existing && <button className="ghost-button danger" onClick={onDelete}>Delete</button>}<button className="primary-button" onClick={onSave} disabled={isSaving}>{isSaving ? "Saving…" : existing ? "Update entry" : "Save entry"}</button></div></div>
+    <div className="save-bar"><div><strong>{existing ? "Edit this entry" : "Ready to save?"}</strong><span>{friendlyDate(selectedDate)} · {draft.activityIds.length} activities</span>{hasLocalDraft && <small className="draft-status"><Icon name="save" /> Unsaved changes stored on this device</small>}</div><div className="save-actions">{existing && <button className="ghost-button danger" onClick={onDelete}>Delete</button>}<button className="primary-button" onClick={onSave} disabled={isSaving}>{isSaving ? "Saving…" : existing ? "Update entry" : "Save entry"}</button></div></div>
   </>;
 }
 
