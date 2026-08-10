@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   type Activity,
+  type ActivityGroup,
   type Bootstrap,
   type Entry,
   type Goal,
@@ -11,6 +12,7 @@ import {
 } from "../lib/daylio";
 import { clearStoredDraft, readActiveStoredDraft, recoverStoredDraft, rememberDraftDate, type Draft, writeStoredDraft } from "../lib/draft-storage";
 import { ACTIVITY_ICON_CHOICES, UI_ICONS } from "../lib/icons";
+import { summarizeActivityGroup } from "../lib/activity-groups";
 
 type View = "log" | "calendar" | "entries" | "settings";
 type ConnectionState = "checking" | "online" | "offline" | "error";
@@ -70,6 +72,11 @@ export default function Home() {
   const [hasLocalDraft, setHasLocalDraft] = useState(false);
   const [connectionState, setConnectionState] = useState<ConnectionState>("checking");
   const [message, setMessage] = useState<Notice | null>(null);
+
+  function changeView(nextView: View) {
+    setView(nextView);
+    setMessage(null);
+  }
 
   function applyBootstrap(next: Bootstrap, preferredDate: string, announceRestore = false) {
     const nextDate = preferredDate || readActiveStoredDraft()?.logicalDate || next.today;
@@ -149,7 +156,7 @@ export default function Home() {
       if (!response) return null;
       if (!response.ok) throw new Error("Could not load that month.");
       return (await response.json()) as { dates: string[] };
-    }).then((result) => { if (result && !cancelled) { setCalendarDates(result.dates); setConnectionState("online"); } })
+    }).then((result) => { if (result && !cancelled) { setCalendarDates(result.dates); setConnectionState("online"); setMessage(null); } })
       .catch((error: Error) => { if (!cancelled) { setConnectionState(navigator.onLine ? "error" : "offline"); setMessage({ kind: "error", text: error.message }); } })
       .finally(() => { if (!cancelled) setIsLoadingCalendar(false); });
     return () => { cancelled = true; };
@@ -281,24 +288,24 @@ export default function Home() {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <button className="brand" onClick={() => setView("log")} aria-label="Go to log"><span className="brand-mark">d</span><span>daymark</span></button>
+        <button className="brand" onClick={() => changeView("log")} aria-label="Go to log"><span className="brand-mark">d</span><span>daymark</span></button>
         <div className="topbar-date">{view === "log" ? friendlyDate(selectedDate) : view === "calendar" ? "Your calendar" : view === "entries" ? "Your entries" : "Your setup"}</div>
-        <div className={`connection-pill ${connectionState}`} role="status"><Icon name={connectionState === "offline" ? "cloud_off" : connectionState === "error" ? "cloud_alert" : UI_ICONS.sync} /> {connectionState === "checking" ? "checking" : connectionState === "online" ? "online" : connectionState === "offline" ? "offline" : "save failed"}</div>
+        <div className={`connection-pill ${connectionState}`} role="status"><Icon name={connectionState === "offline" ? "cloud_off" : connectionState === "error" ? "cloud_alert" : UI_ICONS.sync} /> {connectionState === "checking" ? "checking" : connectionState === "online" ? "online" : connectionState === "offline" ? "offline" : "sync issue"}</div>
       </header>
 
       <main className="content-shell">
         {message && view !== "log" && <div className={`notice ${message.kind}`} role="status">{message.kind === "success" ? "✓" : message.kind === "info" ? "↻" : "!"} {message.text}</div>}
         {view === "log" && <LogView data={data} selectedDate={selectedDate} draft={draft} hasLocalDraft={hasLocalDraft} activityQuery={activityQuery} isLoadingDate={isLoadingDate} onDate={chooseDate} onDraft={updateDraft} onActivityQuery={setActivityQuery} onToggleActivity={toggleActivity} onToggleGoal={toggleGoal} onSave={saveEntry} onDelete={deleteSelectedEntry} isSaving={isSaving} message={message} />}
-        {view === "calendar" && <CalendarView month={calendarMonth} dates={calendarDates} today={data.today} isLoading={isLoadingCalendar} onMonth={setCalendarMonth} onOpenDate={(date) => { setView("log"); void chooseDate(date); }} />}
-        {view === "entries" && <EntriesView data={data} onEdit={(date) => { setView("log"); void chooseDate(date); }} onLoadMore={loadOlderEntries} hasMore={hasMoreEntries} isLoadingMore={isLoadingMore} />}
+        {view === "calendar" && <CalendarView month={calendarMonth} dates={calendarDates} today={data.today} isLoading={isLoadingCalendar} onMonth={setCalendarMonth} onOpenDate={(date) => { changeView("log"); void chooseDate(date); }} />}
+        {view === "entries" && <EntriesView data={data} onEdit={(date) => { changeView("log"); void chooseDate(date); }} onLoadMore={loadOlderEntries} hasMore={hasMoreEntries} isLoadingMore={isLoadingMore} />}
         {view === "settings" && <SettingsView data={data} onRefresh={loadBootstrap} onMessage={setMessage} />}
       </main>
 
       <nav className="bottom-nav" aria-label="Primary navigation">
-        <button className={view === "log" ? "active" : ""} onClick={() => setView("log")}><span className="nav-icon"><Icon name={UI_ICONS.log} /></span><span>Log</span></button>
-        <button className={view === "calendar" ? "active" : ""} onClick={() => setView("calendar")}><span className="nav-icon"><Icon name={UI_ICONS.calendar} /></span><span>Calendar</span></button>
-        <button className={view === "entries" ? "active" : ""} onClick={() => setView("entries")}><span className="nav-icon"><Icon name={UI_ICONS.entries} /></span><span>Entries</span></button>
-        <button className={view === "settings" ? "active" : ""} onClick={() => setView("settings")}><span className="nav-icon"><Icon name={UI_ICONS.settings} /></span><span>Setup</span></button>
+        <button className={view === "log" ? "active" : ""} onClick={() => changeView("log")}><span className="nav-icon"><Icon name={UI_ICONS.log} /></span><span>Log</span></button>
+        <button className={view === "calendar" ? "active" : ""} onClick={() => changeView("calendar")}><span className="nav-icon"><Icon name={UI_ICONS.calendar} /></span><span>Calendar</span></button>
+        <button className={view === "entries" ? "active" : ""} onClick={() => changeView("entries")}><span className="nav-icon"><Icon name={UI_ICONS.entries} /></span><span>Entries</span></button>
+        <button className={view === "settings" ? "active" : ""} onClick={() => changeView("settings")}><span className="nav-icon"><Icon name={UI_ICONS.settings} /></span><span>Setup</span></button>
       </nav>
     </div>
   );
@@ -352,7 +359,7 @@ function LogView({ data, selectedDate, draft, hasLocalDraft, activityQuery, isLo
       <div className="section-heading"><div><p className="eyebrow">Activities</p><h2>What shaped the day?</h2></div><span className="selection-count">{draft.activityIds.length} selected</span></div>
       {draft.activityIds.length > 0 && <div className="selection-row">{draft.activityIds.map((id) => { const activity = activityFor(data.activities, id); return activity ? <button key={id} className="selection-chip" onClick={() => onToggleActivity(id)}><Icon name={activity.icon} /> {activity.name} <span><Icon name={UI_ICONS.close} /></span></button> : null; })}</div>}
       <label className="search-field"><Icon name={UI_ICONS.search} /><input value={activityQuery} onChange={(event) => onActivityQuery(event.target.value)} placeholder="Search your activities" aria-label="Search activities" /></label>
-      {isLoadingDate ? <div className="inline-loading">Loading that day…</div> : <div className="activity-groups">{groups.map(({ group, activities }) => <details key={group.id} open={!activityQuery}><summary><span>{group.name}</span><span>{activities.filter((activity) => draft.activityIds.includes(activity.id)).length} selected</span></summary><div className="activity-grid">{activities.map((activity) => <button key={activity.id} className={`activity-button ${draft.activityIds.includes(activity.id) ? "selected" : ""}`} aria-pressed={draft.activityIds.includes(activity.id)} onClick={() => onToggleActivity(activity.id)}><span className="activity-icon"><Icon name={activity.icon} /></span><span>{activity.name}</span>{draft.activityIds.includes(activity.id) && <span className="check-mark"><Icon name={UI_ICONS.check} /></span>}</button>)}</div></details>)}{groups.length === 0 && <p className="empty-inline">No activities match that search.</p>}</div>}
+      {isLoadingDate ? <div className="inline-loading">Loading that day…</div> : <ActivityGroupList groups={groups} activityQuery={activityQuery} selectedActivityIds={draft.activityIds} onToggleActivity={onToggleActivity} />}
     </section>
 
     <section className="panel goals-panel">
@@ -362,6 +369,44 @@ function LogView({ data, selectedDate, draft, hasLocalDraft, activityQuery, isLo
 
     <div className="save-bar"><div><strong>{existing ? "Edit this entry" : "Ready to save?"}</strong><span>{friendlyDate(selectedDate)} · {draft.activityIds.length} activities</span>{hasLocalDraft && <small className="draft-status"><Icon name="save" /> Unsaved changes stored on this device</small>}</div><div className="save-actions">{existing && <button className="ghost-button danger" onClick={onDelete}>Delete</button>}<button className="primary-button" onClick={onSave} disabled={isSaving}>{isSaving ? "Saving…" : existing ? "Update entry" : "Save entry"}</button></div></div>
   </>;
+}
+
+type ActivityGroupListProps = {
+  groups: Array<{ group: ActivityGroup; activities: Activity[] }>;
+  activityQuery: string;
+  selectedActivityIds: string[];
+  onToggleActivity: (id: string) => void;
+};
+
+function ActivityGroupList({ groups, activityQuery, selectedActivityIds, onToggleActivity }: ActivityGroupListProps) {
+  const hasQuery = activityQuery.trim().length > 0;
+
+  if (groups.length === 0) return <p className="empty-inline">No activities match that search.</p>;
+
+  return <div className="activity-groups">
+    {groups.map(({ group, activities }) => {
+      const summary = summarizeActivityGroup({ activityIds: activities.map((activity) => activity.id), selectedActivityIds });
+      const activityLabel = summary.activityCount === 1 ? "activity" : "activities";
+
+      return <details key={group.id} open={hasQuery || undefined}>
+        <summary>
+          <span>{group.name}</span>
+          <span className="group-summary-meta"><span>{summary.activityCount} {activityLabel} · {summary.selectedCount} selected</span><Icon name="expand_more" className="group-expand-icon" /></span>
+        </summary>
+        <div className="activity-grid">
+          {activities.map((activity) => {
+            const selected = selectedActivityIds.includes(activity.id);
+
+            return <button key={activity.id} className={`activity-button ${selected ? "selected" : ""}`} aria-pressed={selected} onClick={() => onToggleActivity(activity.id)}>
+              <span className="activity-icon"><Icon name={activity.icon} /></span>
+              <span>{activity.name}</span>
+              {selected && <span className="check-mark"><Icon name={UI_ICONS.check} /></span>}
+            </button>;
+          })}
+        </div>
+      </details>;
+    })}
+  </div>;
 }
 
 function GoalRow({ goal, activity, checked, onToggle }: { goal: Goal; activity?: Activity; checked: boolean; onToggle: () => void }) {

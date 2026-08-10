@@ -143,16 +143,26 @@ export class D1DaylioStore {
     return toEntry(result[0], activities.map((item) => item.activity_id), goals.map((item) => item.goal_id));
   }
 
+  private async getPersistedEntry(logicalDate: string) {
+    const result = await rows<EntryRow>(this.database, this.database.prepare("SELECT * FROM entries WHERE logical_date = ? LIMIT 1").bind(logicalDate));
+    return result[0] ?? null;
+  }
+
   async saveEntry(logicalDate: string, input: EntryInput) {
     if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
     const existing = await this.getEntry(logicalDate);
+    const deletedRow = existing ? null : await this.getPersistedEntry(logicalDate);
     if (existing && input.expectedVersion !== undefined && existing.version !== input.expectedVersion) {
       const error = new Error("This entry changed on another device."); (error as Error & { code?: string }).code = "VERSION_CONFLICT"; throw error;
     }
-    const id = existing?.id ?? `entry-${crypto.randomUUID()}`;
+    const id = existing?.id ?? deletedRow?.id ?? `entry-${crypto.randomUUID()}`;
     const timestamp = new Date().toISOString();
-    const version = (existing?.version ?? 0) + 1;
-    const statements = [this.database.prepare(`INSERT INTO entries (id, logical_date, local_time, timezone, timezone_offset_minutes, mood_id, legacy_note_title, legacy_note, version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(logical_date) DO UPDATE SET local_time=excluded.local_time, timezone=excluded.timezone, timezone_offset_minutes=excluded.timezone_offset_minutes, mood_id=excluded.mood_id, legacy_note_title=excluded.legacy_note_title, legacy_note=excluded.legacy_note, version=excluded.version, updated_at=excluded.updated_at, deleted_at=NULL`).bind(id, logicalDate, input.localTime ?? existing?.localTime ?? "23:00", input.timezone ?? existing?.timezone ?? "", input.timezoneOffsetMinutes ?? existing?.timezoneOffsetMinutes ?? null, input.moodId, input.legacyNoteTitle ?? existing?.legacyNoteTitle ?? null, input.legacyNote ?? existing?.legacyNote ?? null, version, existing?.createdAt ?? timestamp, timestamp), this.database.prepare("DELETE FROM entry_activities WHERE entry_id = ?").bind(id), this.database.prepare("DELETE FROM goal_completions WHERE logical_date = ?").bind(logicalDate)];
+    const restoringDeletedEntry = Boolean(deletedRow?.deleted_at);
+    const version = existing ? existing.version + 1 : 1;
+    const entryStatement = restoringDeletedEntry
+      ? this.database.prepare("UPDATE entries SET logical_date = ?, local_time = ?, timezone = ?, timezone_offset_minutes = ?, mood_id = ?, legacy_note_title = ?, legacy_note = ?, version = ?, created_at = ?, updated_at = ?, deleted_at = NULL WHERE id = ?").bind(logicalDate, input.localTime ?? "23:00", input.timezone ?? "", input.timezoneOffsetMinutes ?? null, input.moodId, input.legacyNoteTitle ?? null, input.legacyNote ?? null, version, timestamp, timestamp, id)
+      : this.database.prepare(`INSERT INTO entries (id, logical_date, local_time, timezone, timezone_offset_minutes, mood_id, legacy_note_title, legacy_note, version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(logical_date) DO UPDATE SET local_time=excluded.local_time, timezone=excluded.timezone, timezone_offset_minutes=excluded.timezone_offset_minutes, mood_id=excluded.mood_id, legacy_note_title=excluded.legacy_note_title, legacy_note=excluded.legacy_note, version=excluded.version, updated_at=excluded.updated_at, deleted_at=NULL`).bind(id, logicalDate, input.localTime ?? existing?.localTime ?? "23:00", input.timezone ?? existing?.timezone ?? "", input.timezoneOffsetMinutes ?? existing?.timezoneOffsetMinutes ?? null, input.moodId, input.legacyNoteTitle ?? existing?.legacyNoteTitle ?? null, input.legacyNote ?? existing?.legacyNote ?? null, version, existing?.createdAt ?? timestamp, timestamp);
+    const statements = [entryStatement, this.database.prepare("DELETE FROM entry_activities WHERE entry_id = ?").bind(id), this.database.prepare("DELETE FROM goal_completions WHERE logical_date = ?").bind(logicalDate)];
     statements.push(...[...new Set(input.activityIds)].map((activityId) => this.database.prepare("INSERT INTO entry_activities (entry_id, activity_id) VALUES (?, ?)").bind(id, activityId)));
     statements.push(...[...new Set(input.completedGoalIds)].map((goalId) => this.database.prepare("INSERT INTO goal_completions (id, goal_id, logical_date, entry_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)").bind(`completion-${goalId}-${logicalDate}`, goalId, logicalDate, id, timestamp, timestamp)));
     await this.database.batch(statements);

@@ -109,6 +109,17 @@ test("Wrangler-backed API covers persistence, catalog, calendar, pagination, imp
   const missing = await json("/api/entries/2026-02-03");
   assert.equal(missing.response.status, 404);
 
+  const recreated = await json("/api/entries/2026-02-03", { method: "PUT", body: JSON.stringify({ moodId: "mood-rad", activityIds: [activity.body.activity.id], completedGoalIds: [goal.body.goal.id], localTime: "22:00" }) });
+  assert.equal(recreated.response.status, 200);
+  assert.equal(recreated.body.entry.id, saved.body.entry.id);
+  assert.equal(recreated.body.entry.version, 1);
+  assert.deepEqual(recreated.body.entry.activityIds, [activity.body.activity.id]);
+  assert.deepEqual(recreated.body.entry.completedGoalIds, [goal.body.goal.id]);
+  const reloaded = await json("/api/entries/2026-02-03");
+  assert.equal(reloaded.response.status, 200);
+  assert.deepEqual(reloaded.body.entry.activityIds, [activity.body.activity.id]);
+  assert.deepEqual(reloaded.body.entry.completedGoalIds, [goal.body.goal.id]);
+
   const importPayload = {
     sourceSystem: "daylio",
     sourceSha256: "integration-fixture",
