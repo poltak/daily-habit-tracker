@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Bootstrap, Goal } from "../../lib/daylio";
 import { filterActivityGroups } from "../../lib/activity-groups";
 import { ACTIVITY_ICON_CHOICES, UI_ICONS } from "../../lib/icons";
+import { applyTheme, THEME_MEDIA_QUERY, THEME_STORAGE_KEY, readStoredThemePreference, type ThemePreference } from "../../lib/theme";
 import { Icon } from "./icon";
 
 type SetupMessage = { kind: "success" | "error"; text: string };
@@ -15,6 +16,12 @@ export type SetupViewProps = {
 };
 
 type CatalogKind = "group" | "activity" | "goal";
+
+const THEME_OPTIONS: Array<{ value: ThemePreference; label: string; description: string; icon: string }> = [
+  { value: "system", label: "System", description: "Follow your device setting", icon: "settings_brightness" },
+  { value: "light", label: "Light", description: "Keep the warm Daymark palette", icon: "light_mode" },
+  { value: "dark", label: "Dark", description: "Use a softer low-light palette", icon: "dark_mode" },
+];
 
 function iconLabel(name: string) {
   return name.replaceAll("_", " ");
@@ -124,6 +131,42 @@ export function SetupView({ data, onRefresh, onMessage }: SetupViewProps) {
   const [goalSchedule, setGoalSchedule] = useState<Goal["scheduleType"]>("daily");
   const [activityQuery, setActivityQuery] = useState("");
   const [iconPickerActivity, setIconPickerActivity] = useState<{ id: string; name: string; icon: string } | null>(null);
+  const [themePreference, setThemePreference] = useState<ThemePreference>("system");
+
+  useEffect(() => {
+    const media = typeof window.matchMedia === "function" ? window.matchMedia(THEME_MEDIA_QUERY) : null;
+    const syncTheme = () => {
+      let storage: Storage | undefined;
+      try {
+        storage = window.localStorage;
+      } catch {
+        storage = undefined;
+      }
+      const preference = readStoredThemePreference(storage);
+      setThemePreference(preference);
+      applyTheme({ root: document.documentElement, preference, systemTheme: media?.matches ? "dark" : "light" });
+    };
+
+    syncTheme();
+    if (media?.addEventListener) media.addEventListener("change", syncTheme);
+    else if (media?.addListener) media.addListener(syncTheme);
+
+    return () => {
+      if (media?.removeEventListener) media.removeEventListener("change", syncTheme);
+      else if (media?.removeListener) media.removeListener(syncTheme);
+    };
+  }, []);
+
+  function updateThemePreference(preference: ThemePreference) {
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEY, preference);
+    } catch {
+      // Keep the current session usable when storage is blocked.
+    }
+    const systemTheme = typeof window.matchMedia === "function" && window.matchMedia(THEME_MEDIA_QUERY).matches ? "dark" : "light";
+    applyTheme({ root: document.documentElement, preference, systemTheme });
+    setThemePreference(preference);
+  }
 
   async function create({ payload, reset }: { payload: Record<string, unknown>; reset: () => void }) {
     try {
@@ -272,6 +315,34 @@ export function SetupView({ data, onRefresh, onMessage }: SetupViewProps) {
           <h1>Make it yours</h1>
           <p className="muted">Create, rename, regroup, reorder, archive, and restore your catalog.</p>
         </div>
+
+        <section className="settings-card appearance-card">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Appearance</p>
+              <h2>Choose your theme</h2>
+              <p className="muted small-copy">System follows your device. Your choice is saved on this device.</p>
+            </div>
+          </div>
+          <div className="theme-options" role="radiogroup" aria-label="Appearance theme">
+            {THEME_OPTIONS.map((option) => (
+              <label className={`theme-option ${themePreference === option.value ? "selected" : ""}`} key={option.value}>
+                <input
+                  type="radio"
+                  name="theme-preference"
+                  value={option.value}
+                  checked={themePreference === option.value}
+                  onChange={() => updateThemePreference(option.value)}
+                />
+                <span className="theme-option-content">
+                  <span className="theme-option-icon"><Icon name={option.icon} /></span>
+                  <span className="theme-option-copy"><strong>{option.label}</strong><small>{option.description}</small></span>
+                  <span className="theme-option-check"><Icon name={UI_ICONS.check} /></span>
+                </span>
+              </label>
+            ))}
+          </div>
+        </section>
 
         <section className="settings-card">
           <div className="section-heading">
