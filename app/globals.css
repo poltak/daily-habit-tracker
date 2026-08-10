@@ -143,10 +143,16 @@ button:disabled { cursor: wait; opacity: .68; }
 .management-actions { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
 .tiny-button { width: 30px; height: 30px; border-radius: 8px; font-size: 16px; }
 .tiny-select { max-width: 100px; border: 1px solid var(--line); border-radius: 8px; padding: 5px 4px; background: #fbfaf7; color: var(--ink); font-size: 11px; }
-.management-groups details { border-top: 1px solid var(--line); padding: 11px 0; }
-.management-groups summary { display: flex; align-items: center; justify-content: space-between; cursor: pointer; font-weight: 800; list-style: none; }
-.management-groups summary::-webkit-details-marker { display: none; }
+.management-groups details { border-top: 1px solid var(--line); padding: 7px 0; }
+.management-groups summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; padding: 5px 0; cursor: pointer; font-weight: 800; list-style: none; }
+.management-groups summary::-webkit-details-marker, .management-groups summary::marker { display: none; content: ""; }
 .management-groups summary small { color: var(--muted); font-size: 12px; }
+.management-group-meta { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; font-weight: 650; text-align: right; }
+.disclosure-card { padding-top: 15px; }
+.disclosure-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; cursor: pointer; list-style: none; }
+.disclosure-summary::-webkit-details-marker, .disclosure-summary::marker { display: none; content: ""; }
+.disclosure-summary h2 { margin: 5px 0 0; font-size: 21px; letter-spacing: -.035em; }
+.management-groups details[open] .group-expand-icon, .disclosure-card[open] .group-expand-icon { transform: rotate(180deg); }
 .review-list { display: grid; gap: 7px; margin-top: 15px; }
 .review-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
 .review-row > span { min-width: 0; display: grid; gap: 3px; }
