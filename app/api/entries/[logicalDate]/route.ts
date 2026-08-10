@@ -1,5 +1,5 @@
 import { jsonError, readJson } from "../../../../lib/api";
-import { type EntryInput, isLogicalDate } from "../../../../lib/daylio";
+import { isLogicalDate } from "../../../../lib/daylio";
 import { getServerStore } from "../../../../lib/server-store";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +15,7 @@ export async function GET(_request: Request, context: { params: Promise<{ logica
 export async function PUT(request: Request, context: { params: Promise<{ logicalDate: string }> }) {
   try {
     const { logicalDate } = await context.params;
-    const input = await readJson<EntryInput>(request);
+    const input = await readJson<unknown>(request);
     const store = await getServerStore();
     return Response.json({ entry: await store.saveEntry(logicalDate, input) });
   } catch (error) {

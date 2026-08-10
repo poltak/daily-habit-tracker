@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   type Activity,
   type ActivityGroup,
@@ -13,6 +13,7 @@ import {
 import { clearStoredDraft, readActiveStoredDraft, recoverStoredDraft, rememberDraftDate, type Draft, writeStoredDraft } from "../lib/draft-storage";
 import { ACTIVITY_ICON_CHOICES, UI_ICONS } from "../lib/icons";
 import { summarizeActivityGroup } from "../lib/activity-groups";
+import { createLatestRequestGate } from "../lib/latest-request-gate";
 
 type View = "log" | "calendar" | "entries" | "settings";
 type ConnectionState = "checking" | "online" | "offline" | "error";
@@ -72,6 +73,7 @@ export default function Home() {
   const [hasLocalDraft, setHasLocalDraft] = useState(false);
   const [connectionState, setConnectionState] = useState<ConnectionState>("checking");
   const [message, setMessage] = useState<Notice | null>(null);
+  const dateRequestGate = useRef(createLatestRequestGate());
 
   function changeView(nextView: View) {
     setView(nextView);
@@ -145,6 +147,8 @@ export default function Home() {
     }
   }, []);
 
+  useEffect(() => () => dateRequestGate.current.cancel(), []);
+
   useEffect(() => {
     if (view !== "calendar" || !/^\d{4}-\d{2}$/.test(calendarMonth)) return;
     let cancelled = false;
@@ -164,12 +168,14 @@ export default function Home() {
 
   async function chooseDate(nextDate: string) {
     if (!isLogicalDate(nextDate)) return;
+    const request = dateRequestGate.current.begin();
     rememberDraftDate(nextDate);
     setSelectedDate(nextDate);
     setCalendarMonth(nextDate.slice(0, 7));
     setMessage(null);
     const localEntry = data ? getEntryForDate(data.entries, nextDate) : null;
     if (localEntry) {
+      setIsLoadingDate(false);
       const recovered = draftForDate(nextDate, localEntry);
       setDraft(recovered.draft);
       setHasLocalDraft(recovered.restored);
@@ -178,22 +184,24 @@ export default function Home() {
     }
     setIsLoadingDate(true);
     try {
-      const response = await fetch(`/api/entries/${nextDate}`, { cache: "no-store" });
+      const response = await fetch(`/api/entries/${nextDate}`, { cache: "no-store", signal: request.signal });
       let serverEntry: Entry | null = null;
       if (response.status !== 404) {
         if (!response.ok) throw new Error("Could not load that date.");
         serverEntry = ((await response.json()) as { entry: Entry }).entry;
       }
+      if (!request.isCurrent()) return;
       const recovered = draftForDate(nextDate, serverEntry);
       setDraft(recovered.draft);
       setHasLocalDraft(recovered.restored);
       setConnectionState("online");
       if (recovered.restored) setMessage({ kind: "info", text: `Restored unsaved changes for ${shortDate(nextDate)}.` });
     } catch (error) {
+      if (request.signal.aborted || !request.isCurrent()) return;
       setConnectionState(navigator.onLine ? "error" : "offline");
       setMessage({ kind: "error", text: (error as Error).message });
     } finally {
-      setIsLoadingDate(false);
+      if (request.isCurrent()) setIsLoadingDate(false);
     }
   }
 

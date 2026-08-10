@@ -64,6 +64,22 @@ test("Wrangler-backed API covers persistence, catalog, calendar, pagination, imp
   assert.equal(bootstrap.body.activities.length, 12);
   assert.equal(bootstrap.body.goals.length, 2);
 
+  const malformedEntry = await json("/api/entries/2026-02-01", { method: "PUT", body: JSON.stringify({ moodId: "mood-good", activityIds: null, completedGoalIds: [], localTime: "20:00" }) });
+  assert.equal(malformedEntry.response.status, 400);
+  assert.equal(malformedEntry.body.error, "Activity IDs must be an array of strings.");
+  const invalidTime = await json("/api/entries/2026-02-01", { method: "PUT", body: JSON.stringify({ moodId: "mood-good", activityIds: [], completedGoalIds: [], localTime: "25:00" }) });
+  assert.equal(invalidTime.response.status, 400);
+  assert.equal(invalidTime.body.error, "Choose a valid entry time.");
+  const unknownMood = await json("/api/entries/2026-02-01", { method: "PUT", body: JSON.stringify({ moodId: "mood-missing", activityIds: [], completedGoalIds: [], localTime: "20:00" }) });
+  assert.equal(unknownMood.response.status, 400);
+  assert.equal(unknownMood.body.error, "Choose one of the five moods.");
+  const unknownActivity = await json("/api/entries/2026-02-01", { method: "PUT", body: JSON.stringify({ moodId: "mood-good", activityIds: ["activity-missing"], completedGoalIds: [], localTime: "20:00" }) });
+  assert.equal(unknownActivity.response.status, 400);
+  assert.equal(unknownActivity.body.error, "One activity is no longer available.");
+  const unknownGoal = await json("/api/entries/2026-02-01", { method: "PUT", body: JSON.stringify({ moodId: "mood-good", activityIds: [], completedGoalIds: ["goal-missing"], localTime: "20:00" }) });
+  assert.equal(unknownGoal.response.status, 400);
+  assert.equal(unknownGoal.body.error, "One goal is no longer available.");
+
   const group = await json("/api/catalog", { method: "POST", body: JSON.stringify({ kind: "group", name: "Testing" }) });
   assert.equal(group.response.status, 201);
   const activity = await json("/api/catalog", { method: "POST", body: JSON.stringify({ kind: "activity", name: "Test reading", groupId: group.body.group.id }) });

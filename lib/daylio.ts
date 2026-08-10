@@ -1,4 +1,5 @@
 import { iconForActivity } from "./icons";
+import { isValidTime, validateEntryInput, validateEntryReferences } from "./entry-validation";
 
 export type Mood = {
   id: string;
@@ -206,7 +207,7 @@ export function isLogicalDate(value: string) {
 }
 
 export function isTime(value: string) {
-  return /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+  return isValidTime(value);
 }
 
 function newId(prefix: string) {
@@ -253,15 +254,13 @@ export class DaylioMemoryStore {
     return entry && !entry.deletedAt ? entry : null;
   }
 
-  saveEntry(logicalDate: string, input: EntryInput) {
+  saveEntry(logicalDate: string, input: unknown) {
     if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
-    if (!this.moods.has(input.moodId)) throw new Error("Choose one of the five moods.");
-    if (input.localTime && !isTime(input.localTime)) throw new Error("Choose a valid entry time.");
-    if (input.activityIds.some((id) => !this.activities.has(id))) throw new Error("One activity is no longer available.");
-    if (input.completedGoalIds.some((id) => !this.goals.has(id))) throw new Error("One goal is no longer available.");
+    const validated = validateEntryInput(input);
+    validateEntryReferences(validated, { moodIds: this.moods, activityIds: this.activities, goalIds: this.goals });
 
     const existing = this.entries.get(logicalDate);
-    if (existing && input.expectedVersion !== undefined && existing.version !== input.expectedVersion) {
+    if (existing && validated.expectedVersion !== undefined && existing.version !== validated.expectedVersion) {
       const error = new Error("This entry changed on another device.");
       (error as Error & { code?: string }).code = "VERSION_CONFLICT";
       throw error;
@@ -270,14 +269,14 @@ export class DaylioMemoryStore {
     const entry: Entry = {
       id: existing?.id ?? newId("entry"),
       logicalDate,
-      localTime: input.localTime ?? existing?.localTime ?? "23:00",
-      timezone: input.timezone ?? existing?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
-      timezoneOffsetMinutes: input.timezoneOffsetMinutes ?? existing?.timezoneOffsetMinutes,
-      moodId: input.moodId,
-      activityIds: [...new Set(input.activityIds)],
-      completedGoalIds: [...new Set(input.completedGoalIds)],
-      legacyNoteTitle: input.legacyNoteTitle ?? existing?.legacyNoteTitle,
-      legacyNote: input.legacyNote ?? existing?.legacyNote,
+      localTime: validated.localTime ?? existing?.localTime ?? "23:00",
+      timezone: validated.timezone ?? existing?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
+      timezoneOffsetMinutes: validated.timezoneOffsetMinutes ?? existing?.timezoneOffsetMinutes,
+      moodId: validated.moodId,
+      activityIds: [...new Set(validated.activityIds)],
+      completedGoalIds: [...new Set(validated.completedGoalIds)],
+      legacyNoteTitle: validated.legacyNoteTitle ?? existing?.legacyNoteTitle,
+      legacyNote: validated.legacyNote ?? existing?.legacyNote,
       version: (existing?.version ?? 0) + 1,
       createdAt: existing?.createdAt ?? timestamp,
       updatedAt: timestamp,
