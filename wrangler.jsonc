@@ -1,5 +1,6 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
+  "account_id": "bc5b269de681a5c094ecc01bfafe21cb",
   "name": "daylio-clone",
   "main": "./worker/index.ts",
   "compatibility_date": "2026-05-22",
@@ -8,7 +9,7 @@
     {
       "binding": "DB",
       "database_name": "daylio-clone",
-      "database_id": "00000000-0000-4000-8000-000000000000",
+      "database_id": "ae34a2d3-c377-41fc-8cf0-893104abfef8",
       "migrations_dir": "drizzle"
     }
   ]
