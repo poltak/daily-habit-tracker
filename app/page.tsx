@@ -63,6 +63,8 @@ export default function Home() {
   const [activityQuery, setActivityQuery] = useState("");
   const [isLoadingDate, setIsLoadingDate] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isSetupBusy, setIsSetupBusy] = useState(false);
   const [hasMoreEntries, setHasMoreEntries] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState("");
@@ -72,8 +74,10 @@ export default function Home() {
   const [connectionState, setConnectionState] = useState<ConnectionState>("checking");
   const [message, setMessage] = useState<Notice | null>(null);
   const dateRequestGate = useRef(createLatestRequestGate());
+  const bootstrapRequestGate = useRef(createLatestRequestGate());
 
   function changeView(nextView: View) {
+    if (isSetupBusy && view === "settings" && nextView !== "settings") return;
     setView(nextView);
     setMessage(null);
   }
@@ -92,33 +96,38 @@ export default function Home() {
   }
 
   async function loadBootstrap() {
+    const request = bootstrapRequestGate.current.begin();
     setConnectionState("checking");
     try {
-      const response = await fetch("/api/bootstrap", { cache: "no-store" });
+      const response = await fetch("/api/bootstrap", { cache: "no-store", signal: request.signal });
       if (!response.ok) throw new Error("Could not connect to your journal.");
       const next = (await response.json()) as Bootstrap;
-      applyBootstrap(next, selectedDate || next.today);
-      setConnectionState("online");
+      if (request.isCurrent()) {
+        applyBootstrap(next, selectedDate || next.today);
+        setConnectionState("online");
+      }
+      return next;
     } catch (error) {
-      setConnectionState(navigator.onLine ? "error" : "offline");
+      if (request.isCurrent() && !request.signal.aborted) setConnectionState(navigator.onLine ? "error" : "offline");
       throw error;
     }
   }
 
   useEffect(() => {
+    const request = bootstrapRequestGate.current.begin();
     let cancelled = false;
-    fetch("/api/bootstrap", { cache: "no-store" })
+    fetch("/api/bootstrap", { cache: "no-store", signal: request.signal })
       .then(async (response) => {
         if (!response.ok) throw new Error("Could not connect to your journal.");
         return (await response.json()) as Bootstrap;
       })
       .then((next) => {
-        if (cancelled) return;
+        if (cancelled || !request.isCurrent()) return;
         applyBootstrap(next, "", true);
         setConnectionState("online");
       })
       .catch((error: Error) => {
-        if (!cancelled) {
+        if (!cancelled && request.isCurrent() && !request.signal.aborted) {
           setConnectionState(navigator.onLine ? "error" : "offline");
           setMessage({ kind: "error", text: error.message });
         }
@@ -145,7 +154,10 @@ export default function Home() {
     }
   }, []);
 
-  useEffect(() => () => dateRequestGate.current.cancel(), []);
+  useEffect(() => () => {
+    dateRequestGate.current.cancel();
+    bootstrapRequestGate.current.cancel();
+  }, []);
 
   useEffect(() => {
     if (view !== "calendar" || !/^\d{4}-\d{2}$/.test(calendarMonth)) return;
@@ -220,6 +232,7 @@ export default function Home() {
   }
 
   async function saveEntry() {
+    if (isSaving || isDeleting) return;
     if (!draft.moodId) {
       setMessage({ kind: "error", text: "Pick the mood that best sums up the day." });
       return;
@@ -251,24 +264,30 @@ export default function Home() {
   }
 
   async function deleteSelectedEntry() {
-    if (!draft.version || !window.confirm(`Delete the entry for ${friendlyDate(selectedDate)}?`)) return;
+    if (isDeleting || isSaving || !draft.version || !window.confirm(`Delete the entry for ${friendlyDate(selectedDate)}?`)) return;
     if (!navigator.onLine) {
       setMessage({ kind: "error", text: "You’re offline. Reconnect before deleting an entry." });
       setConnectionState("offline");
       return;
     }
-    const response = await fetch(`/api/entries/${selectedDate}?expectedVersion=${draft.version}`, { method: "DELETE" });
-    if (!response.ok) {
+    setIsDeleting(true);
+    setConnectionState("checking");
+    setMessage(null);
+    try {
+      const response = await fetch(`/api/entries/${selectedDate}?expectedVersion=${draft.version}`, { method: "DELETE" });
+      if (!response.ok) throw new Error("Could not delete that entry.");
+      setData((current) => current ? { ...current, entries: current.entries.filter((entry) => entry.logicalDate !== selectedDate) } : current);
+      setDraft({ ...EMPTY_DRAFT });
+      clearStoredDraft(selectedDate);
+      setHasLocalDraft(false);
+      setConnectionState("online");
+      setMessage({ kind: "success", text: "Entry deleted." });
+    } catch (error) {
       setConnectionState(navigator.onLine ? "error" : "offline");
-      setMessage({ kind: "error", text: "Could not delete that entry." });
-      return;
+      setMessage({ kind: "error", text: (error as Error).message });
+    } finally {
+      setIsDeleting(false);
     }
-    setData((current) => current ? { ...current, entries: current.entries.filter((entry) => entry.logicalDate !== selectedDate) } : current);
-    setDraft({ ...EMPTY_DRAFT });
-    clearStoredDraft(selectedDate);
-    setHasLocalDraft(false);
-    setConnectionState("online");
-    setMessage({ kind: "success", text: "Entry deleted." });
   }
 
   async function loadOlderEntries() {
@@ -294,30 +313,30 @@ export default function Home() {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <button className="brand" onClick={() => changeView("log")} aria-label="Go to log"><span className="brand-mark">d</span><span>daymark</span></button>
+        <button className="brand" onClick={() => changeView("log")} aria-label="Go to log" disabled={isSetupBusy && view === "settings"}><span className="brand-mark">d</span><span>daymark</span></button>
         <div className="topbar-date">{view === "log" ? friendlyDate(selectedDate) : view === "calendar" ? "Your calendar" : view === "entries" ? "Your entries" : "Your setup"}</div>
         <div className={`connection-pill ${connectionState}`} role="status"><Icon name={connectionState === "offline" ? "cloud_off" : connectionState === "error" ? "cloud_alert" : UI_ICONS.sync} /> {connectionState === "checking" ? "checking" : connectionState === "online" ? "online" : connectionState === "offline" ? "offline" : "sync issue"}</div>
       </header>
 
       <main className="content-shell">
         {message && view !== "log" && <div className={`notice ${message.kind}`} role="status">{message.kind === "success" ? "✓" : message.kind === "info" ? "↻" : "!"} {message.text}</div>}
-        {view === "log" && <LogView data={data} selectedDate={selectedDate} draft={draft} hasLocalDraft={hasLocalDraft} activityQuery={activityQuery} isLoadingDate={isLoadingDate} onDate={chooseDate} onDraft={updateDraft} onActivityQuery={setActivityQuery} onToggleActivity={toggleActivity} onToggleGoal={toggleGoal} onSave={saveEntry} onDelete={deleteSelectedEntry} isSaving={isSaving} message={message} />}
+        {view === "log" && <LogView data={data} selectedDate={selectedDate} draft={draft} hasLocalDraft={hasLocalDraft} activityQuery={activityQuery} isLoadingDate={isLoadingDate} onDate={chooseDate} onDraft={updateDraft} onActivityQuery={setActivityQuery} onToggleActivity={toggleActivity} onToggleGoal={toggleGoal} onSave={saveEntry} onDelete={deleteSelectedEntry} isSaving={isSaving} isDeleting={isDeleting} message={message} />}
         {view === "calendar" && <CalendarView month={calendarMonth} dates={calendarDates} today={data.today} isLoading={isLoadingCalendar} onMonth={setCalendarMonth} onOpenDate={(date) => { changeView("log"); void chooseDate(date); }} />}
         {view === "entries" && <EntriesView data={data} onEdit={(date) => { changeView("log"); void chooseDate(date); }} onLoadMore={loadOlderEntries} hasMore={hasMoreEntries} isLoadingMore={isLoadingMore} />}
-        {view === "settings" && <SetupView data={data} onRefresh={loadBootstrap} onMessage={setMessage} />}
+        {view === "settings" && <SetupView data={data} onRefresh={loadBootstrap} onMessage={setMessage} onBusyChange={setIsSetupBusy} />}
       </main>
 
-      <nav className="bottom-nav" aria-label="Primary navigation">
-        <button className={view === "log" ? "active" : ""} onClick={() => changeView("log")}><span className="nav-icon"><Icon name={UI_ICONS.log} /></span><span>Log</span></button>
-        <button className={view === "calendar" ? "active" : ""} onClick={() => changeView("calendar")}><span className="nav-icon"><Icon name={UI_ICONS.calendar} /></span><span>Calendar</span></button>
-        <button className={view === "entries" ? "active" : ""} onClick={() => changeView("entries")}><span className="nav-icon"><Icon name={UI_ICONS.entries} /></span><span>Entries</span></button>
-        <button className={view === "settings" ? "active" : ""} onClick={() => changeView("settings")}><span className="nav-icon"><Icon name={UI_ICONS.settings} /></span><span>Setup</span></button>
+      <nav className="bottom-nav" aria-label="Primary navigation" aria-busy={isSetupBusy && view === "settings"}>
+        <button className={view === "log" ? "active" : ""} onClick={() => changeView("log")} disabled={isSetupBusy && view === "settings"}><span className="nav-icon"><Icon name={UI_ICONS.log} /></span><span>Log</span></button>
+        <button className={view === "calendar" ? "active" : ""} onClick={() => changeView("calendar")} disabled={isSetupBusy && view === "settings"}><span className="nav-icon"><Icon name={UI_ICONS.calendar} /></span><span>Calendar</span></button>
+        <button className={view === "entries" ? "active" : ""} onClick={() => changeView("entries")} disabled={isSetupBusy && view === "settings"}><span className="nav-icon"><Icon name={UI_ICONS.entries} /></span><span>Entries</span></button>
+        <button className={view === "settings" ? "active" : ""} onClick={() => changeView("settings")} disabled={isSetupBusy && view === "settings"}><span className="nav-icon"><Icon name={UI_ICONS.settings} /></span><span>Setup</span></button>
       </nav>
     </div>
   );
 }
 
-function LogView({ data, selectedDate, draft, hasLocalDraft, activityQuery, isLoadingDate, onDate, onDraft, onActivityQuery, onToggleActivity, onToggleGoal, onSave, onDelete, isSaving, message }: {
+function LogView({ data, selectedDate, draft, hasLocalDraft, activityQuery, isLoadingDate, onDate, onDraft, onActivityQuery, onToggleActivity, onToggleGoal, onSave, onDelete, isSaving, isDeleting, message }: {
   data: Bootstrap;
   selectedDate: string;
   draft: Draft;
@@ -332,47 +351,53 @@ function LogView({ data, selectedDate, draft, hasLocalDraft, activityQuery, isLo
   onSave: () => void;
   onDelete: () => void;
   isSaving: boolean;
+  isDeleting: boolean;
   message: Notice | null;
 }) {
   const existing = getEntryForDate(data.entries, selectedDate);
   const groups = useMemo(() => {
     return filterActivityGroups({ groups: data.groups, activities: data.activities, query: activityQuery });
   }, [activityQuery, data.activities, data.groups]);
+  const formBusy = isSaving || isDeleting;
 
   return <>
-    <section className="hero-card">
-      <div>
-        <p className="eyebrow">One small check-in</p>
-        <h1>How did your day feel?</h1>
-        <p className="muted">Capture the shape of the day while it is still close.</p>
-      </div>
-      <div className="date-switcher" aria-label="Choose the logical day">
-        <button className={selectedDate === data.today ? "selected" : ""} onClick={() => onDate(data.today)}>Today</button>
-        <button className={selectedDate === data.yesterday ? "selected" : ""} onClick={() => onDate(data.yesterday)}>Yesterday</button>
-        <label className="date-input"><span>Other</span><input type="date" value={selectedDate} onChange={(event) => onDate(event.target.value)} /></label>
-      </div>
-    </section>
+    <fieldset className="log-form" disabled={formBusy} aria-busy={formBusy}>
+      <legend className="sr-only">Daily entry form</legend>
+      {formBusy && <p className="sr-only" role="status">Daily entry form disabled while {isDeleting ? "deleting" : "saving"}.</p>}
+      <section className="hero-card">
+        <div>
+          <p className="eyebrow">One small check-in</p>
+          <h1>How did your day feel?</h1>
+          <p className="muted">Capture the shape of the day while it is still close.</p>
+        </div>
+        <div className="date-switcher" aria-label="Choose the logical day">
+          <button className={selectedDate === data.today ? "selected" : ""} onClick={() => onDate(data.today)} disabled={isLoadingDate}>Today</button>
+          <button className={selectedDate === data.yesterday ? "selected" : ""} onClick={() => onDate(data.yesterday)} disabled={isLoadingDate}>Yesterday</button>
+          <label className="date-input"><span>Other</span><input type="date" value={selectedDate} onChange={(event) => onDate(event.target.value)} disabled={isLoadingDate} /></label>
+        </div>
+      </section>
 
-    {message && <div className={`notice ${message.kind}`} role="status">{message.kind === "success" ? "✓" : message.kind === "info" ? "↻" : "!"} {message.text}</div>}
+      {message && <div className={`notice ${message.kind}`} role="status">{message.kind === "success" ? "✓" : message.kind === "info" ? "↻" : "!"} {message.text}</div>}
 
-    <section className="panel mood-panel">
-      <div className="section-heading"><div><p className="eyebrow">Overall mood</p><h2>Pick one</h2></div><span className="required-label">required</span></div>
-      <div className="mood-grid">{data.moods.map((mood) => <button key={mood.id} className={`mood-option ${draft.moodId === mood.id ? "selected" : ""}`} style={{ "--mood-color": mood.color } as React.CSSProperties} aria-pressed={draft.moodId === mood.id} onClick={() => onDraft({ moodId: mood.id })}><span className="mood-emoji">{mood.emoji}</span><span>{mood.name}</span></button>)}</div>
-    </section>
+      <section className="panel mood-panel">
+        <div className="section-heading"><div><p className="eyebrow">Overall mood</p><h2>Pick one</h2></div><span className="required-label">required</span></div>
+        <div className="mood-grid">{data.moods.map((mood) => <button key={mood.id} className={`mood-option ${draft.moodId === mood.id ? "selected" : ""}`} style={{ "--mood-color": mood.color } as React.CSSProperties} aria-pressed={draft.moodId === mood.id} onClick={() => onDraft({ moodId: mood.id })}><span className="mood-emoji">{mood.emoji}</span><span>{mood.name}</span></button>)}</div>
+      </section>
 
-    <section className="panel activities-panel">
-      <div className="section-heading"><div><p className="eyebrow">Activities</p><h2>What shaped the day?</h2></div><span className="selection-count">{draft.activityIds.length} selected</span></div>
-      {draft.activityIds.length > 0 && <div className="selection-row">{draft.activityIds.map((id) => { const activity = activityFor(data.activities, id); return activity ? <button key={id} className="selection-chip" onClick={() => onToggleActivity(id)}><Icon name={activity.icon} /> {activity.name} <span><Icon name={UI_ICONS.close} /></span></button> : null; })}</div>}
-      <label className="search-field"><Icon name={UI_ICONS.search} /><input value={activityQuery} onChange={(event) => onActivityQuery(event.target.value)} placeholder="Search your activities" aria-label="Search activities" /></label>
-      {isLoadingDate ? <div className="inline-loading">Loading that day…</div> : <ActivityGroupList groups={groups} activityQuery={activityQuery} selectedActivityIds={draft.activityIds} onToggleActivity={onToggleActivity} />}
-    </section>
+      <section className="panel activities-panel">
+        <div className="section-heading"><div><p className="eyebrow">Activities</p><h2>What shaped the day?</h2></div><span className="selection-count">{draft.activityIds.length} selected</span></div>
+        {draft.activityIds.length > 0 && <div className="selection-row">{draft.activityIds.map((id) => { const activity = activityFor(data.activities, id); return activity ? <button key={id} className="selection-chip" onClick={() => onToggleActivity(id)}><Icon name={activity.icon} /> {activity.name} <span><Icon name={UI_ICONS.close} /></span></button> : null; })}</div>}
+        <label className="search-field"><Icon name={UI_ICONS.search} /><input value={activityQuery} onChange={(event) => onActivityQuery(event.target.value)} placeholder="Search your activities" aria-label="Search activities" /></label>
+        {isLoadingDate ? <div className="inline-loading">Loading that day…</div> : <ActivityGroupList groups={groups} activityQuery={activityQuery} selectedActivityIds={draft.activityIds} onToggleActivity={onToggleActivity} />}
+      </section>
 
-    <section className="panel goals-panel">
-      <div className="section-heading"><div><p className="eyebrow">Goals</p><h2>Keep the promises that matter</h2></div></div>
-      <div className="goal-list">{data.goals.filter((goal) => !goal.archived).map((goal) => <GoalRow key={goal.id} goal={goal} activity={activityFor(data.activities, goal.activityId)} checked={draft.completedGoalIds.includes(goal.id)} onToggle={() => onToggleGoal(goal.id)} />)}</div>
-    </section>
+      <section className="panel goals-panel">
+        <div className="section-heading"><div><p className="eyebrow">Goals</p><h2>Keep the promises that matter</h2></div></div>
+        <div className="goal-list">{data.goals.filter((goal) => !goal.archived).map((goal) => <GoalRow key={goal.id} goal={goal} activity={activityFor(data.activities, goal.activityId)} checked={draft.completedGoalIds.includes(goal.id)} onToggle={() => onToggleGoal(goal.id)} />)}</div>
+      </section>
+    </fieldset>
 
-    <div className="save-bar"><div><strong>{existing ? "Edit this entry" : "Ready to save?"}</strong><span>{friendlyDate(selectedDate)} · {draft.activityIds.length} activities</span>{hasLocalDraft && <small className="draft-status"><Icon name="save" /> Unsaved changes stored on this device</small>}</div><div className="save-actions">{existing && <button className="ghost-button danger" onClick={onDelete}>Delete</button>}<button className="primary-button" onClick={onSave} disabled={isSaving}>{isSaving ? "Saving…" : existing ? "Update entry" : "Save entry"}</button></div></div>
+    <div className="save-bar" aria-busy={formBusy}><div><strong>{existing ? "Edit this entry" : "Ready to save?"}</strong><span>{friendlyDate(selectedDate)} · {draft.activityIds.length} activities</span>{hasLocalDraft && <small className="draft-status"><Icon name="save" /> Unsaved changes stored on this device</small>}</div><div className="save-actions">{existing && <button className="ghost-button danger" onClick={onDelete} disabled={isDeleting || isSaving} aria-busy={isDeleting}>{isDeleting ? "Deleting…" : "Delete"}</button>}<button className="primary-button" onClick={onSave} disabled={isSaving || isDeleting} aria-busy={isSaving}>{isSaving ? "Saving…" : existing ? "Update entry" : "Save entry"}</button></div></div>
   </>;
 }
 
@@ -435,5 +460,5 @@ function CalendarView({ month, dates, today, isLoading, onMonth, onOpenDate }: {
     const next = new Date(year, monthNumber - 1 + amount, 1);
     onMonth(`${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}`);
   }
-  return <section className="page-section calendar-page"><div className="page-intro"><p className="eyebrow">Your history</p><h1>Calendar</h1><p className="muted">Filled days have an entry. Select any day to open or add its check-in.</p></div><section className="calendar-card"><div className="calendar-heading"><button className="icon-button" aria-label="Previous month" onClick={() => shiftMonth(-1)}><Icon name="chevron_left" /></button><h2>{label}</h2><button className="icon-button" aria-label="Next month" onClick={() => shiftMonth(1)}><Icon name="chevron_right" /></button></div><div className="calendar-weekdays">{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => <span key={day}>{day}</span>)}</div><div className="calendar-grid">{cells.map((date, index) => date ? <button key={date} className={`calendar-day ${filled.has(date) ? "filled" : ""} ${date === today ? "today" : ""}`} onClick={() => onOpenDate(date)} aria-label={`${date}${filled.has(date) ? ", entry exists" : ", empty"}`}><span>{Number(date.slice(-2))}</span>{filled.has(date) && <Icon name={UI_ICONS.check} />}</button> : <span className="calendar-blank" key={`blank-${index}`} />)}</div>{isLoading && <p className="calendar-loading">Checking this month…</p>}<div className="calendar-legend"><span><i className="legend-dot filled" /> Entry</span><span><i className="legend-dot" /> Empty</span></div></section></section>;
+  return <section className="page-section calendar-page"><div className="page-intro"><p className="eyebrow">Your history</p><h1>Calendar</h1><p className="muted">Filled days have an entry. Select any day to open or add its check-in.</p></div><section className="calendar-card"><div className="calendar-heading"><button className={`icon-button ${isLoading ? "pending-action" : ""}`} aria-label={isLoading ? "Loading month" : "Previous month"} aria-busy={isLoading} disabled={isLoading} onClick={() => shiftMonth(-1)}><Icon name={isLoading ? UI_ICONS.sync : "chevron_left"} /></button><h2>{label}</h2><button className={`icon-button ${isLoading ? "pending-action" : ""}`} aria-label={isLoading ? "Loading month" : "Next month"} aria-busy={isLoading} disabled={isLoading} onClick={() => shiftMonth(1)}><Icon name={isLoading ? UI_ICONS.sync : "chevron_right"} /></button></div><div className="calendar-weekdays">{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => <span key={day}>{day}</span>)}</div><div className="calendar-grid">{cells.map((date, index) => date ? <button key={date} className={`calendar-day ${filled.has(date) ? "filled" : ""} ${date === today ? "today" : ""}`} onClick={() => onOpenDate(date)} aria-label={`${date}${filled.has(date) ? ", entry exists" : ", empty"}`}><span>{Number(date.slice(-2))}</span>{filled.has(date) && <Icon name={UI_ICONS.check} />}</button> : <span className="calendar-blank" key={`blank-${index}`} />)}</div>{isLoading && <p className="calendar-loading" role="status">Checking this month…</p>}<div className="calendar-legend"><span><i className="legend-dot filled" /> Entry</span><span><i className="legend-dot" /> Empty</span></div></section></section>;
 }
