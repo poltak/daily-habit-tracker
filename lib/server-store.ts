@@ -4,6 +4,7 @@ import {
   type Bootstrap,
   type Entry,
   type Goal,
+  type GoalCompletion,
   type ImportPayload,
   type Mood,
   DaylioMemoryStore,
@@ -35,6 +36,7 @@ type MoodRow = { id: string; name: string; score: number; emoji: string; color: 
 type GroupRow = { id: string; name: string; sort_order: number; archived_at: string | null };
 type ActivityRow = { id: string; group_id: string; name: string; material_icon: string; source_icon_id: string | null; sort_order: number; archived_at: string | null };
 type GoalRow = { id: string; activity_id: string; name: string; schedule_type: Goal["scheduleType"]; target_per_week: number | null; weekdays_mask: number | null; sort_order: number; archived_at: string | null; reminder_enabled: number; reminder_time: string | null; source_state: number | null };
+type GoalCompletionRow = { id: string; goal_id: string; logical_date: string; entry_id: string | null; created_at: string; updated_at: string };
 
 async function currentDatabase(): Promise<Database | null> {
   try {
@@ -139,8 +141,35 @@ export class D1DaylioStore {
     const result = await rows<EntryRow>(this.database, this.database.prepare("SELECT * FROM entries WHERE logical_date = ? AND deleted_at IS NULL LIMIT 1").bind(logicalDate));
     if (!result[0]) return null;
     const activities = await rows<{ activity_id: string }>(this.database, this.database.prepare("SELECT activity_id FROM entry_activities WHERE entry_id = ?").bind(result[0].id));
-    const goals = await rows<{ goal_id: string }>(this.database, this.database.prepare("SELECT goal_id FROM goal_completions WHERE entry_id = ?").bind(result[0].id));
-    return toEntry(result[0], activities.map((item) => item.activity_id), goals.map((item) => item.goal_id));
+    const goals = await this.getGoalCompletionIds(logicalDate);
+    return toEntry(result[0], activities.map((item) => item.activity_id), goals);
+  }
+
+  private async getGoalCompletionRows(logicalDate: string) {
+    return rows<GoalCompletionRow>(this.database, this.database.prepare("SELECT id, goal_id, logical_date, entry_id, created_at, updated_at FROM goal_completions WHERE logical_date = ? ORDER BY goal_id").bind(logicalDate));
+  }
+
+  async getGoalCompletionIds(logicalDate: string) {
+    if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
+    const completions = await this.getGoalCompletionRows(logicalDate);
+    return completions.map((completion) => completion.goal_id);
+  }
+
+  async setGoalCompletion(logicalDate: string, goalId: string, completed: boolean): Promise<GoalCompletion> {
+    if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
+    if (typeof goalId !== "string" || !goalId.trim()) throw new Error("One goal is no longer available.");
+    if (typeof completed !== "boolean") throw new Error("Goal completion must be a boolean.");
+    const goal = await this.database.prepare("SELECT id FROM goals WHERE id = ? LIMIT 1").bind(goalId).first<{ id: string }>();
+    if (!goal) throw new Error("One goal is no longer available.");
+    const entry = await this.getEntry(logicalDate);
+    const entryId = entry?.id ?? null;
+    const timestamp = new Date().toISOString();
+    if (completed) {
+      await this.database.prepare("INSERT INTO goal_completions (id, goal_id, logical_date, entry_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(goal_id, logical_date) DO UPDATE SET entry_id = excluded.entry_id, updated_at = excluded.updated_at").bind(`completion-${goalId}-${logicalDate}`, goalId, logicalDate, entryId, timestamp, timestamp).run();
+    } else {
+      await this.database.prepare("DELETE FROM goal_completions WHERE goal_id = ? AND logical_date = ?").bind(goalId, logicalDate).run();
+    }
+    return { goalId, logicalDate, completed, entryId: entryId ?? undefined };
   }
 
   private async getPersistedEntry(logicalDate: string) {
@@ -182,9 +211,8 @@ export class D1DaylioStore {
     const entryStatement = restoringDeletedEntry
       ? this.database.prepare("UPDATE entries SET logical_date = ?, local_time = ?, timezone = ?, timezone_offset_minutes = ?, mood_id = ?, legacy_note_title = ?, legacy_note = ?, version = ?, created_at = ?, updated_at = ?, deleted_at = NULL WHERE id = ?").bind(logicalDate, validated.localTime ?? "23:00", validated.timezone ?? "", validated.timezoneOffsetMinutes ?? null, validated.moodId, validated.legacyNoteTitle ?? null, validated.legacyNote ?? null, version, timestamp, timestamp, id)
       : this.database.prepare(`INSERT INTO entries (id, logical_date, local_time, timezone, timezone_offset_minutes, mood_id, legacy_note_title, legacy_note, version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(logical_date) DO UPDATE SET local_time=excluded.local_time, timezone=excluded.timezone, timezone_offset_minutes=excluded.timezone_offset_minutes, mood_id=excluded.mood_id, legacy_note_title=excluded.legacy_note_title, legacy_note=excluded.legacy_note, version=excluded.version, updated_at=excluded.updated_at, deleted_at=NULL`).bind(id, logicalDate, validated.localTime ?? existing?.localTime ?? "23:00", validated.timezone ?? existing?.timezone ?? "", validated.timezoneOffsetMinutes ?? existing?.timezoneOffsetMinutes ?? null, validated.moodId, validated.legacyNoteTitle ?? existing?.legacyNoteTitle ?? null, validated.legacyNote ?? existing?.legacyNote ?? null, version, existing?.createdAt ?? timestamp, timestamp);
-    const statements = [entryStatement, this.database.prepare("DELETE FROM entry_activities WHERE entry_id = ?").bind(id), this.database.prepare("DELETE FROM goal_completions WHERE logical_date = ?").bind(logicalDate)];
+    const statements = [entryStatement, this.database.prepare("DELETE FROM entry_activities WHERE entry_id = ?").bind(id), this.database.prepare("UPDATE goal_completions SET entry_id = ?, updated_at = ? WHERE logical_date = ? AND (entry_id IS NULL OR entry_id = ?)").bind(id, timestamp, logicalDate, id)];
     statements.push(...[...new Set(validated.activityIds)].map((activityId) => this.database.prepare("INSERT INTO entry_activities (entry_id, activity_id) VALUES (?, ?)").bind(id, activityId)));
-    statements.push(...[...new Set(validated.completedGoalIds)].map((goalId) => this.database.prepare("INSERT INTO goal_completions (id, goal_id, logical_date, entry_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)").bind(`completion-${goalId}-${logicalDate}`, goalId, logicalDate, id, timestamp, timestamp)));
     await this.database.batch(statements);
     return this.getEntry(logicalDate);
   }

@@ -57,6 +57,13 @@ export type Entry = {
   deletedAt?: string;
 };
 
+export type GoalCompletion = {
+  goalId: string;
+  logicalDate: string;
+  completed: boolean;
+  entryId?: string;
+};
+
 export type EntryInput = {
   moodId: string;
   activityIds: string[];
@@ -214,12 +221,27 @@ function newId(prefix: string) {
   return `${prefix}-${crypto.randomUUID()}`;
 }
 
+function goalCompletionKey(logicalDate: string, goalId: string) {
+  return `${logicalDate}:${goalId}`;
+}
+
 export class DaylioMemoryStore {
   private moods = new Map(MOODS.map((mood) => [mood.id, mood]));
   private groups = new Map(seedGroups.map((group) => [group.id, group]));
   private activities = new Map(seedActivities.map((activity) => [activity.id, activity]));
   private goals = new Map(seedGoals.map((goal) => [goal.id, goal]));
   private entries = new Map<string, Entry>();
+  private goalCompletions = new Map<string, { goalId: string; logicalDate: string; entryId?: string; createdAt: string; updatedAt: string }>();
+
+  private completedGoalIdsForDate(logicalDate: string) {
+    return [...this.goalCompletions.values()]
+      .filter((completion) => completion.logicalDate === logicalDate)
+      .map((completion) => completion.goalId);
+  }
+
+  private withGoalCompletions(entry: Entry): Entry {
+    return { ...entry, completedGoalIds: this.completedGoalIdsForDate(entry.logicalDate) };
+  }
 
   bootstrap(): Bootstrap {
     const today = logicalDateFromDate();
@@ -239,7 +261,8 @@ export class DaylioMemoryStore {
     return [...this.entries.values()]
       .filter((entry) => !entry.deletedAt)
       .sort((a, b) => b.logicalDate.localeCompare(a.logicalDate))
-      .slice(offset, offset + limit);
+      .slice(offset, offset + limit)
+      .map((entry) => this.withGoalCompletions(entry));
   }
 
   listEntryDates(startDate: string, endDate: string) {
@@ -251,7 +274,33 @@ export class DaylioMemoryStore {
 
   getEntry(logicalDate: string) {
     const entry = this.entries.get(logicalDate);
-    return entry && !entry.deletedAt ? entry : null;
+    return entry && !entry.deletedAt ? this.withGoalCompletions(entry) : null;
+  }
+
+  getGoalCompletionIds(logicalDate: string) {
+    if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
+    return this.completedGoalIdsForDate(logicalDate);
+  }
+
+  setGoalCompletion(logicalDate: string, goalId: string, completed: boolean): GoalCompletion {
+    if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
+    if (typeof goalId !== "string" || !goalId.trim() || !this.goals.has(goalId)) throw new Error("One goal is no longer available.");
+    if (typeof completed !== "boolean") throw new Error("Goal completion must be a boolean.");
+
+    const key = goalCompletionKey(logicalDate, goalId);
+    const entry = this.entries.get(logicalDate);
+    if (!completed) {
+      this.goalCompletions.delete(key);
+      if (entry && !entry.deletedAt) entry.completedGoalIds = this.completedGoalIdsForDate(logicalDate);
+      return { goalId, logicalDate, completed: false, entryId: entry && !entry.deletedAt ? entry.id : undefined };
+    }
+
+    const timestamp = nowIso();
+    const current = this.goalCompletions.get(key);
+    const entryId = entry && !entry.deletedAt ? entry.id : undefined;
+    this.goalCompletions.set(key, { goalId, logicalDate, entryId, createdAt: current?.createdAt ?? timestamp, updatedAt: timestamp });
+    if (entry && !entry.deletedAt) entry.completedGoalIds = this.completedGoalIdsForDate(logicalDate);
+    return { goalId, logicalDate, completed: true, entryId };
   }
 
   saveEntry(logicalDate: string, input: unknown) {
@@ -274,7 +323,7 @@ export class DaylioMemoryStore {
       timezoneOffsetMinutes: validated.timezoneOffsetMinutes ?? existing?.timezoneOffsetMinutes,
       moodId: validated.moodId,
       activityIds: [...new Set(validated.activityIds)],
-      completedGoalIds: [...new Set(validated.completedGoalIds)],
+      completedGoalIds: this.completedGoalIdsForDate(logicalDate),
       legacyNoteTitle: validated.legacyNoteTitle ?? existing?.legacyNoteTitle,
       legacyNote: validated.legacyNote ?? existing?.legacyNote,
       version: (existing?.version ?? 0) + 1,
@@ -282,7 +331,13 @@ export class DaylioMemoryStore {
       updatedAt: timestamp,
     };
     this.entries.set(logicalDate, entry);
-    return entry;
+    const goalIds = entry.completedGoalIds;
+    for (const goalId of goalIds) {
+      const key = goalCompletionKey(logicalDate, goalId);
+      const current = this.goalCompletions.get(key);
+      this.goalCompletions.set(key, { goalId, logicalDate, entryId: entry.id, createdAt: current?.createdAt ?? timestamp, updatedAt: current?.updatedAt ?? timestamp });
+    }
+    return this.withGoalCompletions(entry);
   }
 
   deleteEntry(logicalDate: string, expectedVersion?: number) {
@@ -295,7 +350,7 @@ export class DaylioMemoryStore {
     }
     const deleted = { ...existing, deletedAt: nowIso(), updatedAt: nowIso(), version: existing.version + 1 };
     this.entries.set(logicalDate, deleted);
-    return deleted;
+    return this.withGoalCompletions(deleted);
   }
 
   createGroup(name: string) {
@@ -364,7 +419,7 @@ export class DaylioMemoryStore {
       groups: [...this.groups.values()],
       activities: [...this.activities.values()],
       goals: [...this.goals.values()],
-      entries: [...this.entries.values()],
+      entries: [...this.entries.values()].map((entry) => this.withGoalCompletions(entry)),
     };
   }
 
@@ -399,7 +454,10 @@ export class DaylioMemoryStore {
     for (const completion of payload.completions) {
       const entry = this.entries.get(completion.logicalDate);
       const goalId = goalIds.get(completion.goalSourceId);
-      if (entry && goalId && !entry.completedGoalIds.includes(goalId)) entry.completedGoalIds.push(goalId);
+      if (goalId) {
+        const timestamp = nowIso();
+        this.goalCompletions.set(goalCompletionKey(completion.logicalDate, goalId), { goalId, logicalDate: completion.logicalDate, entryId: entry?.id, createdAt: timestamp, updatedAt: timestamp });
+      }
     }
     return this.bootstrap();
   }

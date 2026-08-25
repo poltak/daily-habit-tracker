@@ -39,12 +39,14 @@ function getEntryForDate(entries: Entry[], date: string) {
 
 function draftFromEntry(entry: Entry | null): Draft {
   if (!entry) return { ...EMPTY_DRAFT };
-  return { moodId: entry.moodId, activityIds: entry.activityIds, completedGoalIds: entry.completedGoalIds, localTime: entry.localTime, version: entry.version };
+  return { moodId: entry.moodId, activityIds: [...entry.activityIds], completedGoalIds: [...entry.completedGoalIds], localTime: entry.localTime, version: entry.version };
 }
 
-function draftForDate(logicalDate: string, serverEntry: Entry | null) {
+function draftForDate(logicalDate: string, serverEntry: Entry | null, serverCompletedGoalIds = serverEntry?.completedGoalIds ?? []) {
   const recovered = recoverStoredDraft(logicalDate, serverEntry);
-  return recovered ? { draft: recovered, restored: true } : { draft: draftFromEntry(serverEntry), restored: false };
+  const completedGoalIds = [...new Set(serverCompletedGoalIds)];
+  if (recovered) return { draft: { ...recovered, completedGoalIds }, restored: true };
+  return { draft: { ...draftFromEntry(serverEntry), completedGoalIds }, restored: false };
 }
 
 function moodFor(moods: Mood[], id: string) {
@@ -73,8 +75,14 @@ export default function Home() {
   const [hasLocalDraft, setHasLocalDraft] = useState(false);
   const [connectionState, setConnectionState] = useState<ConnectionState>("checking");
   const [message, setMessage] = useState<Notice | null>(null);
+  const [pendingGoalKeys, setPendingGoalKeys] = useState<Set<string>>(new Set());
+  const draftRef = useRef(EMPTY_DRAFT);
   const dateRequestGate = useRef(createLatestRequestGate());
   const bootstrapRequestGate = useRef(createLatestRequestGate());
+  const pendingGoalRef = useRef<Set<string>>(new Set());
+  const selectedDateRef = useRef("");
+  const selectedDateEpochRef = useRef(0);
+  draftRef.current = draft;
 
   function changeView(nextView: View) {
     if (isSetupBusy && view === "settings" && nextView !== "settings") return;
@@ -86,6 +94,7 @@ export default function Home() {
     const nextDate = preferredDate || readActiveStoredDraft()?.logicalDate || next.today;
     const recovered = draftForDate(nextDate, getEntryForDate(next.entries, nextDate) ?? null);
     rememberDraftDate(nextDate);
+    selectedDateRef.current = nextDate;
     setData(next);
     setSelectedDate(nextDate);
     setCalendarMonth((current) => current || nextDate.slice(0, 7));
@@ -93,6 +102,7 @@ export default function Home() {
     setDraft(recovered.draft);
     setHasLocalDraft(recovered.restored);
     if (announceRestore && recovered.restored) setMessage({ kind: "info", text: `Restored unsaved changes for ${shortDate(nextDate)}.` });
+    void chooseDate(nextDate);
   }
 
   async function loadBootstrap() {
@@ -178,32 +188,36 @@ export default function Home() {
 
   async function chooseDate(nextDate: string) {
     if (!isLogicalDate(nextDate)) return;
+    if (selectedDateRef.current && hasPendingGoalToggle(selectedDateRef.current)) {
+      setMessage({ kind: "info", text: "Wait for the goal update to finish before changing the day." });
+      return;
+    }
     const request = dateRequestGate.current.begin();
     rememberDraftDate(nextDate);
+    selectedDateRef.current = nextDate;
+    selectedDateEpochRef.current += 1;
     setSelectedDate(nextDate);
     setCalendarMonth(nextDate.slice(0, 7));
     setMessage(null);
-    const localEntry = data ? getEntryForDate(data.entries, nextDate) : null;
-    if (localEntry) {
-      setIsLoadingDate(false);
-      const recovered = draftForDate(nextDate, localEntry);
-      setDraft(recovered.draft);
-      setHasLocalDraft(recovered.restored);
-      if (recovered.restored) setMessage({ kind: "info", text: `Restored unsaved changes for ${shortDate(nextDate)}.` });
-      return;
-    }
     setIsLoadingDate(true);
     try {
       const response = await fetch(`/api/entries/${nextDate}`, { cache: "no-store", signal: request.signal });
       let serverEntry: Entry | null = null;
+      let serverCompletedGoalIds: string[] = [];
       if (response.status !== 404) {
         if (!response.ok) throw new Error("Could not load that date.");
-        serverEntry = ((await response.json()) as { entry: Entry }).entry;
+        const result = (await response.json()) as { entry: Entry; completedGoalIds?: string[] };
+        serverEntry = result.entry;
+        serverCompletedGoalIds = result.completedGoalIds ?? serverEntry.completedGoalIds;
+      } else {
+        const result = (await response.json()) as { completedGoalIds?: string[] };
+        serverCompletedGoalIds = result.completedGoalIds ?? [];
       }
       if (!request.isCurrent()) return;
-      const recovered = draftForDate(nextDate, serverEntry);
+      const recovered = draftForDate(nextDate, serverEntry, serverCompletedGoalIds);
       setDraft(recovered.draft);
       setHasLocalDraft(recovered.restored);
+      if (serverEntry) setData((current) => current ? { ...current, entries: [serverEntry!, ...current.entries.filter((entry) => entry.logicalDate !== nextDate)] } : current);
       setConnectionState("online");
       if (recovered.restored) setMessage({ kind: "info", text: `Restored unsaved changes for ${shortDate(nextDate)}.` });
     } catch (error) {
@@ -216,7 +230,8 @@ export default function Home() {
   }
 
   function updateDraft(patch: Partial<Draft>) {
-    const next = { ...draft, ...patch };
+    const next = { ...draftRef.current, ...patch };
+    draftRef.current = next;
     setDraft(next);
     if (selectedDate) writeStoredDraft(selectedDate, next);
     setHasLocalDraft(true);
@@ -227,12 +242,73 @@ export default function Home() {
     updateDraft({ activityIds: draft.activityIds.includes(id) ? draft.activityIds.filter((item) => item !== id) : [...draft.activityIds, id] });
   }
 
-  function toggleGoal(id: string) {
-    updateDraft({ completedGoalIds: draft.completedGoalIds.includes(id) ? draft.completedGoalIds.filter((item) => item !== id) : [...draft.completedGoalIds, id] });
+  function goalPendingKey(logicalDate: string, goalId: string) {
+    return `${logicalDate}:${goalId}`;
+  }
+
+  function setGoalPending(key: string, pending: boolean) {
+    setPendingGoalKeys((current) => {
+      const next = new Set(current);
+      if (pending) next.add(key); else next.delete(key);
+      return next;
+    });
+  }
+
+  function hasPendingGoalToggle(logicalDate: string) {
+    const prefix = `${logicalDate}:`;
+    return [...pendingGoalRef.current].some((key) => key.startsWith(prefix));
+  }
+
+  async function toggleGoal(id: string) {
+    const logicalDate = selectedDateRef.current || selectedDate;
+    const key = goalPendingKey(logicalDate, id);
+    if (!logicalDate || isLoadingDate || pendingGoalRef.current.has(key)) return;
+    if (!navigator.onLine) {
+      setMessage({ kind: "error", text: "You’re offline. Reconnect before updating a goal." });
+      setConnectionState("offline");
+      return;
+    }
+    const previousChecked = draftRef.current.completedGoalIds.includes(id);
+    const nextChecked = !previousChecked;
+    const dateEpoch = selectedDateEpochRef.current;
+    pendingGoalRef.current.add(key);
+    setGoalPending(key, true);
+    setDraft((current) => {
+      const next = { ...current, completedGoalIds: nextChecked ? [...new Set([...current.completedGoalIds, id])] : current.completedGoalIds.filter((item) => item !== id) };
+      draftRef.current = next;
+      return next;
+    });
+    try {
+      const response = await fetch(`/api/goal-completions/${logicalDate}/${id}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ completed: nextChecked }) });
+      const result = (await response.json()) as { completion?: { completed: boolean }; error?: string };
+      if (!response.ok || !result.completion || result.completion.completed !== nextChecked) throw new Error(result.error ?? "The goal update was out of date.");
+      if (selectedDateRef.current === logicalDate && selectedDateEpochRef.current === dateEpoch && result.completion.completed === nextChecked) {
+        setData((current) => current ? { ...current, entries: current.entries.map((entry) => entry.logicalDate === logicalDate ? { ...entry, completedGoalIds: nextChecked ? [...new Set([...entry.completedGoalIds, id])] : entry.completedGoalIds.filter((item) => item !== id) } : entry) } : current);
+        setConnectionState("online");
+        setMessage(null);
+      }
+    } catch (error) {
+      if (selectedDateRef.current === logicalDate && selectedDateEpochRef.current === dateEpoch) {
+        setDraft((current) => {
+          const next = { ...current, completedGoalIds: previousChecked ? [...new Set([...current.completedGoalIds, id])] : current.completedGoalIds.filter((item) => item !== id) };
+          draftRef.current = next;
+          return next;
+        });
+        setMessage({ kind: "error", text: `${(error as Error).message} The goal was restored.` });
+        setConnectionState(navigator.onLine ? "error" : "offline");
+      }
+    } finally {
+      pendingGoalRef.current.delete(key);
+      setGoalPending(key, false);
+    }
   }
 
   async function saveEntry() {
     if (isSaving || isDeleting) return;
+    if (hasPendingGoalToggle(selectedDate)) {
+      setMessage({ kind: "info", text: "Wait for the goal update to finish before saving the entry." });
+      return;
+    }
     if (!draft.moodId) {
       setMessage({ kind: "error", text: "Pick the mood that best sums up the day." });
       return;
@@ -277,7 +353,7 @@ export default function Home() {
       const response = await fetch(`/api/entries/${selectedDate}?expectedVersion=${draft.version}`, { method: "DELETE" });
       if (!response.ok) throw new Error("Could not delete that entry.");
       setData((current) => current ? { ...current, entries: current.entries.filter((entry) => entry.logicalDate !== selectedDate) } : current);
-      setDraft({ ...EMPTY_DRAFT });
+      setDraft({ ...EMPTY_DRAFT, completedGoalIds: [...draft.completedGoalIds] });
       clearStoredDraft(selectedDate);
       setHasLocalDraft(false);
       setConnectionState("online");
@@ -320,7 +396,7 @@ export default function Home() {
 
       <main className="content-shell">
         {message && view !== "log" && <div className={`notice ${message.kind}`} role="status">{message.kind === "success" ? "✓" : message.kind === "info" ? "↻" : "!"} {message.text}</div>}
-        {view === "log" && <LogView data={data} selectedDate={selectedDate} draft={draft} hasLocalDraft={hasLocalDraft} activityQuery={activityQuery} isLoadingDate={isLoadingDate} onDate={chooseDate} onDraft={updateDraft} onActivityQuery={setActivityQuery} onToggleActivity={toggleActivity} onToggleGoal={toggleGoal} onSave={saveEntry} onDelete={deleteSelectedEntry} isSaving={isSaving} isDeleting={isDeleting} message={message} />}
+        {view === "log" && <LogView data={data} selectedDate={selectedDate} draft={draft} hasLocalDraft={hasLocalDraft} activityQuery={activityQuery} isLoadingDate={isLoadingDate} onDate={chooseDate} onDraft={updateDraft} onActivityQuery={setActivityQuery} onToggleActivity={toggleActivity} onToggleGoal={toggleGoal} onSave={saveEntry} onDelete={deleteSelectedEntry} isSaving={isSaving} isDeleting={isDeleting} pendingGoalKeys={pendingGoalKeys} message={message} />}
         {view === "calendar" && <CalendarView month={calendarMonth} dates={calendarDates} today={data.today} isLoading={isLoadingCalendar} onMonth={setCalendarMonth} onOpenDate={(date) => { changeView("log"); void chooseDate(date); }} />}
         {view === "entries" && <EntriesView data={data} onEdit={(date) => { changeView("log"); void chooseDate(date); }} onLoadMore={loadOlderEntries} hasMore={hasMoreEntries} isLoadingMore={isLoadingMore} />}
         {view === "settings" && <SetupView data={data} onRefresh={loadBootstrap} onMessage={setMessage} onBusyChange={setIsSetupBusy} />}
@@ -336,7 +412,7 @@ export default function Home() {
   );
 }
 
-function LogView({ data, selectedDate, draft, hasLocalDraft, activityQuery, isLoadingDate, onDate, onDraft, onActivityQuery, onToggleActivity, onToggleGoal, onSave, onDelete, isSaving, isDeleting, message }: {
+function LogView({ data, selectedDate, draft, hasLocalDraft, activityQuery, isLoadingDate, onDate, onDraft, onActivityQuery, onToggleActivity, onToggleGoal, onSave, onDelete, isSaving, isDeleting, pendingGoalKeys, message }: {
   data: Bootstrap;
   selectedDate: string;
   draft: Draft;
@@ -352,6 +428,7 @@ function LogView({ data, selectedDate, draft, hasLocalDraft, activityQuery, isLo
   onDelete: () => void;
   isSaving: boolean;
   isDeleting: boolean;
+  pendingGoalKeys: Set<string>;
   message: Notice | null;
 }) {
   const existing = getEntryForDate(data.entries, selectedDate);
@@ -359,6 +436,7 @@ function LogView({ data, selectedDate, draft, hasLocalDraft, activityQuery, isLo
     return filterActivityGroups({ groups: data.groups, activities: data.activities, query: activityQuery });
   }, [activityQuery, data.activities, data.groups]);
   const formBusy = isSaving || isDeleting;
+  const goalsBusy = [...pendingGoalKeys].some((key) => key.startsWith(`${selectedDate}:`));
 
   return <>
     <fieldset className="log-form" disabled={formBusy} aria-busy={formBusy}>
@@ -371,13 +449,18 @@ function LogView({ data, selectedDate, draft, hasLocalDraft, activityQuery, isLo
           <p className="muted">Capture the shape of the day while it is still close.</p>
         </div>
         <div className="date-switcher" aria-label="Choose the logical day">
-          <button className={selectedDate === data.today ? "selected" : ""} onClick={() => onDate(data.today)} disabled={isLoadingDate}>Today</button>
-          <button className={selectedDate === data.yesterday ? "selected" : ""} onClick={() => onDate(data.yesterday)} disabled={isLoadingDate}>Yesterday</button>
-          <label className="date-input"><span>Other</span><input type="date" value={selectedDate} onChange={(event) => onDate(event.target.value)} disabled={isLoadingDate} /></label>
+          <button className={selectedDate === data.today ? "selected" : ""} onClick={() => onDate(data.today)} disabled={isLoadingDate || goalsBusy}>Today</button>
+          <button className={selectedDate === data.yesterday ? "selected" : ""} onClick={() => onDate(data.yesterday)} disabled={isLoadingDate || goalsBusy}>Yesterday</button>
+          <label className="date-input"><span>Other</span><input type="date" value={selectedDate} onChange={(event) => onDate(event.target.value)} disabled={isLoadingDate || goalsBusy} /></label>
         </div>
       </section>
 
       {message && <div className={`notice ${message.kind}`} role="status">{message.kind === "success" ? "✓" : message.kind === "info" ? "↻" : "!"} {message.text}</div>}
+
+      <section className="panel goals-panel" aria-busy={isLoadingDate || goalsBusy}>
+        <div className="section-heading"><div><p className="eyebrow">Goals</p><h2>Keep the promises that matter</h2></div></div>
+        <div className="goal-list">{data.goals.filter((goal) => !goal.archived).map((goal) => <GoalRow key={goal.id} goal={goal} activity={activityFor(data.activities, goal.activityId)} checked={draft.completedGoalIds.includes(goal.id)} pending={pendingGoalKeys.has(`${selectedDate}:${goal.id}`)} disabled={isLoadingDate} onToggle={() => { void onToggleGoal(goal.id); }} />)}</div>
+      </section>
 
       <section className="panel mood-panel">
         <div className="section-heading"><div><p className="eyebrow">Overall mood</p><h2>Pick one</h2></div><span className="required-label">required</span></div>
@@ -391,13 +474,9 @@ function LogView({ data, selectedDate, draft, hasLocalDraft, activityQuery, isLo
         {isLoadingDate ? <div className="inline-loading">Loading that day…</div> : <ActivityGroupList groups={groups} activityQuery={activityQuery} selectedActivityIds={draft.activityIds} onToggleActivity={onToggleActivity} />}
       </section>
 
-      <section className="panel goals-panel">
-        <div className="section-heading"><div><p className="eyebrow">Goals</p><h2>Keep the promises that matter</h2></div></div>
-        <div className="goal-list">{data.goals.filter((goal) => !goal.archived).map((goal) => <GoalRow key={goal.id} goal={goal} activity={activityFor(data.activities, goal.activityId)} checked={draft.completedGoalIds.includes(goal.id)} onToggle={() => onToggleGoal(goal.id)} />)}</div>
-      </section>
     </fieldset>
 
-    <div className="save-bar" aria-busy={formBusy}><div><strong>{existing ? "Edit this entry" : "Ready to save?"}</strong><span>{friendlyDate(selectedDate)} · {draft.activityIds.length} activities</span>{hasLocalDraft && <small className="draft-status"><Icon name="save" /> Unsaved changes stored on this device</small>}</div><div className="save-actions">{existing && <button className="ghost-button danger" onClick={onDelete} disabled={isDeleting || isSaving} aria-busy={isDeleting}>{isDeleting ? "Deleting…" : "Delete"}</button>}<button className="primary-button" onClick={onSave} disabled={isSaving || isDeleting} aria-busy={isSaving}>{isSaving ? "Saving…" : existing ? "Update entry" : "Save entry"}</button></div></div>
+    <div className="save-bar" aria-busy={formBusy || goalsBusy}><div><strong>{existing ? "Edit this entry" : "Ready to save?"}</strong><span>{friendlyDate(selectedDate)} · {draft.activityIds.length} activities</span>{hasLocalDraft && <small className="draft-status"><Icon name="save" /> Unsaved changes stored on this device</small>}</div><div className="save-actions">{existing && <button className="ghost-button danger" onClick={onDelete} disabled={isDeleting || isSaving} aria-busy={isDeleting}>{isDeleting ? "Deleting…" : "Delete"}</button>}<button className="primary-button" onClick={onSave} disabled={isSaving || isDeleting || goalsBusy} aria-busy={isSaving}>{isSaving ? "Saving…" : goalsBusy ? "Updating goal…" : existing ? "Update entry" : "Save entry"}</button></div></div>
   </>;
 }
 
@@ -439,9 +518,10 @@ function ActivityGroupList({ groups, activityQuery, selectedActivityIds, onToggl
   </div>;
 }
 
-function GoalRow({ goal, activity, checked, onToggle }: { goal: Goal; activity?: Activity; checked: boolean; onToggle: () => void }) {
+function GoalRow({ goal, activity, checked, pending, disabled, onToggle }: { goal: Goal; activity?: Activity; checked: boolean; pending: boolean; disabled: boolean; onToggle: () => void }) {
   const detail = goal.scheduleType === "daily" ? "Every day" : goal.scheduleType === "times_per_week" ? `${goal.targetPerWeek ?? 1} times this week` : "Selected days";
-  return <button className={`goal-row ${checked ? "checked" : ""}`} onClick={onToggle} aria-pressed={checked}><span className="goal-checkbox">{checked && <Icon name={UI_ICONS.check} />}</span><span className="goal-copy"><strong>{goal.name}</strong><small>{detail}{activity ? ` · ${activity.name}` : ""}</small></span><span className="goal-arrow"><Icon name="chevron_right" /></span></button>;
+  const unavailable = pending || disabled;
+  return <button className={`goal-row ${checked ? "checked" : ""}`} onClick={onToggle} disabled={unavailable} aria-pressed={checked} aria-busy={pending} aria-disabled={unavailable}><span className="goal-checkbox">{checked && <Icon name={UI_ICONS.check} />}</span><span className="goal-copy"><strong>{goal.name}</strong><small>{pending ? "Saving…" : disabled ? "Loading day…" : `${detail}${activity ? ` · ${activity.name}` : ""}`}</small></span>{pending && <span className="sr-only" role="status">Saving {goal.name}…</span>}<span className="goal-arrow"><Icon name="chevron_right" /></span></button>;
 }
 
 function EntriesView({ data, onEdit, onLoadMore, hasMore, isLoadingMore }: { data: Bootstrap; onEdit: (date: string) => void; onLoadMore: () => void; hasMore: boolean; isLoadingMore: boolean }) {

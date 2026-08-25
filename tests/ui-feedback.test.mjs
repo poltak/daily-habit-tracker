@@ -54,3 +54,20 @@ test("bootstrap refreshes and setup navigation use a latest-request gate", () =>
   assert.match(pageSource, /onBusyChange=\{setIsSetupBusy\}/);
   assert.match(pageSource, /disabled=\{isSetupBusy && view === "settings"\}/);
 });
+
+test("goals are above mood and persist through a dedicated optimistic toggle", () => {
+  const goalsIndex = pageSource.indexOf('<section className="panel goals-panel"');
+  const moodIndex = pageSource.indexOf('<section className="panel mood-panel">');
+  assert.ok(goalsIndex >= 0 && moodIndex >= 0 && goalsIndex < moodIndex);
+  assert.match(pageSource, /api\/goal-completions\//);
+  assert.match(pageSource, /const pendingGoalRef = useRef<Set<string>>\(new Set\(\)\)/);
+  assert.match(pageSource, /pendingGoalRef\.current\.has\(key\)/);
+  assert.match(pageSource, /setDraft\(\(current\) => \{[\s\S]*completedGoalIds:/);
+  assert.match(pageSource, /pending=\{pendingGoalKeys\.has\(/);
+  assert.match(pageSource, /aria-busy=\{pending\}/);
+  assert.match(pageSource, /disabled=\{isLoadingDate \|\| goalsBusy\}/);
+  assert.match(pageSource, /if \(selectedDateRef\.current && hasPendingGoalToggle\(selectedDateRef\.current\)\)/);
+  assert.match(pageSource, /The goal was restored/);
+  assert.match(pageSource, /serverCompletedGoalIds/);
+  assert.doesNotMatch(pageSource, /function toggleGoal[\s\S]*?updateDraft\(/);
+});

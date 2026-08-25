@@ -64,6 +64,32 @@ test("Wrangler-backed API covers persistence, catalog, calendar, pagination, imp
   assert.equal(bootstrap.body.activities.length, 12);
   assert.equal(bootstrap.body.goals.length, 2);
 
+  const standaloneDate = "2026-01-10";
+  const standaloneComplete = await json(`/api/goal-completions/${standaloneDate}/goal-read`, { method: "PUT", body: JSON.stringify({ completed: true }) });
+  assert.equal(standaloneComplete.response.status, 200);
+  assert.deepEqual(standaloneComplete.body.completion, { goalId: "goal-read", logicalDate: standaloneDate, completed: true });
+  const standaloneCompleteAgain = await json(`/api/goal-completions/${standaloneDate}/goal-read`, { method: "PUT", body: JSON.stringify({ completed: true }) });
+  assert.equal(standaloneCompleteAgain.response.status, 200);
+  const standaloneBeforeEntry = await json(`/api/entries/${standaloneDate}`);
+  assert.equal(standaloneBeforeEntry.response.status, 404);
+  assert.deepEqual(standaloneBeforeEntry.body.completedGoalIds, ["goal-read"]);
+  const entryAfterStandaloneToggle = await json(`/api/entries/${standaloneDate}`, { method: "PUT", body: JSON.stringify({ moodId: "mood-good", activityIds: [], completedGoalIds: ["goal-move"], localTime: "20:00" }) });
+  assert.equal(entryAfterStandaloneToggle.response.status, 200);
+  assert.deepEqual(entryAfterStandaloneToggle.body.entry.completedGoalIds, ["goal-read"]);
+  const standaloneUncomplete = await json(`/api/goal-completions/${standaloneDate}/goal-read`, { method: "PUT", body: JSON.stringify({ completed: false }) });
+  assert.equal(standaloneUncomplete.response.status, 200);
+  const standaloneUncompleteAgain = await json(`/api/goal-completions/${standaloneDate}/goal-read`, { method: "PUT", body: JSON.stringify({ completed: false }) });
+  assert.equal(standaloneUncompleteAgain.response.status, 200);
+  const standaloneAfterUncomplete = await json(`/api/entries/${standaloneDate}`);
+  assert.deepEqual(standaloneAfterUncomplete.body.entry.completedGoalIds, []);
+  const staleGoalSave = await json(`/api/entries/${standaloneDate}`, { method: "PUT", body: JSON.stringify({ moodId: "mood-rad", activityIds: [], completedGoalIds: ["goal-read"], localTime: "21:00" }) });
+  assert.equal(staleGoalSave.response.status, 200);
+  assert.deepEqual(staleGoalSave.body.entry.completedGoalIds, []);
+  const invalidGoalToggle = await json(`/api/goal-completions/${standaloneDate}/goal-missing`, { method: "PUT", body: JSON.stringify({ completed: true }) });
+  assert.equal(invalidGoalToggle.response.status, 400);
+  const invalidDateToggle = await json("/api/goal-completions/not-a-date/goal-read", { method: "PUT", body: JSON.stringify({ completed: true }) });
+  assert.equal(invalidDateToggle.response.status, 400);
+
   const malformedEntry = await json("/api/entries/2026-02-01", { method: "PUT", body: JSON.stringify({ moodId: "mood-good", activityIds: null, completedGoalIds: [], localTime: "20:00" }) });
   assert.equal(malformedEntry.response.status, 400);
   assert.equal(malformedEntry.body.error, "Activity IDs must be an array of strings.");
@@ -104,7 +130,9 @@ test("Wrangler-backed API covers persistence, catalog, calendar, pagination, imp
   assert.equal(archivedGoal.body.goal.archived, true);
   await json(`/api/catalog/goal/${goal.body.goal.id}`, { method: "PATCH", body: JSON.stringify({ archived: false }) });
 
-  const saved = await json("/api/entries/2026-02-03", { method: "PUT", body: JSON.stringify({ moodId: "mood-good", activityIds: [activity.body.activity.id], completedGoalIds: [goal.body.goal.id], localTime: "21:30" }) });
+  const savedGoal = await json(`/api/goal-completions/2026-02-03/${goal.body.goal.id}`, { method: "PUT", body: JSON.stringify({ completed: true }) });
+  assert.equal(savedGoal.response.status, 200);
+  const saved = await json("/api/entries/2026-02-03", { method: "PUT", body: JSON.stringify({ moodId: "mood-good", activityIds: [activity.body.activity.id], completedGoalIds: ["goal-move"], localTime: "21:30" }) });
   assert.equal(saved.response.status, 200);
   assert.equal(saved.body.entry.activityIds.length, 1);
   const savedOlder = await json("/api/entries/2026-02-02", { method: "PUT", body: JSON.stringify({ moodId: "mood-meh", activityIds: [], completedGoalIds: [], localTime: "20:00" }) });
