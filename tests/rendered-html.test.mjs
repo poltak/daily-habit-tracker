@@ -23,6 +23,7 @@ test("server-renders the Daymark journal shell", async () => {
 
   const html = await response.text();
   assert.match(html, /<title>daymark — your daily journal<\/title>/i);
+  assert.match(html, /<link rel="manifest" href="\/manifest\.webmanifest" crossorigin="use-credentials"\s*\/?>/i);
   assert.match(html, /Opening your journal/);
   assert.doesNotMatch(html, /Codex|sites-skeleton|react-loading-skeleton|codex-preview/);
 });
