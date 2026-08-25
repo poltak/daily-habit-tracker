@@ -103,7 +103,7 @@ button:disabled { cursor: wait; opacity: .68; }
 .app-shell { min-height: 100vh; padding-bottom: 100px; }
 .topbar { height: 76px; padding: 0 max(22px, calc((100vw - 1080px) / 2)); display: flex; align-items: center; gap: 22px; border-bottom: 1px solid var(--line-strong); background: color-mix(in srgb, var(--paper) 92%, transparent); position: sticky; top: 0; z-index: 10; backdrop-filter: blur(18px); }
 .brand { border: 0; background: none; display: inline-flex; align-items: center; gap: 10px; color: var(--ink); font-weight: 800; letter-spacing: -.04em; font-size: 20px; padding: 0; }
-.brand-mark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 12px 12px 12px 4px; color: var(--ink-inverse); background: var(--accent); font-weight: 900; font-size: 23px; box-shadow: var(--accent-shadow); }
+.brand-mark { display: block; width: 34px; height: 34px; flex: 0 0 auto; border-radius: 12px 12px 12px 4px; background: url("/icon.svg") center / contain no-repeat; box-shadow: var(--accent-shadow); }
 .topbar-date { color: var(--muted); font-size: 14px; flex: 1; text-align: center; }
 .connection-pill { color: var(--positive-muted); background: var(--surface-success); border: 1px solid color-mix(in srgb, var(--positive) 24%, var(--surface-success)); padding: 7px 11px; border-radius: 999px; font-size: 12px; font-weight: 700; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
 .connection-pill.checking { color: var(--muted); background: var(--surface-muted); border-color: var(--line); }
@@ -279,12 +279,12 @@ button:disabled { cursor: wait; opacity: .68; }
 .icon-choice span:last-child { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; font-weight: 750; }
 .icon-picker .empty-inline { padding: 28px 22px 36px; }
 .app-loading { min-height: 100vh; display: grid; place-items: center; align-content: center; gap: 14px; color: var(--muted); }
-.app-loading .brand-mark { width: 48px; height: 48px; font-size: 31px; }
+.app-loading .brand-mark { width: 48px; height: 48px; }
 .inline-loading, .empty-inline { color: var(--muted); padding: 22px 0; text-align: center; font-size: 13px; }
 @media (max-width: 620px) {
   .topbar { height: 64px; padding: 0 16px; gap: 12px; }
   .brand { font-size: 18px; }
-  .brand-mark { width: 30px; height: 30px; font-size: 20px; }
+  .brand-mark { width: 30px; height: 30px; }
   .topbar-date { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .connection-pill { padding: 6px 8px; font-size: 0; }
   .connection-pill .material-symbols-rounded { font-size: 17px; }

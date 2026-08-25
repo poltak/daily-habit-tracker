@@ -9,6 +9,29 @@ async function readProjectFile(path) {
   return readFile(new URL(path, projectRoot));
 }
 
+test("favicon reuses the Daymark PWA artwork", async () => {
+  assert.deepEqual(
+    await readProjectFile("public/favicon.svg"),
+    await readProjectFile("public/icon.svg"),
+  );
+});
+
+test("both app brand marks use the canonical vector asset", async () => {
+  const page = (await readProjectFile("app/page.tsx")).toString();
+  const icon = (await readProjectFile("public/icon.svg")).toString();
+  const styles = (await readProjectFile("app/globals.css")).toString();
+
+  assert.equal((page.match(/<span className="brand-mark" aria-hidden="true" \/>/g) ?? []).length, 2);
+  assert.match(styles, /\.brand-mark \{[^}]*background: url\("\/icon\.svg"\) center \/ contain no-repeat;/s);
+  assert.doesNotMatch(page, /className="brand-mark">d<\//);
+  assert.doesNotMatch(icon, /<text\b|font-family=/i);
+  assert.match(icon, /#E78363/);
+  assert.match(icon, /#FFFFFF/);
+  assert.match(styles, /\.brand-mark \{[^}]*width: 34px;[^}]*height: 34px;[^}]*box-shadow: var\(--accent-shadow\);/s);
+  assert.match(styles, /\.app-loading \.brand-mark \{ width: 48px; height: 48px; \}/);
+  assert.match(styles, /\.brand-mark \{ width: 30px; height: 30px; \}/);
+});
+
 function readPng(buffer) {
   const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
   assert.deepEqual(buffer.subarray(0, signature.length), signature);
@@ -157,7 +180,7 @@ test("layout emits one credentialed manifest link and no metadata manifest", asy
 
 test("service-worker shell caches the versioned PWA assets", async () => {
   const serviceWorker = (await readProjectFile("public/sw.js")).toString();
-  assert.match(serviceWorker, /daymark-shell-v2/);
+  assert.match(serviceWorker, /daymark-shell-v3/);
   for (const asset of ["/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/icon-maskable-512.png"]) {
     assert.match(serviceWorker, new RegExp(`"${asset.replaceAll(".", "\\.")}"`));
   }

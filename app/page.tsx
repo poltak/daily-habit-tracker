@@ -384,12 +384,12 @@ export default function Home() {
     }
   }
 
-  if (!data) return <main className="app-loading"><div className="brand-mark">d</div><p>Opening your journal…</p></main>;
+  if (!data) return <main className="app-loading"><span className="brand-mark" aria-hidden="true" /><p>Opening your journal…</p></main>;
 
   return (
     <div className="app-shell">
       <header className="topbar">
-        <button className="brand" onClick={() => changeView("log")} aria-label="Go to log" disabled={isSetupBusy && view === "settings"}><span className="brand-mark">d</span><span>daymark</span></button>
+        <button className="brand" onClick={() => changeView("log")} aria-label="Go to log" disabled={isSetupBusy && view === "settings"}><span className="brand-mark" aria-hidden="true" /><span>daymark</span></button>
         <div className="topbar-date">{view === "log" ? friendlyDate(selectedDate) : view === "calendar" ? "Your calendar" : view === "entries" ? "Your entries" : "Your setup"}</div>
         <div className={`connection-pill ${connectionState}`} role="status"><Icon name={connectionState === "offline" ? "cloud_off" : connectionState === "error" ? "cloud_alert" : UI_ICONS.sync} /> {connectionState === "checking" ? "checking" : connectionState === "online" ? "online" : connectionState === "offline" ? "offline" : "sync issue"}</div>
       </header>
