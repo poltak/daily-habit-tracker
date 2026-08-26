@@ -5,6 +5,7 @@ import {
   type Activity,
   type ActivityGroup,
   type Bootstrap,
+  type DaySelections,
   type Entry,
   type Goal,
   type Mood,
@@ -73,17 +74,45 @@ function draftFromEntry(entry: Entry | null): Draft {
   };
 }
 
-function draftForDate(
-  logicalDate: string,
-  serverEntry: Entry | null,
+function draftForDate({
+  logicalDate,
+  serverEntry,
   serverCompletedGoalIds = serverEntry?.completedGoalIds ?? [],
-) {
+  serverSelections,
+}: {
+  logicalDate: string;
+  serverEntry: Entry | null;
+  serverCompletedGoalIds?: string[];
+  serverSelections?: DaySelections;
+}) {
   const recovered = recoverStoredDraft(logicalDate, serverEntry);
   const completedGoalIds = [...new Set(serverCompletedGoalIds)];
-  if (recovered)
-    return { draft: { ...recovered, completedGoalIds }, restored: true };
+  const baseDraft = serverEntry
+    ? draftFromEntry(serverEntry)
+    : serverSelections
+      ? {
+          ...EMPTY_DRAFT,
+          moodId: serverSelections.moodId ?? "",
+          activityIds: [...serverSelections.activityIds],
+        }
+      : draftFromEntry(null);
+  if (recovered) {
+    const recoveredDraft = { ...recovered, completedGoalIds };
+    if (serverSelections?.moodOverride)
+      recoveredDraft.moodId = baseDraft.moodId;
+    if (serverSelections && serverSelections.activityOverrideIds.length > 0) {
+      const activityIds = new Set(recoveredDraft.activityIds);
+      for (const activityId of serverSelections.activityOverrideIds) {
+        if (serverSelections.activityIds.includes(activityId))
+          activityIds.add(activityId);
+        else activityIds.delete(activityId);
+      }
+      recoveredDraft.activityIds = [...activityIds];
+    }
+    return { draft: recoveredDraft, restored: true };
+  }
   return {
-    draft: { ...draftFromEntry(serverEntry), completedGoalIds },
+    draft: { ...baseDraft, completedGoalIds },
     restored: false,
   };
 }
@@ -118,13 +147,24 @@ export default function Home() {
   const [pendingGoalKeys, setPendingGoalKeys] = useState<Set<string>>(
     new Set(),
   );
+  const [pendingSelectionKeys, setPendingSelectionKeys] = useState<Set<string>>(
+    new Set(),
+  );
   const draftRef = useRef(EMPTY_DRAFT);
   const dateRequestGate = useRef(createLatestRequestGate());
   const bootstrapRequestGate = useRef(createLatestRequestGate());
   const pendingGoalRef = useRef<Set<string>>(new Set());
+  const pendingSelectionRef = useRef<Set<string>>(new Set());
+  const failedSelectionRef = useRef<Set<string>>(new Set());
+  const hasLocalDraftRef = useRef(false);
   const selectedDateRef = useRef("");
   const selectedDateEpochRef = useRef(0);
   draftRef.current = draft;
+
+  function markLocalDraft(value: boolean) {
+    hasLocalDraftRef.current = value;
+    setHasLocalDraft(value);
+  }
 
   function changeView(nextView: View) {
     if (isSetupBusy && view === "settings" && nextView !== "settings") return;
@@ -139,10 +179,10 @@ export default function Home() {
   ) {
     const nextDate =
       preferredDate || readActiveStoredDraft()?.logicalDate || next.today;
-    const recovered = draftForDate(
-      nextDate,
-      getEntryForDate(next.entries, nextDate) ?? null,
-    );
+    const recovered = draftForDate({
+      logicalDate: nextDate,
+      serverEntry: getEntryForDate(next.entries, nextDate) ?? null,
+    });
     rememberDraftDate(nextDate);
     selectedDateRef.current = nextDate;
     setData(next);
@@ -150,7 +190,7 @@ export default function Home() {
     setCalendarMonth((current) => current || nextDate.slice(0, 7));
     setHasMoreEntries(next.entries.length >= 30);
     setDraft(recovered.draft);
-    setHasLocalDraft(recovered.restored);
+    markLocalDraft(recovered.restored);
     if (announceRestore && recovered.restored)
       setMessage({
         kind: "info",
@@ -274,13 +314,20 @@ export default function Home() {
 
   async function chooseDate(nextDate: string) {
     if (!isLogicalDate(nextDate)) return;
-    if (
-      selectedDateRef.current &&
-      hasPendingGoalToggle(selectedDateRef.current)
-    ) {
+    if (selectedDateRef.current && hasPendingGoalToggle(selectedDateRef.current)) {
       setMessage({
         kind: "info",
         text: "Wait for the goal update to finish before changing the day.",
+      });
+      return;
+    }
+    if (
+      selectedDateRef.current &&
+      hasPendingSelectionToggle(selectedDateRef.current)
+    ) {
+      setMessage({
+        kind: "info",
+        text: "Wait for the mood or activity update to finish before changing the day.",
       });
       return;
     }
@@ -299,29 +346,35 @@ export default function Home() {
       });
       let serverEntry: Entry | null = null;
       let serverCompletedGoalIds: string[] = [];
+      let serverSelections: DaySelections | undefined;
       if (response.status !== 404) {
         if (!response.ok) throw new Error("Could not load that date.");
         const result = (await response.json()) as {
           entry: Entry;
           completedGoalIds?: string[];
+          daySelections?: DaySelections;
         };
         serverEntry = result.entry;
         serverCompletedGoalIds =
           result.completedGoalIds ?? serverEntry.completedGoalIds;
+        serverSelections = result.daySelections;
       } else {
         const result = (await response.json()) as {
           completedGoalIds?: string[];
+          daySelections?: DaySelections;
         };
         serverCompletedGoalIds = result.completedGoalIds ?? [];
+        serverSelections = result.daySelections;
       }
       if (!request.isCurrent()) return;
-      const recovered = draftForDate(
-        nextDate,
+      const recovered = draftForDate({
+        logicalDate: nextDate,
         serverEntry,
         serverCompletedGoalIds,
-      );
+        serverSelections,
+      });
       setDraft(recovered.draft);
-      setHasLocalDraft(recovered.restored);
+      markLocalDraft(recovered.restored);
       if (serverEntry)
         setData((current) =>
           current
@@ -351,21 +404,174 @@ export default function Home() {
     }
   }
 
-  function updateDraft(patch: Partial<Draft>) {
+  function updateDraft(
+    patch: Partial<Draft>,
+    { markLocal = true }: { markLocal?: boolean } = {},
+  ) {
     const next = { ...draftRef.current, ...patch };
     draftRef.current = next;
     setDraft(next);
     if (selectedDate) writeStoredDraft(selectedDate, next);
-    setHasLocalDraft(true);
+    if (markLocal) markLocalDraft(true);
     setMessage(null);
   }
 
-  function toggleActivity(id: string) {
-    updateDraft({
-      activityIds: draft.activityIds.includes(id)
-        ? draft.activityIds.filter((item) => item !== id)
-        : [...draft.activityIds, id],
+  function selectionPendingKey(logicalDate: string, kind: "mood" | "activity", id?: string) {
+    return `${logicalDate}:${kind}:${id ?? ""}`;
+  }
+
+  function setSelectionPending(key: string, pending: boolean) {
+    setPendingSelectionKeys((current) => {
+      const next = new Set(current);
+      if (pending) next.add(key);
+      else next.delete(key);
+      return next;
     });
+  }
+
+  function hasPendingSelectionToggle(logicalDate: string) {
+    const prefix = `${logicalDate}:`;
+    return [...pendingSelectionRef.current].some((key) => key.startsWith(prefix));
+  }
+
+  async function toggleMood(id: string) {
+    const logicalDate = selectedDateRef.current || selectedDate;
+    const key = selectionPendingKey(logicalDate, "mood");
+    if (!logicalDate || isLoadingDate || pendingSelectionRef.current.has(key)) return;
+    const previousMoodId = draftRef.current.moodId;
+    if (previousMoodId === id) return;
+    const nextDraft = { ...draftRef.current, moodId: id };
+    const dateEpoch = selectedDateEpochRef.current;
+    pendingSelectionRef.current.add(key);
+    setSelectionPending(key, true);
+    updateDraft({ moodId: id }, { markLocal: false });
+    try {
+      const response = await fetch(`/api/day-selections/${logicalDate}/mood`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ moodId: id }),
+      });
+      const result = (await response.json()) as {
+        selection?: { moodId: string };
+        error?: string;
+      };
+      if (!response.ok || !result.selection || result.selection.moodId !== id)
+        throw new Error(result.error ?? "The mood update was out of date.");
+      failedSelectionRef.current.delete(key);
+      if (selectedDateRef.current === logicalDate && selectedDateEpochRef.current === dateEpoch) {
+        setData((current) =>
+          current
+            ? {
+                ...current,
+                entries: current.entries.map((entry) =>
+                  entry.logicalDate === logicalDate ? { ...entry, moodId: id } : entry,
+                ),
+              }
+            : current,
+        );
+        const hasOtherPendingSelection = [...pendingSelectionRef.current].some(
+          (pendingKey) => pendingKey !== key && pendingKey.startsWith(`${logicalDate}:`),
+        );
+        if (!hasOtherPendingSelection && !hasLocalDraftRef.current) {
+          clearStoredDraft(logicalDate);
+          markLocalDraft(false);
+        }
+        const hasFailedSelection = [...failedSelectionRef.current].some(
+          (failedKey) => failedKey.startsWith(`${logicalDate}:`),
+        );
+        if (!hasFailedSelection) {
+          setConnectionState("online");
+          setMessage(null);
+        }
+      }
+    } catch (error) {
+      failedSelectionRef.current.add(key);
+      if (selectedDateRef.current === logicalDate && selectedDateEpochRef.current === dateEpoch) {
+        updateDraft({ moodId: previousMoodId }, { markLocal: false });
+        writeStoredDraft(logicalDate, draftRef.current);
+        markLocalDraft(true);
+        setConnectionState(navigator.onLine ? "error" : "offline");
+        setMessage({ kind: "error", text: `${(error as Error).message} The mood was restored.` });
+      } else writeStoredDraft(logicalDate, nextDraft);
+    } finally {
+      pendingSelectionRef.current.delete(key);
+      setSelectionPending(key, false);
+    }
+  }
+
+  async function toggleActivity(id: string) {
+    const logicalDate = selectedDateRef.current || selectedDate;
+    const key = selectionPendingKey(logicalDate, "activity", id);
+    if (!logicalDate || isLoadingDate || pendingSelectionRef.current.has(key)) return;
+    const previousSelected = draftRef.current.activityIds.includes(id);
+    const nextSelected = !previousSelected;
+    const nextActivityIds = nextSelected
+      ? [...new Set([...draftRef.current.activityIds, id])]
+      : draftRef.current.activityIds.filter((item) => item !== id);
+    const nextDraft = { ...draftRef.current, activityIds: nextActivityIds };
+    const dateEpoch = selectedDateEpochRef.current;
+    pendingSelectionRef.current.add(key);
+    setSelectionPending(key, true);
+    updateDraft({ activityIds: nextActivityIds }, { markLocal: false });
+    try {
+      const response = await fetch(`/api/day-selections/${logicalDate}/activities/${id}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ selected: nextSelected }),
+      });
+      const result = (await response.json()) as {
+        selection?: { activityId: string; selected: boolean };
+        error?: string;
+      };
+      if (!response.ok || !result.selection || result.selection.activityId !== id || result.selection.selected !== nextSelected)
+        throw new Error(result.error ?? "The activity update was out of date.");
+      failedSelectionRef.current.delete(key);
+      if (selectedDateRef.current === logicalDate && selectedDateEpochRef.current === dateEpoch) {
+        setData((current) =>
+          current
+            ? {
+                ...current,
+                entries: current.entries.map((entry) =>
+                  entry.logicalDate === logicalDate
+                    ? {
+                        ...entry,
+                        activityIds: nextSelected
+                          ? [...new Set([...entry.activityIds, id])]
+                          : entry.activityIds.filter((item) => item !== id),
+                      }
+                    : entry,
+                ),
+              }
+            : current,
+        );
+        const hasOtherPendingSelection = [...pendingSelectionRef.current].some(
+          (pendingKey) => pendingKey !== key && pendingKey.startsWith(`${logicalDate}:`),
+        );
+        if (!hasOtherPendingSelection && !hasLocalDraftRef.current) {
+          clearStoredDraft(logicalDate);
+          markLocalDraft(false);
+        }
+        const hasFailedSelection = [...failedSelectionRef.current].some(
+          (failedKey) => failedKey.startsWith(`${logicalDate}:`),
+        );
+        if (!hasFailedSelection) {
+          setConnectionState("online");
+          setMessage(null);
+        }
+      }
+    } catch (error) {
+      failedSelectionRef.current.add(key);
+      if (selectedDateRef.current === logicalDate && selectedDateEpochRef.current === dateEpoch) {
+        updateDraft({ activityIds: previousSelected ? [...new Set([...draftRef.current.activityIds, id])] : draftRef.current.activityIds.filter((item) => item !== id) }, { markLocal: false });
+        writeStoredDraft(logicalDate, draftRef.current);
+        markLocalDraft(true);
+        setConnectionState(navigator.onLine ? "error" : "offline");
+        setMessage({ kind: "error", text: `${(error as Error).message} The activity was restored.` });
+      } else writeStoredDraft(logicalDate, nextDraft);
+    } finally {
+      pendingSelectionRef.current.delete(key);
+      setSelectionPending(key, false);
+    }
   }
 
   function goalPendingKey(logicalDate: string, goalId: string) {
@@ -489,10 +695,10 @@ export default function Home() {
 
   async function saveEntry() {
     if (isSaving || isDeleting) return;
-    if (hasPendingGoalToggle(selectedDate)) {
+    if (hasPendingGoalToggle(selectedDate) || hasPendingSelectionToggle(selectedDate)) {
       setMessage({
         kind: "info",
-        text: "Wait for the goal update to finish before saving the entry.",
+        text: "Wait for the mood, activity, or goal update to finish before saving the entry.",
       });
       return;
     }
@@ -541,7 +747,7 @@ export default function Home() {
       );
       setDraft(draftFromEntry(result.entry));
       clearStoredDraft(selectedDate);
-      setHasLocalDraft(false);
+      markLocalDraft(false);
       setConnectionState("online");
       setMessage({
         kind: "success",
@@ -559,12 +765,16 @@ export default function Home() {
   }
 
   async function deleteSelectedEntry() {
-    if (
-      isDeleting ||
-      isSaving ||
-      !draft.version ||
-      !window.confirm(`Delete the entry for ${friendlyDate(selectedDate)}?`)
-    )
+    if (isDeleting || isSaving || !draft.version)
+      return;
+    if (hasPendingGoalToggle(selectedDate) || hasPendingSelectionToggle(selectedDate)) {
+      setMessage({
+        kind: "info",
+        text: "Wait for the mood, activity, or goal update to finish before deleting the entry.",
+      });
+      return;
+    }
+    if (!window.confirm(`Delete the entry for ${friendlyDate(selectedDate)}?`))
       return;
     if (!navigator.onLine) {
       setMessage({
@@ -598,7 +808,7 @@ export default function Home() {
         completedGoalIds: [...draft.completedGoalIds],
       });
       clearStoredDraft(selectedDate);
-      setHasLocalDraft(false);
+      markLocalDraft(false);
       setConnectionState("online");
       setMessage({ kind: "success", text: "Entry deleted." });
     } catch (error) {
@@ -717,7 +927,7 @@ export default function Home() {
             activityQuery={activityQuery}
             isLoadingDate={isLoadingDate}
             onDate={chooseDate}
-            onDraft={updateDraft}
+            onMood={toggleMood}
             onActivityQuery={setActivityQuery}
             onToggleActivity={toggleActivity}
             onToggleGoal={toggleGoal}
@@ -726,6 +936,7 @@ export default function Home() {
             isSaving={isSaving}
             isDeleting={isDeleting}
             pendingGoalKeys={pendingGoalKeys}
+            pendingSelectionKeys={pendingSelectionKeys}
             message={message}
           />
         )}
@@ -822,7 +1033,7 @@ function LogView({
   activityQuery,
   isLoadingDate,
   onDate,
-  onDraft,
+  onMood,
   onActivityQuery,
   onToggleActivity,
   onToggleGoal,
@@ -831,6 +1042,7 @@ function LogView({
   isSaving,
   isDeleting,
   pendingGoalKeys,
+  pendingSelectionKeys,
   message,
 }: {
   data: Bootstrap;
@@ -840,7 +1052,7 @@ function LogView({
   activityQuery: string;
   isLoadingDate: boolean;
   onDate: (date: string) => void;
-  onDraft: (patch: Partial<Draft>) => void;
+  onMood: (id: string) => void;
   onActivityQuery: (value: string) => void;
   onToggleActivity: (id: string) => void;
   onToggleGoal: (id: string) => void;
@@ -849,6 +1061,7 @@ function LogView({
   isSaving: boolean;
   isDeleting: boolean;
   pendingGoalKeys: Set<string>;
+  pendingSelectionKeys: Set<string>;
   message: Notice | null;
 }) {
   const existing = getEntryForDate(data.entries, selectedDate);
@@ -863,15 +1076,18 @@ function LogView({
   const goalsBusy = [...pendingGoalKeys].some((key) =>
     key.startsWith(`${selectedDate}:`),
   );
+  const selectionBusy = [...pendingSelectionKeys].some((key) =>
+    key.startsWith(`${selectedDate}:`),
+  );
 
   return (
     <>
       <fieldset className="log-form" disabled={formBusy} aria-busy={formBusy}>
         <legend className="sr-only">Daily entry form</legend>
-        {formBusy && (
+        {formBusy && <p className="sr-only" role="status">Daily entry form disabled while {isDeleting ? "deleting" : "saving"}.</p>}
+        {selectionBusy && (
           <p className="sr-only" role="status">
-            Daily entry form disabled while {isDeleting ? "deleting" : "saving"}
-            .
+            Saving your mood or activity selection…
           </p>
         )}
         <section className="hero-card">
@@ -886,14 +1102,14 @@ function LogView({
             <button
               className={selectedDate === data.today ? "selected" : ""}
               onClick={() => onDate(data.today)}
-              disabled={isLoadingDate || goalsBusy}
+              disabled={isLoadingDate || goalsBusy || selectionBusy}
             >
               Today
             </button>
             <button
               className={selectedDate === data.yesterday ? "selected" : ""}
               onClick={() => onDate(data.yesterday)}
-              disabled={isLoadingDate || goalsBusy}
+              disabled={isLoadingDate || goalsBusy || selectionBusy}
             >
               Yesterday
             </button>
@@ -903,7 +1119,7 @@ function LogView({
                 type="date"
                 value={selectedDate}
                 onChange={(event) => onDate(event.target.value)}
-                disabled={isLoadingDate || goalsBusy}
+                disabled={isLoadingDate || goalsBusy || selectionBusy}
               />
             </label>
           </div>
@@ -920,10 +1136,7 @@ function LogView({
           </div>
         )}
 
-        <section
-          className="panel goals-panel"
-          aria-busy={isLoadingDate || goalsBusy}
-        >
+        <section className="panel goals-panel" aria-busy={isLoadingDate || goalsBusy}>
           <div className="section-heading">
             <div>
               <p className="eyebrow">Goals</p>
@@ -940,7 +1153,7 @@ function LogView({
                   activity={activityFor(data.activities, goal.activityId)}
                   checked={draft.completedGoalIds.includes(goal.id)}
                   pending={pendingGoalKeys.has(`${selectedDate}:${goal.id}`)}
-                  disabled={isLoadingDate}
+                  disabled={isLoadingDate || goalsBusy}
                   onToggle={() => {
                     void onToggleGoal(goal.id);
                   }}
@@ -957,14 +1170,16 @@ function LogView({
             </div>
             <span className="required-label">required</span>
           </div>
-          <div className="mood-grid">
+          <div className="mood-grid" aria-busy={isLoadingDate || selectionBusy}>
             {data.moods.map((mood) => (
               <button
                 key={mood.id}
                 className={`mood-option ${draft.moodId === mood.id ? "selected" : ""}`}
                 style={{ "--mood-color": mood.color } as React.CSSProperties}
                 aria-pressed={draft.moodId === mood.id}
-                onClick={() => onDraft({ moodId: mood.id })}
+                aria-busy={pendingSelectionKeys.has(`${selectedDate}:mood:`)}
+                disabled={isLoadingDate || pendingSelectionKeys.has(`${selectedDate}:mood:`)}
+                onClick={() => onMood(mood.id)}
               >
                 <span className="mood-emoji">{mood.emoji}</span>
                 <span>{mood.name}</span>
@@ -991,6 +1206,8 @@ function LogView({
                   <button
                     key={id}
                     className="selection-chip"
+                    disabled={isLoadingDate || pendingSelectionKeys.has(`${selectedDate}:activity:${id}`)}
+                    aria-busy={pendingSelectionKeys.has(`${selectedDate}:activity:${id}`)}
                     onClick={() => onToggleActivity(id)}
                   >
                     <Icon name={activity.icon} /> {activity.name}{" "}
@@ -1018,13 +1235,16 @@ function LogView({
               groups={groups}
               activityQuery={activityQuery}
               selectedActivityIds={draft.activityIds}
+              selectedDate={selectedDate}
+              isLoadingDate={isLoadingDate}
+              pendingSelectionKeys={pendingSelectionKeys}
               onToggleActivity={onToggleActivity}
             />
           )}
         </section>
       </fieldset>
 
-      <div className="save-bar" aria-busy={formBusy || goalsBusy}>
+      <div className="save-bar" aria-busy={formBusy || goalsBusy || selectionBusy}>
         <div>
           <strong>{existing ? "Edit this entry" : "Ready to save?"}</strong>
           <span>
@@ -1041,7 +1261,7 @@ function LogView({
             <button
               className="ghost-button danger"
               onClick={onDelete}
-              disabled={isDeleting || isSaving}
+              disabled={isDeleting || isSaving || goalsBusy || selectionBusy}
               aria-busy={isDeleting}
             >
               {isDeleting ? "Deleting…" : "Delete"}
@@ -1050,13 +1270,13 @@ function LogView({
           <button
             className="primary-button"
             onClick={onSave}
-            disabled={isSaving || isDeleting || goalsBusy}
+            disabled={isSaving || isDeleting || goalsBusy || selectionBusy}
             aria-busy={isSaving}
           >
             {isSaving
               ? "Saving…"
-              : goalsBusy
-                ? "Updating goal…"
+              : goalsBusy || selectionBusy
+                ? "Updating selection…"
                 : existing
                   ? "Update entry"
                   : "Save entry"}
@@ -1071,6 +1291,9 @@ type ActivityGroupListProps = {
   groups: Array<{ group: ActivityGroup; activities: Activity[] }>;
   activityQuery: string;
   selectedActivityIds: string[];
+  selectedDate: string;
+  isLoadingDate: boolean;
+  pendingSelectionKeys: Set<string>;
   onToggleActivity: (id: string) => void;
 };
 
@@ -1078,6 +1301,9 @@ function ActivityGroupList({
   groups,
   activityQuery,
   selectedActivityIds,
+  selectedDate,
+  isLoadingDate,
+  pendingSelectionKeys,
   onToggleActivity,
 }: ActivityGroupListProps) {
   const hasQuery = activityQuery.trim().length > 0;
@@ -1116,6 +1342,8 @@ function ActivityGroupList({
                     key={activity.id}
                     className={`activity-button ${selected ? "selected" : ""}`}
                     aria-pressed={selected}
+                    aria-busy={pendingSelectionKeys.has(`${selectedDate}:activity:${activity.id}`)}
+                    disabled={isLoadingDate || pendingSelectionKeys.has(`${selectedDate}:activity:${activity.id}`)}
                     onClick={() => onToggleActivity(activity.id)}
                   >
                     <span className="activity-icon">

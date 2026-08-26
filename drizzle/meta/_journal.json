@@ -15,6 +15,13 @@
       "when": 1785466767622,
       "tag": "0001_square_the_twelve",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1787743218726,
+      "tag": "0002_blushing_captain_universe",
+      "breakpoints": true
     }
   ]
 }

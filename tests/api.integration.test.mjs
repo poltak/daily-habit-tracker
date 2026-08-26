@@ -64,6 +64,54 @@ test("Wrangler-backed API covers persistence, catalog, calendar, pagination, imp
   assert.equal(bootstrap.body.activities.length, 12);
   assert.equal(bootstrap.body.goals.length, 2);
 
+  const selectionDate = "2026-01-11";
+  const standaloneMood = await json(`/api/day-selections/${selectionDate}/mood`, { method: "PUT", body: JSON.stringify({ moodId: "mood-rad" }) });
+  assert.equal(standaloneMood.response.status, 200);
+  assert.deepEqual(standaloneMood.body.selection, { logicalDate: selectionDate, moodId: "mood-rad" });
+  const standaloneMoodAgain = await json(`/api/day-selections/${selectionDate}/mood`, { method: "PUT", body: JSON.stringify({ moodId: "mood-rad" }) });
+  assert.equal(standaloneMoodAgain.response.status, 200);
+  const standaloneActivity = await json(`/api/day-selections/${selectionDate}/activities/activity-gym`, { method: "PUT", body: JSON.stringify({ selected: true }) });
+  assert.equal(standaloneActivity.response.status, 200);
+  const standaloneActivityAgain = await json(`/api/day-selections/${selectionDate}/activities/activity-gym`, { method: "PUT", body: JSON.stringify({ selected: true }) });
+  assert.equal(standaloneActivityAgain.response.status, 200);
+  const standaloneState = await json(`/api/entries/${selectionDate}`);
+  assert.equal(standaloneState.response.status, 404);
+  assert.equal(standaloneState.body.entry, null);
+  assert.equal(standaloneState.body.daySelections.moodId, "mood-rad");
+  assert.deepEqual(standaloneState.body.daySelections.activityIds, ["activity-gym"]);
+  const standaloneOff = await json(`/api/day-selections/${selectionDate}/activities/activity-gym`, { method: "PUT", body: JSON.stringify({ selected: false }) });
+  assert.equal(standaloneOff.response.status, 200);
+  const standaloneOffAgain = await json(`/api/day-selections/${selectionDate}/activities/activity-gym`, { method: "PUT", body: JSON.stringify({ selected: false }) });
+  assert.equal(standaloneOffAgain.response.status, 200);
+  const standaloneEmpty = await json(`/api/entries/${selectionDate}`);
+  assert.deepEqual(standaloneEmpty.body.daySelections.activityIds, []);
+
+  const invalidMoodSelection = await json(`/api/day-selections/${selectionDate}/mood`, { method: "PUT", body: JSON.stringify({ moodId: "mood-missing" }) });
+  assert.equal(invalidMoodSelection.response.status, 400);
+  const invalidActivitySelection = await json(`/api/day-selections/${selectionDate}/activities/activity-missing`, { method: "PUT", body: JSON.stringify({ selected: true }) });
+  assert.equal(invalidActivitySelection.response.status, 400);
+  const invalidActivityBody = await json(`/api/day-selections/${selectionDate}/activities/activity-gym`, { method: "PUT", body: JSON.stringify({ selected: "yes" }) });
+  assert.equal(invalidActivityBody.response.status, 400);
+  const invalidSelectionDate = await json("/api/day-selections/not-a-date/mood", { method: "PUT", body: JSON.stringify({ moodId: "mood-good" }) });
+  assert.equal(invalidSelectionDate.response.status, 400);
+
+  const overrideDate = "2026-01-12";
+  const initialOverrideEntry = await json(`/api/entries/${overrideDate}`, { method: "PUT", body: JSON.stringify({ moodId: "mood-good", activityIds: ["activity-gym", "activity-walk"], completedGoalIds: [], localTime: "20:00" }) });
+  assert.equal(initialOverrideEntry.response.status, 200);
+  await json(`/api/day-selections/${overrideDate}/mood`, { method: "PUT", body: JSON.stringify({ moodId: "mood-rad" }) });
+  await json(`/api/day-selections/${overrideDate}/activities/activity-walk`, { method: "PUT", body: JSON.stringify({ selected: false }) });
+  await json(`/api/day-selections/${overrideDate}/activities/activity-sleep`, { method: "PUT", body: JSON.stringify({ selected: true }) });
+  const effectiveOverride = await json(`/api/entries/${overrideDate}`);
+  assert.equal(effectiveOverride.body.entry.moodId, "mood-rad");
+  assert.deepEqual(effectiveOverride.body.entry.activityIds, ["activity-gym", "activity-sleep"]);
+  const finalizedOverride = await json(`/api/entries/${overrideDate}`, { method: "PUT", body: JSON.stringify({ moodId: "mood-good", activityIds: ["activity-gym", "activity-walk"], completedGoalIds: [], localTime: "20:00" }) });
+  assert.equal(finalizedOverride.response.status, 200);
+  assert.equal(finalizedOverride.body.entry.moodId, "mood-rad");
+  assert.deepEqual(finalizedOverride.body.entry.activityIds, ["activity-gym", "activity-sleep"]);
+  const finalizedOverrideState = await json(`/api/entries/${overrideDate}`);
+  assert.equal(finalizedOverrideState.body.daySelections.moodOverride, false);
+  assert.deepEqual(finalizedOverrideState.body.daySelections.activityOverrideIds, []);
+
   const standaloneDate = "2026-01-10";
   const standaloneComplete = await json(`/api/goal-completions/${standaloneDate}/goal-read`, { method: "PUT", body: JSON.stringify({ completed: true }) });
   assert.equal(standaloneComplete.response.status, 200);

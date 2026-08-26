@@ -64,6 +64,25 @@ export type GoalCompletion = {
   entryId?: string;
 };
 
+export type DayMoodSelection = {
+  logicalDate: string;
+  moodId: string;
+};
+
+export type DayActivitySelection = {
+  logicalDate: string;
+  activityId: string;
+  selected: boolean;
+};
+
+export type DaySelections = {
+  logicalDate: string;
+  moodId: string | null;
+  activityIds: string[];
+  moodOverride: boolean;
+  activityOverrideIds: string[];
+};
+
 export type EntryInput = {
   moodId: string;
   activityIds: string[];
@@ -225,6 +244,10 @@ function goalCompletionKey(logicalDate: string, goalId: string) {
   return `${logicalDate}:${goalId}`;
 }
 
+function dayActivitySelectionKey(logicalDate: string, activityId: string) {
+  return `${logicalDate}:${activityId}`;
+}
+
 export class DaylioMemoryStore {
   private moods = new Map(MOODS.map((mood) => [mood.id, mood]));
   private groups = new Map(seedGroups.map((group) => [group.id, group]));
@@ -232,6 +255,8 @@ export class DaylioMemoryStore {
   private goals = new Map(seedGoals.map((goal) => [goal.id, goal]));
   private entries = new Map<string, Entry>();
   private goalCompletions = new Map<string, { goalId: string; logicalDate: string; entryId?: string; createdAt: string; updatedAt: string }>();
+  private dayMoodSelections = new Map<string, { moodId: string; createdAt: string; updatedAt: string }>();
+  private dayActivitySelections = new Map<string, { logicalDate: string; activityId: string; selected: boolean; createdAt: string; updatedAt: string }>();
 
   private completedGoalIdsForDate(logicalDate: string) {
     return [...this.goalCompletions.values()]
@@ -274,7 +299,55 @@ export class DaylioMemoryStore {
 
   getEntry(logicalDate: string) {
     const entry = this.entries.get(logicalDate);
-    return entry && !entry.deletedAt ? this.withGoalCompletions(entry) : null;
+    if (!entry || entry.deletedAt) return null;
+    const selections = this.getDaySelections(logicalDate);
+    return this.withGoalCompletions({
+      ...entry,
+      moodId: selections.moodId ?? entry.moodId,
+      activityIds: selections.activityIds,
+    });
+  }
+
+  getDaySelections(logicalDate: string): DaySelections {
+    if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
+    const entry = this.entries.get(logicalDate);
+    const activeEntry = entry && !entry.deletedAt ? entry : null;
+    const moodSelection = this.dayMoodSelections.get(logicalDate);
+    const activityIds = new Set(activeEntry?.activityIds ?? []);
+    const activityOverrideIds: string[] = [];
+    for (const selection of this.dayActivitySelections.values()) {
+      if (selection.logicalDate !== logicalDate) continue;
+      activityOverrideIds.push(selection.activityId);
+      if (selection.selected) activityIds.add(selection.activityId);
+      else activityIds.delete(selection.activityId);
+    }
+    return {
+      logicalDate,
+      moodId: moodSelection?.moodId ?? activeEntry?.moodId ?? null,
+      activityIds: [...activityIds],
+      moodOverride: Boolean(moodSelection),
+      activityOverrideIds,
+    };
+  }
+
+  setMoodSelection(logicalDate: string, moodId: string): DayMoodSelection {
+    if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
+    if (typeof moodId !== "string" || !this.moods.has(moodId)) throw new Error("Choose one of the five moods.");
+    const timestamp = nowIso();
+    const current = this.dayMoodSelections.get(logicalDate);
+    this.dayMoodSelections.set(logicalDate, { moodId, createdAt: current?.createdAt ?? timestamp, updatedAt: timestamp });
+    return { logicalDate, moodId };
+  }
+
+  setActivitySelection(logicalDate: string, activityId: string, selected: boolean): DayActivitySelection {
+    if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
+    if (typeof activityId !== "string" || !this.activities.has(activityId)) throw new Error("One activity is no longer available.");
+    if (typeof selected !== "boolean") throw new Error("Activity selection must be a boolean.");
+    const timestamp = nowIso();
+    const key = dayActivitySelectionKey(logicalDate, activityId);
+    const current = this.dayActivitySelections.get(key);
+    this.dayActivitySelections.set(key, { logicalDate, activityId, selected, createdAt: current?.createdAt ?? timestamp, updatedAt: timestamp });
+    return { logicalDate, activityId, selected };
   }
 
   getGoalCompletionIds(logicalDate: string) {
@@ -308,21 +381,28 @@ export class DaylioMemoryStore {
     const validated = validateEntryInput(input);
     validateEntryReferences(validated, { moodIds: this.moods, activityIds: this.activities, goalIds: this.goals });
 
-    const existing = this.entries.get(logicalDate);
+    const persisted = this.entries.get(logicalDate);
+    const existing = persisted && !persisted.deletedAt ? persisted : undefined;
     if (existing && validated.expectedVersion !== undefined && existing.version !== validated.expectedVersion) {
       const error = new Error("This entry changed on another device.");
       (error as Error & { code?: string }).code = "VERSION_CONFLICT";
       throw error;
     }
+    const selections = this.getDaySelections(logicalDate);
+    const activityIds = new Set(validated.activityIds);
+    for (const activityId of selections.activityOverrideIds) {
+      if (selections.activityIds.includes(activityId)) activityIds.add(activityId);
+      else activityIds.delete(activityId);
+    }
     const timestamp = nowIso();
     const entry: Entry = {
-      id: existing?.id ?? newId("entry"),
+      id: existing?.id ?? persisted?.id ?? newId("entry"),
       logicalDate,
       localTime: validated.localTime ?? existing?.localTime ?? "23:00",
       timezone: validated.timezone ?? existing?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
       timezoneOffsetMinutes: validated.timezoneOffsetMinutes ?? existing?.timezoneOffsetMinutes,
-      moodId: validated.moodId,
-      activityIds: [...new Set(validated.activityIds)],
+      moodId: selections.moodId ?? validated.moodId,
+      activityIds: [...activityIds],
       completedGoalIds: this.completedGoalIdsForDate(logicalDate),
       legacyNoteTitle: validated.legacyNoteTitle ?? existing?.legacyNoteTitle,
       legacyNote: validated.legacyNote ?? existing?.legacyNote,
@@ -331,6 +411,10 @@ export class DaylioMemoryStore {
       updatedAt: timestamp,
     };
     this.entries.set(logicalDate, entry);
+    this.dayMoodSelections.delete(logicalDate);
+    for (const key of [...this.dayActivitySelections.keys()]) {
+      if (key.startsWith(`${logicalDate}:`)) this.dayActivitySelections.delete(key);
+    }
     const goalIds = entry.completedGoalIds;
     for (const goalId of goalIds) {
       const key = goalCompletionKey(logicalDate, goalId);

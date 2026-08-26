@@ -95,6 +95,19 @@ export const goalCompletions = sqliteTable("goal_completions", {
   ...timestamps,
 }, (table) => ({ goalDateIdx: uniqueIndex("goal_completions_goal_date_idx").on(table.goalId, table.logicalDate) }));
 
+export const dayMoodSelections = sqliteTable("day_mood_selections", {
+  logicalDate: text("logical_date").primaryKey(),
+  moodId: text("mood_id").notNull().references(() => moodLevels.id),
+  ...timestamps,
+});
+
+export const dayActivitySelections = sqliteTable("day_activity_selections", {
+  logicalDate: text("logical_date").notNull(),
+  activityId: text("activity_id").notNull().references(() => activities.id),
+  selected: integer("selected", { mode: "boolean" }).notNull(),
+  ...timestamps,
+}, (table) => ({ dateActivityIdx: uniqueIndex("day_activity_selections_date_activity_idx").on(table.logicalDate, table.activityId) }));
+
 export const importRuns = sqliteTable("import_runs", {
   id: text("id").primaryKey(),
   sourceSystem: text("source_system").notNull(),

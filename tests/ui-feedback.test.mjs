@@ -39,8 +39,13 @@ test("catalog mutations expose pending state and optimistic archive rollback", (
 test("entry deletion has a duplicate-request guard and loading feedback", () => {
   assert.match(pageSource, /const \[isDeleting, setIsDeleting\]/);
   assert.match(pageSource, /if \(isDeleting \|\| isSaving \|\| !draft\.version/);
+  const deleteHandler = pageSource.slice(pageSource.indexOf("async function deleteSelectedEntry"));
+  assert.ok(
+    deleteHandler.indexOf("hasPendingGoalToggle(selectedDate)") <
+      deleteHandler.indexOf("window.confirm"),
+  );
+  assert.match(pageSource, /disabled=\{isDeleting \|\| isSaving \|\| goalsBusy \|\| selectionBusy\}/);
   assert.match(pageSource, /setIsDeleting\(true\)/);
-  assert.match(pageSource, /disabled=\{isDeleting \|\| isSaving\}/);
   assert.match(pageSource, /isDeleting \? "Deleting…"/);
   assert.match(pageSource, /className="log-form" disabled=\{formBusy\} aria-busy=\{formBusy\}/);
   assert.match(pageSource, /<legend className="sr-only">Daily entry form<\/legend>/);
@@ -70,4 +75,33 @@ test("goals are above mood and persist through a dedicated optimistic toggle", (
   assert.match(pageSource, /The goal was restored/);
   assert.match(pageSource, /serverCompletedGoalIds/);
   assert.doesNotMatch(pageSource, /function toggleGoal[\s\S]*?updateDraft\(/);
+});
+
+test("mood and activity selections persist independently with optimistic pending guards", () => {
+  assert.match(pageSource, /api\/day-selections\/\$\{logicalDate\}\/mood/);
+  assert.match(pageSource, /api\/day-selections\/\$\{logicalDate\}\/activities\/\$\{id\}/);
+  assert.match(pageSource, /const pendingSelectionRef = useRef<Set<string>>\(new Set\(\)\)/);
+  assert.match(pageSource, /const failedSelectionRef = useRef<Set<string>>\(new Set\(\)\)/);
+  assert.equal(
+    pageSource.match(/failedSelectionRef\.current\.delete\(key\)/g)?.length,
+    2,
+  );
+  assert.match(pageSource, /failedSelectionRef\.current\.add\(key\)/);
+  assert.match(pageSource, /const hasLocalDraftRef = useRef\(false\)/);
+  assert.match(pageSource, /hasLocalDraftRef\.current = value;/);
+  assert.match(pageSource, /pendingSelectionRef\.current\.has\(key\)/);
+  assert.match(pageSource, /setSelectionPending\(key, true\)/);
+  assert.match(pageSource, /The mood was restored/);
+  assert.match(pageSource, /The activity was restored/);
+  assert.match(pageSource, /aria-busy=\{pendingSelectionKeys\.has/);
+  assert.match(pageSource, /disabled=\{isLoadingDate \|\| pendingSelectionKeys\.has/);
+  assert.match(pageSource, /hasPendingGoalToggle\(selectedDate\) \|\| hasPendingSelectionToggle\(selectedDate\)/);
+  assert.match(pageSource, /Wait for the mood, activity, or goal update to finish before saving the entry/);
+  assert.match(pageSource, /disabled=\{isLoadingDate \|\| goalsBusy \|\| selectionBusy\}/);
+  assert.match(pageSource, /Saving your mood or activity selection/);
+  assert.match(pageSource, /serverSelections/);
+  assert.match(pageSource, /!hasOtherPendingSelection && !hasLocalDraftRef\.current/);
+  assert.match(pageSource, /const hasFailedSelection = \[\.\.\.failedSelectionRef\.current\]\.some\(/);
+  assert.match(pageSource, /if \(!hasFailedSelection\) \{[\s\S]*setConnectionState\("online"\);[\s\S]*setMessage\(null\);/);
+  assert.match(pageSource, /activityIds: nextSelected[\s\S]*?new Set\(\[\.\.\.entry\.activityIds, id\]\)[\s\S]*?entry\.activityIds\.filter\(\(item\) => item !== id\)/);
 });

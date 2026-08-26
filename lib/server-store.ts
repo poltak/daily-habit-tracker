@@ -2,6 +2,9 @@ import {
   type Activity,
   type ActivityGroup,
   type Bootstrap,
+  type DayActivitySelection,
+  type DayMoodSelection,
+  type DaySelections,
   type Entry,
   type Goal,
   type GoalCompletion,
@@ -37,6 +40,8 @@ type GroupRow = { id: string; name: string; sort_order: number; archived_at: str
 type ActivityRow = { id: string; group_id: string; name: string; material_icon: string; source_icon_id: string | null; sort_order: number; archived_at: string | null };
 type GoalRow = { id: string; activity_id: string; name: string; schedule_type: Goal["scheduleType"]; target_per_week: number | null; weekdays_mask: number | null; sort_order: number; archived_at: string | null; reminder_enabled: number; reminder_time: string | null; source_state: number | null };
 type GoalCompletionRow = { id: string; goal_id: string; logical_date: string; entry_id: string | null; created_at: string; updated_at: string };
+type DayMoodSelectionRow = { logical_date: string; mood_id: string; created_at: string; updated_at: string };
+type DayActivitySelectionRow = { logical_date: string; activity_id: string; selected: number; created_at: string; updated_at: string };
 
 async function currentDatabase(): Promise<Database | null> {
   try {
@@ -100,8 +105,8 @@ function toGoal(row: { id: string; activity_id: string; name: string; schedule_t
   return { id: row.id, activityId: row.activity_id, name: row.name, scheduleType: row.schedule_type, targetPerWeek: row.target_per_week ?? undefined, weekdaysMask: row.weekdays_mask ?? undefined, sortOrder: row.sort_order, archived: Boolean(row.archived_at), reminderEnabled: Boolean(row.reminder_enabled), reminderTime: row.reminder_time ?? undefined, sourceState: row.source_state ?? undefined };
 }
 
-function toEntry(row: EntryRow, activityIds: string[], completedGoalIds: string[]): Entry {
-  return { id: row.id, logicalDate: row.logical_date, localTime: row.local_time ?? "23:00", timezone: row.timezone ?? "", timezoneOffsetMinutes: row.timezone_offset_minutes ?? undefined, moodId: row.mood_id, activityIds, completedGoalIds, legacyNoteTitle: row.legacy_note_title ?? undefined, legacyNote: row.legacy_note ?? undefined, version: row.version, createdAt: row.created_at, updatedAt: row.updated_at, deletedAt: row.deleted_at ?? undefined };
+function toEntry(row: EntryRow, activityIds: string[], completedGoalIds: string[], moodId = row.mood_id): Entry {
+  return { id: row.id, logicalDate: row.logical_date, localTime: row.local_time ?? "23:00", timezone: row.timezone ?? "", timezoneOffsetMinutes: row.timezone_offset_minutes ?? undefined, moodId, activityIds, completedGoalIds, legacyNoteTitle: row.legacy_note_title ?? undefined, legacyNote: row.legacy_note ?? undefined, version: row.version, createdAt: row.created_at, updatedAt: row.updated_at, deletedAt: row.deleted_at ?? undefined };
 }
 
 export class D1DaylioStore {
@@ -142,7 +147,54 @@ export class D1DaylioStore {
     if (!result[0]) return null;
     const activities = await rows<{ activity_id: string }>(this.database, this.database.prepare("SELECT activity_id FROM entry_activities WHERE entry_id = ?").bind(result[0].id));
     const goals = await this.getGoalCompletionIds(logicalDate);
-    return toEntry(result[0], activities.map((item) => item.activity_id), goals);
+    const selections = await this.getDaySelections(logicalDate);
+    const activityIds = selections.activityOverrideIds.length > 0 ? selections.activityIds : activities.map((item) => item.activity_id);
+    return toEntry(result[0], activityIds, goals, selections.moodId ?? result[0].mood_id);
+  }
+
+  async getDaySelections(logicalDate: string): Promise<DaySelections> {
+    if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
+    const entry = await this.database.prepare("SELECT id, mood_id FROM entries WHERE logical_date = ? AND deleted_at IS NULL LIMIT 1").bind(logicalDate).first<{ id: string; mood_id: string }>();
+    const [moodSelection, activitySelections] = await Promise.all([
+      this.database.prepare("SELECT logical_date, mood_id, created_at, updated_at FROM day_mood_selections WHERE logical_date = ? LIMIT 1").bind(logicalDate).first<DayMoodSelectionRow>(),
+      rows<DayActivitySelectionRow>(this.database, this.database.prepare("SELECT logical_date, activity_id, selected, created_at, updated_at FROM day_activity_selections WHERE logical_date = ? ORDER BY activity_id").bind(logicalDate)),
+    ]);
+    const baseActivityRows = entry
+      ? await rows<{ activity_id: string }>(this.database, this.database.prepare("SELECT activity_id FROM entry_activities WHERE entry_id = ?").bind(entry.id))
+      : [];
+    const activityIds = new Set(baseActivityRows.map((row) => row.activity_id));
+    for (const selection of activitySelections) {
+      if (selection.selected) activityIds.add(selection.activity_id);
+      else activityIds.delete(selection.activity_id);
+    }
+    return {
+      logicalDate,
+      moodId: moodSelection?.mood_id ?? entry?.mood_id ?? null,
+      activityIds: [...activityIds],
+      moodOverride: Boolean(moodSelection),
+      activityOverrideIds: activitySelections.map((selection) => selection.activity_id),
+    };
+  }
+
+  async setMoodSelection(logicalDate: string, moodId: string): Promise<DayMoodSelection> {
+    if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
+    if (typeof moodId !== "string" || !moodId.trim()) throw new Error("Choose one of the five moods.");
+    const mood = await this.database.prepare("SELECT id FROM mood_levels WHERE id = ? LIMIT 1").bind(moodId).first<{ id: string }>();
+    if (!mood) throw new Error("Choose one of the five moods.");
+    const timestamp = new Date().toISOString();
+    await this.database.prepare("INSERT INTO day_mood_selections (logical_date, mood_id, created_at, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(logical_date) DO UPDATE SET mood_id = excluded.mood_id, updated_at = excluded.updated_at").bind(logicalDate, moodId, timestamp, timestamp).run();
+    return { logicalDate, moodId };
+  }
+
+  async setActivitySelection(logicalDate: string, activityId: string, selected: boolean): Promise<DayActivitySelection> {
+    if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
+    if (typeof activityId !== "string" || !activityId.trim()) throw new Error("One activity is no longer available.");
+    if (typeof selected !== "boolean") throw new Error("Activity selection must be a boolean.");
+    const activity = await this.database.prepare("SELECT id FROM activities WHERE id = ? LIMIT 1").bind(activityId).first<{ id: string }>();
+    if (!activity) throw new Error("One activity is no longer available.");
+    const timestamp = new Date().toISOString();
+    await this.database.prepare("INSERT INTO day_activity_selections (logical_date, activity_id, selected, created_at, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(logical_date, activity_id) DO UPDATE SET selected = excluded.selected, updated_at = excluded.updated_at").bind(logicalDate, activityId, selected ? 1 : 0, timestamp, timestamp).run();
+    return { logicalDate, activityId, selected };
   }
 
   private async getGoalCompletionRows(logicalDate: string) {
@@ -204,15 +256,22 @@ export class D1DaylioStore {
     if (existing && validated.expectedVersion !== undefined && existing.version !== validated.expectedVersion) {
       const error = new Error("This entry changed on another device."); (error as Error & { code?: string }).code = "VERSION_CONFLICT"; throw error;
     }
+    const selections = await this.getDaySelections(logicalDate);
+    const activityIds = new Set(validated.activityIds);
+    for (const activityId of selections.activityOverrideIds) {
+      if (selections.activityIds.includes(activityId)) activityIds.add(activityId);
+      else activityIds.delete(activityId);
+    }
+    const moodId = selections.moodId ?? validated.moodId;
     const id = existing?.id ?? deletedRow?.id ?? `entry-${crypto.randomUUID()}`;
     const timestamp = new Date().toISOString();
     const restoringDeletedEntry = Boolean(deletedRow?.deleted_at);
     const version = existing ? existing.version + 1 : 1;
     const entryStatement = restoringDeletedEntry
-      ? this.database.prepare("UPDATE entries SET logical_date = ?, local_time = ?, timezone = ?, timezone_offset_minutes = ?, mood_id = ?, legacy_note_title = ?, legacy_note = ?, version = ?, created_at = ?, updated_at = ?, deleted_at = NULL WHERE id = ?").bind(logicalDate, validated.localTime ?? "23:00", validated.timezone ?? "", validated.timezoneOffsetMinutes ?? null, validated.moodId, validated.legacyNoteTitle ?? null, validated.legacyNote ?? null, version, timestamp, timestamp, id)
-      : this.database.prepare(`INSERT INTO entries (id, logical_date, local_time, timezone, timezone_offset_minutes, mood_id, legacy_note_title, legacy_note, version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(logical_date) DO UPDATE SET local_time=excluded.local_time, timezone=excluded.timezone, timezone_offset_minutes=excluded.timezone_offset_minutes, mood_id=excluded.mood_id, legacy_note_title=excluded.legacy_note_title, legacy_note=excluded.legacy_note, version=excluded.version, updated_at=excluded.updated_at, deleted_at=NULL`).bind(id, logicalDate, validated.localTime ?? existing?.localTime ?? "23:00", validated.timezone ?? existing?.timezone ?? "", validated.timezoneOffsetMinutes ?? existing?.timezoneOffsetMinutes ?? null, validated.moodId, validated.legacyNoteTitle ?? existing?.legacyNoteTitle ?? null, validated.legacyNote ?? existing?.legacyNote ?? null, version, existing?.createdAt ?? timestamp, timestamp);
-    const statements = [entryStatement, this.database.prepare("DELETE FROM entry_activities WHERE entry_id = ?").bind(id), this.database.prepare("UPDATE goal_completions SET entry_id = ?, updated_at = ? WHERE logical_date = ? AND (entry_id IS NULL OR entry_id = ?)").bind(id, timestamp, logicalDate, id)];
-    statements.push(...[...new Set(validated.activityIds)].map((activityId) => this.database.prepare("INSERT INTO entry_activities (entry_id, activity_id) VALUES (?, ?)").bind(id, activityId)));
+      ? this.database.prepare("UPDATE entries SET logical_date = ?, local_time = ?, timezone = ?, timezone_offset_minutes = ?, mood_id = ?, legacy_note_title = ?, legacy_note = ?, version = ?, created_at = ?, updated_at = ?, deleted_at = NULL WHERE id = ?").bind(logicalDate, validated.localTime ?? "23:00", validated.timezone ?? "", validated.timezoneOffsetMinutes ?? null, moodId, validated.legacyNoteTitle ?? null, validated.legacyNote ?? null, version, timestamp, timestamp, id)
+      : this.database.prepare(`INSERT INTO entries (id, logical_date, local_time, timezone, timezone_offset_minutes, mood_id, legacy_note_title, legacy_note, version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(logical_date) DO UPDATE SET local_time=excluded.local_time, timezone=excluded.timezone, timezone_offset_minutes=excluded.timezone_offset_minutes, mood_id=excluded.mood_id, legacy_note_title=excluded.legacy_note_title, legacy_note=excluded.legacy_note, version=excluded.version, updated_at=excluded.updated_at, deleted_at=NULL`).bind(id, logicalDate, validated.localTime ?? existing?.localTime ?? "23:00", validated.timezone ?? existing?.timezone ?? "", validated.timezoneOffsetMinutes ?? null, moodId, validated.legacyNoteTitle ?? existing?.legacyNoteTitle ?? null, validated.legacyNote ?? existing?.legacyNote ?? null, version, existing?.createdAt ?? timestamp, timestamp);
+    const statements = [entryStatement, this.database.prepare("DELETE FROM entry_activities WHERE entry_id = ?").bind(id), this.database.prepare("UPDATE goal_completions SET entry_id = ?, updated_at = ? WHERE logical_date = ? AND (entry_id IS NULL OR entry_id = ?)").bind(id, timestamp, logicalDate, id), this.database.prepare("DELETE FROM day_mood_selections WHERE logical_date = ?").bind(logicalDate), this.database.prepare("DELETE FROM day_activity_selections WHERE logical_date = ?").bind(logicalDate)];
+    statements.push(...[...activityIds].map((activityId) => this.database.prepare("INSERT INTO entry_activities (entry_id, activity_id) VALUES (?, ?)").bind(id, activityId)));
     await this.database.batch(statements);
     return this.getEntry(logicalDate);
   }
@@ -273,7 +332,7 @@ export class D1DaylioStore {
 
   async exportData() {
     const tables = {} as Record<string, unknown[]>;
-    for (const table of ["mood_levels", "activity_groups", "activities", "entries", "entry_activities", "goals", "goal_completions", "import_runs"]) tables[table] = await rows(this.database, this.database.prepare(`SELECT * FROM ${table}`));
+    for (const table of ["mood_levels", "activity_groups", "activities", "entries", "entry_activities", "goals", "goal_completions", "day_mood_selections", "day_activity_selections", "import_runs"]) tables[table] = await rows(this.database, this.database.prepare(`SELECT * FROM ${table}`));
     return { formatVersion: 1, exportedAt: new Date().toISOString(), tables };
   }
 
