@@ -121,8 +121,53 @@ function moodFor(moods: Mood[], id: string) {
   return moods.find((mood) => mood.id === id);
 }
 
-function activityFor(activities: Activity[], id: string) {
+function activityFor(activities: Activity[], id?: string | null) {
   return activities.find((activity) => activity.id === id);
+}
+
+function applyGoalCompletionStates({
+  completedGoalIds,
+  completions,
+}: {
+  completedGoalIds: string[];
+  completions: Array<{ goalId: string; completed: boolean }>;
+}) {
+  const next = new Set(completedGoalIds);
+  for (const completion of completions) {
+    if (completion.completed) next.add(completion.goalId);
+    else next.delete(completion.goalId);
+  }
+  return [...next];
+}
+
+function applyActivitySelectionStates({
+  activityIds,
+  selections,
+}: {
+  activityIds: string[];
+  selections: Array<{ activityId: string; selected: boolean }>;
+}) {
+  const next = new Set(activityIds);
+  for (const selection of selections) {
+    if (selection.selected) next.add(selection.activityId);
+    else next.delete(selection.activityId);
+  }
+  return [...next];
+}
+
+function restoreGoalCompletionStates({
+  completedGoalIds,
+  previousStates,
+}: {
+  completedGoalIds: string[];
+  previousStates: Map<string, boolean>;
+}) {
+  const next = new Set(completedGoalIds);
+  for (const [goalId, completed] of previousStates) {
+    if (completed) next.add(goalId);
+    else next.delete(goalId);
+  }
+  return [...next];
 }
 
 export default function Home() {
@@ -503,16 +548,36 @@ export default function Home() {
     const logicalDate = selectedDateRef.current || selectedDate;
     const key = selectionPendingKey(logicalDate, "activity", id);
     if (!logicalDate || isLoadingDate || pendingSelectionRef.current.has(key)) return;
+    const linkedGoalIds = data?.goals
+      .filter((goal) => !goal.archived && goal.activityId === id)
+      .map((goal) => goal.id) ?? [];
+    const linkedGoalKeys = linkedGoalIds.map((goalId) => goalPendingKey(logicalDate, goalId));
     const previousSelected = draftRef.current.activityIds.includes(id);
     const nextSelected = !previousSelected;
     const nextActivityIds = nextSelected
       ? [...new Set([...draftRef.current.activityIds, id])]
       : draftRef.current.activityIds.filter((item) => item !== id);
-    const nextDraft = { ...draftRef.current, activityIds: nextActivityIds };
+    const previousGoalStates = new Map(
+      linkedGoalIds.map((goalId) => [goalId, draftRef.current.completedGoalIds.includes(goalId)]),
+    );
+    const nextCompletedGoalIds = applyGoalCompletionStates({
+      completedGoalIds: draftRef.current.completedGoalIds,
+      completions: linkedGoalIds.map((goalId) => ({ goalId, completed: nextSelected })),
+    });
+    const nextDraft = {
+      ...draftRef.current,
+      activityIds: nextActivityIds,
+      completedGoalIds: nextCompletedGoalIds,
+    };
     const dateEpoch = selectedDateEpochRef.current;
     pendingSelectionRef.current.add(key);
+    for (const goalKey of linkedGoalKeys) pendingGoalRef.current.add(goalKey);
     setSelectionPending(key, true);
-    updateDraft({ activityIds: nextActivityIds }, { markLocal: false });
+    for (const goalKey of linkedGoalKeys) setGoalPending(goalKey, true);
+    updateDraft(
+      { activityIds: nextActivityIds, completedGoalIds: nextCompletedGoalIds },
+      { markLocal: false },
+    );
     try {
       const response = await fetch(`/api/day-selections/${logicalDate}/activities/${id}`, {
         method: "PUT",
@@ -521,12 +586,39 @@ export default function Home() {
       });
       const result = (await response.json()) as {
         selection?: { activityId: string; selected: boolean };
+        affectedGoalCompletions?: Array<{ goalId: string; completed: boolean }>;
+        affectedActivitySelections?: Array<{ activityId: string; selected: boolean }>;
         error?: string;
       };
       if (!response.ok || !result.selection || result.selection.activityId !== id || result.selection.selected !== nextSelected)
         throw new Error(result.error ?? "The activity update was out of date.");
+      const affectedGoalCompletions = result.affectedGoalCompletions ?? [];
+      const affectedActivitySelections = result.affectedActivitySelections ?? [result.selection];
+      if (
+        affectedGoalCompletions.length !== linkedGoalIds.length ||
+        linkedGoalIds.some(
+          (goalId) =>
+            !affectedGoalCompletions.some(
+              (completion) => completion.goalId === goalId && completion.completed === nextSelected,
+            ),
+        )
+      )
+        throw new Error("The activity update was out of date.");
       failedSelectionRef.current.delete(key);
       if (selectedDateRef.current === logicalDate && selectedDateEpochRef.current === dateEpoch) {
+        updateDraft(
+          {
+            activityIds: applyActivitySelectionStates({
+              activityIds: draftRef.current.activityIds,
+              selections: affectedActivitySelections,
+            }),
+            completedGoalIds: applyGoalCompletionStates({
+              completedGoalIds: draftRef.current.completedGoalIds,
+              completions: affectedGoalCompletions,
+            }),
+          },
+          { markLocal: false },
+        );
         setData((current) =>
           current
             ? {
@@ -535,9 +627,14 @@ export default function Home() {
                   entry.logicalDate === logicalDate
                     ? {
                         ...entry,
-                        activityIds: nextSelected
-                          ? [...new Set([...entry.activityIds, id])]
-                          : entry.activityIds.filter((item) => item !== id),
+                        activityIds: applyActivitySelectionStates({
+                          activityIds: entry.activityIds,
+                          selections: affectedActivitySelections,
+                        }),
+                        completedGoalIds: applyGoalCompletionStates({
+                          completedGoalIds: entry.completedGoalIds,
+                          completions: affectedGoalCompletions,
+                        }),
                       }
                     : entry,
                 ),
@@ -562,7 +659,18 @@ export default function Home() {
     } catch (error) {
       failedSelectionRef.current.add(key);
       if (selectedDateRef.current === logicalDate && selectedDateEpochRef.current === dateEpoch) {
-        updateDraft({ activityIds: previousSelected ? [...new Set([...draftRef.current.activityIds, id])] : draftRef.current.activityIds.filter((item) => item !== id) }, { markLocal: false });
+        updateDraft(
+          {
+            activityIds: previousSelected
+              ? [...new Set([...draftRef.current.activityIds, id])]
+              : draftRef.current.activityIds.filter((item) => item !== id),
+            completedGoalIds: restoreGoalCompletionStates({
+              completedGoalIds: draftRef.current.completedGoalIds,
+              previousStates: previousGoalStates,
+            }),
+          },
+          { markLocal: false },
+        );
         writeStoredDraft(logicalDate, draftRef.current);
         markLocalDraft(true);
         setConnectionState(navigator.onLine ? "error" : "offline");
@@ -571,6 +679,10 @@ export default function Home() {
     } finally {
       pendingSelectionRef.current.delete(key);
       setSelectionPending(key, false);
+      for (const goalKey of linkedGoalKeys) {
+        pendingGoalRef.current.delete(goalKey);
+        setGoalPending(goalKey, false);
+      }
     }
   }
 
@@ -605,17 +717,46 @@ export default function Home() {
       setConnectionState("offline");
       return;
     }
+    const linkedActivityId = data?.goals.find((goal) => goal.id === id)?.activityId ?? null;
+    const affectedGoalIds = linkedActivityId
+      ? data?.goals.filter((goal) => !goal.archived && goal.activityId === linkedActivityId).map((goal) => goal.id) ?? [id]
+      : [id];
+    const affectedGoalKeys = affectedGoalIds.map((goalId) => goalPendingKey(logicalDate, goalId));
+    const activityKey = linkedActivityId
+      ? selectionPendingKey(logicalDate, "activity", linkedActivityId)
+      : null;
     const previousChecked = draftRef.current.completedGoalIds.includes(id);
     const nextChecked = !previousChecked;
+    const previousGoalStates = new Map(
+      affectedGoalIds.map((goalId) => [goalId, draftRef.current.completedGoalIds.includes(goalId)]),
+    );
+    const previousActivitySelected = linkedActivityId
+      ? draftRef.current.activityIds.includes(linkedActivityId)
+      : undefined;
+    const nextCompletedGoalIds = applyGoalCompletionStates({
+      completedGoalIds: draftRef.current.completedGoalIds,
+      completions: affectedGoalIds.map((goalId) => ({ goalId, completed: nextChecked })),
+    });
+    const nextActivityIds = linkedActivityId
+      ? applyActivitySelectionStates({
+          activityIds: draftRef.current.activityIds,
+          selections: [{ activityId: linkedActivityId, selected: nextChecked }],
+        })
+      : draftRef.current.activityIds;
     const dateEpoch = selectedDateEpochRef.current;
-    pendingGoalRef.current.add(key);
-    setGoalPending(key, true);
+    for (const goalKey of affectedGoalKeys) {
+      pendingGoalRef.current.add(goalKey);
+      setGoalPending(goalKey, true);
+    }
+    if (activityKey) {
+      pendingSelectionRef.current.add(activityKey);
+      setSelectionPending(activityKey, true);
+    }
     setDraft((current) => {
       const next = {
         ...current,
-        completedGoalIds: nextChecked
-          ? [...new Set([...current.completedGoalIds, id])]
-          : current.completedGoalIds.filter((item) => item !== id),
+        completedGoalIds: nextCompletedGoalIds,
+        activityIds: nextActivityIds,
       };
       draftRef.current = next;
       return next;
@@ -630,20 +771,55 @@ export default function Home() {
         },
       );
       const result = (await response.json()) as {
-        completion?: { completed: boolean };
+        completion?: { goalId: string; completed: boolean };
+        selection?: { activityId: string; selected: boolean };
+        affectedGoalCompletions?: Array<{ goalId: string; completed: boolean }>;
+        affectedActivitySelections?: Array<{ activityId: string; selected: boolean }>;
         error?: string;
       };
       if (
         !response.ok ||
         !result.completion ||
+        result.completion.goalId !== id ||
         result.completion.completed !== nextChecked
       )
         throw new Error(result.error ?? "The goal update was out of date.");
+      const affectedGoalCompletions = result.affectedGoalCompletions ?? [result.completion];
+      const affectedActivitySelections = result.affectedActivitySelections ?? (result.selection ? [result.selection] : []);
+      if (
+        affectedGoalCompletions.length !== affectedGoalIds.length ||
+        affectedGoalIds.some(
+          (goalId) =>
+            !affectedGoalCompletions.some(
+              (completion) => completion.goalId === goalId && completion.completed === nextChecked,
+            ),
+        ) ||
+        (linkedActivityId &&
+          !affectedActivitySelections.some(
+            (selection) => selection.activityId === linkedActivityId && selection.selected === nextChecked,
+          ))
+      )
+        throw new Error("The goal update was out of date.");
       if (
         selectedDateRef.current === logicalDate &&
         selectedDateEpochRef.current === dateEpoch &&
         result.completion.completed === nextChecked
       ) {
+        setDraft((current) => {
+          const next = {
+            ...current,
+            completedGoalIds: applyGoalCompletionStates({
+              completedGoalIds: current.completedGoalIds,
+              completions: affectedGoalCompletions,
+            }),
+            activityIds: applyActivitySelectionStates({
+              activityIds: current.activityIds,
+              selections: affectedActivitySelections,
+            }),
+          };
+          draftRef.current = next;
+          return next;
+        });
         setData((current) =>
           current
             ? {
@@ -652,11 +828,14 @@ export default function Home() {
                   entry.logicalDate === logicalDate
                     ? {
                         ...entry,
-                        completedGoalIds: nextChecked
-                          ? [...new Set([...entry.completedGoalIds, id])]
-                          : entry.completedGoalIds.filter(
-                              (item) => item !== id,
-                            ),
+                        completedGoalIds: applyGoalCompletionStates({
+                          completedGoalIds: entry.completedGoalIds,
+                          completions: affectedGoalCompletions,
+                        }),
+                        activityIds: applyActivitySelectionStates({
+                          activityIds: entry.activityIds,
+                          selections: affectedActivitySelections,
+                        }),
                       }
                     : entry,
                 ),
@@ -674,9 +853,16 @@ export default function Home() {
         setDraft((current) => {
           const next = {
             ...current,
-            completedGoalIds: previousChecked
-              ? [...new Set([...current.completedGoalIds, id])]
-              : current.completedGoalIds.filter((item) => item !== id),
+            completedGoalIds: restoreGoalCompletionStates({
+              completedGoalIds: current.completedGoalIds,
+              previousStates: previousGoalStates,
+            }),
+            activityIds: linkedActivityId && previousActivitySelected !== undefined
+              ? applyActivitySelectionStates({
+                  activityIds: current.activityIds,
+                  selections: [{ activityId: linkedActivityId, selected: previousActivitySelected }],
+                })
+              : current.activityIds,
           };
           draftRef.current = next;
           return next;
@@ -688,8 +874,14 @@ export default function Home() {
         setConnectionState(navigator.onLine ? "error" : "offline");
       }
     } finally {
-      pendingGoalRef.current.delete(key);
-      setGoalPending(key, false);
+      for (const goalKey of affectedGoalKeys) {
+        pendingGoalRef.current.delete(goalKey);
+        setGoalPending(goalKey, false);
+      }
+      if (activityKey) {
+        pendingSelectionRef.current.delete(activityKey);
+        setSelectionPending(activityKey, false);
+      }
     }
   }
 

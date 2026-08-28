@@ -77,10 +77,24 @@ test("goals are above mood and persist through a dedicated optimistic toggle", (
   assert.doesNotMatch(pageSource, /function toggleGoal[\s\S]*?updateDraft\(/);
 });
 
+test("goal setup supports linked and unlinked activities", () => {
+  assert.match(setupSource, /No linked activity/);
+  assert.match(setupSource, /activityId: goalActivity \|\| null/);
+  assert.match(setupSource, /value=\{goal\.activityId \?\? ""\}/);
+  assert.match(setupSource, /const activityId = event\.target\.value \|\| null/);
+  assert.match(setupSource, /patch: \{ activityId \}, optimistic: \{ activityId \}/);
+});
+
 test("mood and activity selections persist independently with optimistic pending guards", () => {
   assert.match(pageSource, /api\/day-selections\/\$\{logicalDate\}\/mood/);
   assert.match(pageSource, /api\/day-selections\/\$\{logicalDate\}\/activities\/\$\{id\}/);
   assert.match(pageSource, /const pendingSelectionRef = useRef<Set<string>>\(new Set\(\)\)/);
+  assert.match(pageSource, /const linkedGoalIds = data\?\.goals/);
+  assert.match(pageSource, /filter\(\(goal\) => !goal\.archived && goal\.activityId === id\)/);
+  assert.match(pageSource, /filter\(\(goal\) => !goal\.archived && goal\.activityId === linkedActivityId\)/);
+  assert.match(pageSource, /for \(const goalKey of linkedGoalKeys\)/);
+  assert.match(pageSource, /affectedGoalCompletions/);
+  assert.match(pageSource, /restoreGoalCompletionStates/);
   assert.match(pageSource, /const failedSelectionRef = useRef<Set<string>>\(new Set\(\)\)/);
   assert.equal(
     pageSource.match(/failedSelectionRef\.current\.delete\(key\)/g)?.length,
@@ -103,5 +117,5 @@ test("mood and activity selections persist independently with optimistic pending
   assert.match(pageSource, /!hasOtherPendingSelection && !hasLocalDraftRef\.current/);
   assert.match(pageSource, /const hasFailedSelection = \[\.\.\.failedSelectionRef\.current\]\.some\(/);
   assert.match(pageSource, /if \(!hasFailedSelection\) \{[\s\S]*setConnectionState\("online"\);[\s\S]*setMessage\(null\);/);
-  assert.match(pageSource, /activityIds: nextSelected[\s\S]*?new Set\(\[\.\.\.entry\.activityIds, id\]\)[\s\S]*?entry\.activityIds\.filter\(\(item\) => item !== id\)/);
+  assert.match(pageSource, /activityIds: applyActivitySelectionStates\(\{[\s\S]*activityIds: entry\.activityIds/);
 });

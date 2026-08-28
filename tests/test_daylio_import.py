@@ -46,10 +46,10 @@ class DaylioImportTests(unittest.TestCase):
         payload = normalize_backup(self.root, rows)
         self.assertEqual(payload["csvMismatches"], {"mood": 1, "time": 1, "activities": 1})
 
-    def test_unlinked_goal_keeps_daylio_activity_id_for_store_reconciliation(self):
+    def test_unlinked_goal_uses_null_activity_id(self):
         self.root["goals"][0]["id_tag"] = -1
         payload = normalize_backup(self.root)
-        self.assertEqual(payload["goals"][0]["activitySourceId"], "-1")
+        self.assertIsNone(payload["goals"][0]["activitySourceId"])
         self.assertEqual(payload["goalStateSummary"][0]["rawState"], 0)
         self.assertEqual(payload["goalStateSummary"][0]["completionCount"], 1)
 

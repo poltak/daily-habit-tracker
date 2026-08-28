@@ -27,6 +27,12 @@ def source_id(value: Any) -> str:
     return str(value)
 
 
+def goal_activity_source_id(value: Any) -> str | None:
+    if value is None or value == -1 or value == "-1":
+        return None
+    return source_id(value)
+
+
 def entry_date(item: dict[str, Any], *, goal_history: bool = False) -> str:
     month = int(item["month"]) if goal_history else int(item["month"]) + 1
     return date(int(item["year"]), month, int(item["day"])).isoformat()
@@ -130,7 +136,7 @@ def normalize_backup(root: dict[str, Any], csv_rows: list[dict[str, str]] | None
         normalized_goals.append(
             {
                 "sourceId": source_id(item["goal_id"]),
-                "activitySourceId": source_id(item.get("id_tag")),
+                "activitySourceId": goal_activity_source_id(item.get("id_tag")),
                 "name": item.get("name") or "Activity goal",
                 "scheduleType": "times_per_week" if repeat_type == 2 else "weekdays",
                 "targetPerWeek": repeat_value if repeat_type == 2 and repeat_value is not None and repeat_value <= 7 else None,

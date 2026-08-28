@@ -2,14 +2,13 @@ import {
   type Activity,
   type ActivityGroup,
   type Bootstrap,
-  type DayActivitySelection,
   type DayMoodSelection,
   type DaySelections,
   type Entry,
   type Goal,
-  type GoalCompletion,
   type ImportPayload,
   type Mood,
+  type SelectionMutationResult,
   DaylioMemoryStore,
   MOODS,
   addDays,
@@ -38,7 +37,7 @@ type EntryRow = {
 type MoodRow = { id: string; name: string; score: number; emoji: string; color: string };
 type GroupRow = { id: string; name: string; sort_order: number; archived_at: string | null };
 type ActivityRow = { id: string; group_id: string; name: string; material_icon: string; source_icon_id: string | null; sort_order: number; archived_at: string | null };
-type GoalRow = { id: string; activity_id: string; name: string; schedule_type: Goal["scheduleType"]; target_per_week: number | null; weekdays_mask: number | null; sort_order: number; archived_at: string | null; reminder_enabled: number; reminder_time: string | null; source_state: number | null };
+type GoalRow = { id: string; activity_id: string | null; name: string; schedule_type: Goal["scheduleType"]; target_per_week: number | null; weekdays_mask: number | null; sort_order: number; archived_at: string | null; reminder_enabled: number; reminder_time: string | null; source_state: number | null };
 type GoalCompletionRow = { id: string; goal_id: string; logical_date: string; entry_id: string | null; created_at: string; updated_at: string };
 type DayMoodSelectionRow = { logical_date: string; mood_id: string; created_at: string; updated_at: string };
 type DayActivitySelectionRow = { logical_date: string; activity_id: string; selected: number; created_at: string; updated_at: string };
@@ -101,7 +100,7 @@ function toActivity(row: { id: string; group_id: string; name: string; material_
   return { id: row.id, groupId: row.group_id, name: row.name, icon: iconForActivity(row.name, row.material_icon !== "✨" ? row.material_icon : row.source_icon_id ?? undefined), sourceIconId: row.source_icon_id ?? undefined, sortOrder: row.sort_order, archived: Boolean(row.archived_at) };
 }
 
-function toGoal(row: { id: string; activity_id: string; name: string; schedule_type: Goal["scheduleType"]; target_per_week: number | null; weekdays_mask: number | null; sort_order: number; archived_at: string | null; reminder_enabled: number; reminder_time: string | null; source_state: number | null }): Goal {
+function toGoal(row: { id: string; activity_id: string | null; name: string; schedule_type: Goal["scheduleType"]; target_per_week: number | null; weekdays_mask: number | null; sort_order: number; archived_at: string | null; reminder_enabled: number; reminder_time: string | null; source_state: number | null }): Goal {
   return { id: row.id, activityId: row.activity_id, name: row.name, scheduleType: row.schedule_type, targetPerWeek: row.target_per_week ?? undefined, weekdaysMask: row.weekdays_mask ?? undefined, sortOrder: row.sort_order, archived: Boolean(row.archived_at), reminderEnabled: Boolean(row.reminder_enabled), reminderTime: row.reminder_time ?? undefined, sourceState: row.source_state ?? undefined };
 }
 
@@ -186,15 +185,30 @@ export class D1DaylioStore {
     return { logicalDate, moodId };
   }
 
-  async setActivitySelection(logicalDate: string, activityId: string, selected: boolean): Promise<DayActivitySelection> {
+  async setActivitySelection(logicalDate: string, activityId: string, selected: boolean): Promise<SelectionMutationResult> {
     if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
     if (typeof activityId !== "string" || !activityId.trim()) throw new Error("One activity is no longer available.");
     if (typeof selected !== "boolean") throw new Error("Activity selection must be a boolean.");
     const activity = await this.database.prepare("SELECT id FROM activities WHERE id = ? LIMIT 1").bind(activityId).first<{ id: string }>();
     if (!activity) throw new Error("One activity is no longer available.");
+    const linkedGoals = await rows<{ id: string }>(this.database, this.database.prepare("SELECT id FROM goals WHERE activity_id = ? AND archived_at IS NULL ORDER BY id").bind(activityId));
+    const entry = await this.database.prepare("SELECT id FROM entries WHERE logical_date = ? AND deleted_at IS NULL LIMIT 1").bind(logicalDate).first<{ id: string }>();
     const timestamp = new Date().toISOString();
-    await this.database.prepare("INSERT INTO day_activity_selections (logical_date, activity_id, selected, created_at, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(logical_date, activity_id) DO UPDATE SET selected = excluded.selected, updated_at = excluded.updated_at").bind(logicalDate, activityId, selected ? 1 : 0, timestamp, timestamp).run();
-    return { logicalDate, activityId, selected };
+    const statements = [this.database.prepare("INSERT INTO day_activity_selections (logical_date, activity_id, selected, created_at, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(logical_date, activity_id) DO UPDATE SET selected = excluded.selected, updated_at = excluded.updated_at").bind(logicalDate, activityId, selected ? 1 : 0, timestamp, timestamp)];
+    for (const goal of linkedGoals) {
+      if (selected) {
+        statements.push(this.database.prepare("INSERT INTO goal_completions (id, goal_id, logical_date, entry_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(goal_id, logical_date) DO UPDATE SET entry_id = excluded.entry_id, updated_at = excluded.updated_at").bind(`completion-${goal.id}-${logicalDate}`, goal.id, logicalDate, entry?.id ?? null, timestamp, timestamp));
+      } else {
+        statements.push(this.database.prepare("DELETE FROM goal_completions WHERE goal_id = ? AND logical_date = ?").bind(goal.id, logicalDate));
+      }
+    }
+    await this.database.batch(statements);
+    const selection = { logicalDate, activityId, selected };
+    return {
+      selection,
+      affectedGoalCompletions: linkedGoals.map((goal) => ({ goalId: goal.id, logicalDate, completed: selected, entryId: entry?.id })),
+      affectedActivitySelections: [selection],
+    };
   }
 
   private async getGoalCompletionRows(logicalDate: string) {
@@ -207,21 +221,29 @@ export class D1DaylioStore {
     return completions.map((completion) => completion.goal_id);
   }
 
-  async setGoalCompletion(logicalDate: string, goalId: string, completed: boolean): Promise<GoalCompletion> {
+  async setGoalCompletion(logicalDate: string, goalId: string, completed: boolean): Promise<SelectionMutationResult> {
     if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
     if (typeof goalId !== "string" || !goalId.trim()) throw new Error("One goal is no longer available.");
     if (typeof completed !== "boolean") throw new Error("Goal completion must be a boolean.");
-    const goal = await this.database.prepare("SELECT id FROM goals WHERE id = ? LIMIT 1").bind(goalId).first<{ id: string }>();
+    const goal = await this.database.prepare("SELECT id, activity_id FROM goals WHERE id = ? LIMIT 1").bind(goalId).first<{ id: string; activity_id: string | null }>();
     if (!goal) throw new Error("One goal is no longer available.");
-    const entry = await this.getEntry(logicalDate);
-    const entryId = entry?.id ?? null;
+    const linkedGoals = goal.activity_id
+      ? await rows<{ id: string }>(this.database, this.database.prepare("SELECT id FROM goals WHERE activity_id = ? AND archived_at IS NULL ORDER BY id").bind(goal.activity_id))
+      : [{ id: goal.id }];
+    const entry = await this.database.prepare("SELECT id FROM entries WHERE logical_date = ? AND deleted_at IS NULL LIMIT 1").bind(logicalDate).first<{ id: string }>();
     const timestamp = new Date().toISOString();
-    if (completed) {
-      await this.database.prepare("INSERT INTO goal_completions (id, goal_id, logical_date, entry_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(goal_id, logical_date) DO UPDATE SET entry_id = excluded.entry_id, updated_at = excluded.updated_at").bind(`completion-${goalId}-${logicalDate}`, goalId, logicalDate, entryId, timestamp, timestamp).run();
-    } else {
-      await this.database.prepare("DELETE FROM goal_completions WHERE goal_id = ? AND logical_date = ?").bind(goalId, logicalDate).run();
-    }
-    return { goalId, logicalDate, completed, entryId: entryId ?? undefined };
+    const statements = linkedGoals.map((linkedGoal) => completed
+      ? this.database.prepare("INSERT INTO goal_completions (id, goal_id, logical_date, entry_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(goal_id, logical_date) DO UPDATE SET entry_id = excluded.entry_id, updated_at = excluded.updated_at").bind(`completion-${linkedGoal.id}-${logicalDate}`, linkedGoal.id, logicalDate, entry?.id ?? null, timestamp, timestamp)
+      : this.database.prepare("DELETE FROM goal_completions WHERE goal_id = ? AND logical_date = ?").bind(linkedGoal.id, logicalDate));
+    if (goal.activity_id) statements.push(this.database.prepare("INSERT INTO day_activity_selections (logical_date, activity_id, selected, created_at, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(logical_date, activity_id) DO UPDATE SET selected = excluded.selected, updated_at = excluded.updated_at").bind(logicalDate, goal.activity_id, completed ? 1 : 0, timestamp, timestamp));
+    await this.database.batch(statements);
+    const selection = goal.activity_id ? { logicalDate, activityId: goal.activity_id, selected: completed } : undefined;
+    return {
+      completion: { goalId, logicalDate, completed, entryId: entry?.id },
+      selection,
+      affectedGoalCompletions: linkedGoals.map((linkedGoal) => ({ goalId: linkedGoal.id, logicalDate, completed, entryId: entry?.id })),
+      affectedActivitySelections: selection ? [selection] : [],
+    };
   }
 
   private async getPersistedEntry(logicalDate: string) {
@@ -315,17 +337,25 @@ export class D1DaylioStore {
     return toActivity(result);
   }
 
-  async createGoal(input: Pick<Goal, "name" | "activityId" | "scheduleType"> & Partial<Pick<Goal, "targetPerWeek" | "reminderEnabled" | "reminderTime">>) {
+  async createGoal(input: { name: string; activityId?: string | null; scheduleType: Goal["scheduleType"]; targetPerWeek?: number; reminderEnabled?: boolean; reminderTime?: string }) {
+    if (input.activityId !== undefined && input.activityId !== null) {
+      const activity = await this.database.prepare("SELECT id FROM activities WHERE id = ? LIMIT 1").bind(input.activityId).first<{ id: string }>();
+      if (!activity) throw new Error("Choose an activity for the goal.");
+    }
     const id = `goal-${crypto.randomUUID()}`;
-    const result = await this.database.prepare("INSERT INTO goals (id, activity_id, name, schedule_type, target_per_week, sort_order, reminder_enabled, reminder_time) VALUES (?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM goals), ?, ?) RETURNING id, activity_id, name, schedule_type, target_per_week, weekdays_mask, sort_order, archived_at, reminder_enabled, reminder_time, source_state").bind(id, input.activityId, input.name.trim() || "Activity goal", input.scheduleType, input.targetPerWeek ?? null, input.reminderEnabled ? 1 : 0, input.reminderTime ?? null).first<{ id: string; activity_id: string; name: string; schedule_type: Goal["scheduleType"]; target_per_week: number | null; weekdays_mask: number | null; sort_order: number; archived_at: string | null; reminder_enabled: number; reminder_time: string | null; source_state: number | null }>();
+    const result = await this.database.prepare("INSERT INTO goals (id, activity_id, name, schedule_type, target_per_week, sort_order, reminder_enabled, reminder_time) VALUES (?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM goals), ?, ?) RETURNING id, activity_id, name, schedule_type, target_per_week, weekdays_mask, sort_order, archived_at, reminder_enabled, reminder_time, source_state").bind(id, input.activityId ?? null, input.name.trim() || "Activity goal", input.scheduleType, input.targetPerWeek ?? null, input.reminderEnabled ? 1 : 0, input.reminderTime ?? null).first<{ id: string; activity_id: string | null; name: string; schedule_type: Goal["scheduleType"]; target_per_week: number | null; weekdays_mask: number | null; sort_order: number; archived_at: string | null; reminder_enabled: number; reminder_time: string | null; source_state: number | null }>();
     if (!result) throw new Error("Could not create the goal.");
     return toGoal(result);
   }
 
   async updateGoal(id: string, patch: Partial<Goal>) {
-    const current = await this.database.prepare("SELECT id, activity_id, name, schedule_type, target_per_week, weekdays_mask, sort_order, archived_at, reminder_enabled, reminder_time, source_state FROM goals WHERE id = ?").bind(id).first<{ id: string; activity_id: string; name: string; schedule_type: Goal["scheduleType"]; target_per_week: number | null; weekdays_mask: number | null; sort_order: number; archived_at: string | null; reminder_enabled: number; reminder_time: string | null; source_state: number | null }>();
+    const current = await this.database.prepare("SELECT id, activity_id, name, schedule_type, target_per_week, weekdays_mask, sort_order, archived_at, reminder_enabled, reminder_time, source_state FROM goals WHERE id = ?").bind(id).first<{ id: string; activity_id: string | null; name: string; schedule_type: Goal["scheduleType"]; target_per_week: number | null; weekdays_mask: number | null; sort_order: number; archived_at: string | null; reminder_enabled: number; reminder_time: string | null; source_state: number | null }>();
     if (!current) throw new Error("Goal not found.");
-    const result = await this.database.prepare("UPDATE goals SET name = ?, activity_id = ?, schedule_type = ?, target_per_week = ?, sort_order = ?, reminder_enabled = ?, reminder_time = ?, archived_at = ? WHERE id = ? RETURNING id, activity_id, name, schedule_type, target_per_week, weekdays_mask, sort_order, archived_at, reminder_enabled, reminder_time, source_state").bind(patch.name?.trim() || current.name, patch.activityId ?? current.activity_id, patch.scheduleType ?? current.schedule_type, patch.targetPerWeek ?? current.target_per_week, patch.sortOrder ?? current.sort_order, patch.reminderEnabled === undefined ? current.reminder_enabled : patch.reminderEnabled ? 1 : 0, patch.reminderTime ?? current.reminder_time, patch.archived === undefined ? current.archived_at : patch.archived ? new Date().toISOString() : null, id).first<{ id: string; activity_id: string; name: string; schedule_type: Goal["scheduleType"]; target_per_week: number | null; weekdays_mask: number | null; sort_order: number; archived_at: string | null; reminder_enabled: number; reminder_time: string | null; source_state: number | null }>();
+    if (patch.activityId !== undefined && patch.activityId !== null) {
+      const activity = await this.database.prepare("SELECT id FROM activities WHERE id = ? LIMIT 1").bind(patch.activityId).first<{ id: string }>();
+      if (!activity) throw new Error("Choose an activity for the goal.");
+    }
+    const result = await this.database.prepare("UPDATE goals SET name = ?, activity_id = ?, schedule_type = ?, target_per_week = ?, sort_order = ?, reminder_enabled = ?, reminder_time = ?, archived_at = ? WHERE id = ? RETURNING id, activity_id, name, schedule_type, target_per_week, weekdays_mask, sort_order, archived_at, reminder_enabled, reminder_time, source_state").bind(patch.name?.trim() || current.name, patch.activityId === undefined ? current.activity_id : patch.activityId, patch.scheduleType ?? current.schedule_type, patch.targetPerWeek ?? current.target_per_week, patch.sortOrder ?? current.sort_order, patch.reminderEnabled === undefined ? current.reminder_enabled : patch.reminderEnabled ? 1 : 0, patch.reminderTime ?? current.reminder_time, patch.archived === undefined ? current.archived_at : patch.archived ? new Date().toISOString() : null, id).first<{ id: string; activity_id: string | null; name: string; schedule_type: Goal["scheduleType"]; target_per_week: number | null; weekdays_mask: number | null; sort_order: number; archived_at: string | null; reminder_enabled: number; reminder_time: string | null; source_state: number | null }>();
     if (!result) throw new Error("Could not update the goal.");
     return toGoal(result);
   }
@@ -365,25 +395,11 @@ export class D1DaylioStore {
     const groupIds = new Map(payload.groups.map((item) => [item.sourceId, `daylio-group-${item.sourceId}`]));
     const activityIds = new Map(payload.activities.map((item) => [item.sourceId, `daylio-activity-${item.sourceId}`]));
     const goalIds = new Map(payload.goals.map((item) => [item.sourceId, `daylio-goal-${item.sourceId}`]));
-    const unresolvedGoalActivitySources = [...new Set(payload.goals.map((item) => item.activitySourceId).filter((sourceId) => !activityIds.has(sourceId)))];
-    if (unresolvedGoalActivitySources.length > 0) {
-      // Daylio allows goals that are not linked to an activity (id_tag -1),
-      // while our UI keeps the relationship convenient and non-null. Store a
-      // hidden, archived placeholder activity so those goals and completions
-      // remain importable without inventing a real historical activity link.
-      const fallbackGroupId = "daylio-group-unlinked-goals";
-      await this.database.prepare("INSERT INTO activity_groups (id, name, sort_order, archived_at, source_system, source_id) VALUES (?, ?, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM activity_groups), ?, ?, ?) ON CONFLICT(id) DO NOTHING").bind(fallbackGroupId, "Imported goals", new Date().toISOString(), "daylio", "__unlinked_goals__").run();
-      for (const sourceId of unresolvedGoalActivitySources) {
-        const fallbackActivityId = `daylio-activity-unlinked-goal-${sourceId}`;
-        activityIds.set(sourceId, fallbackActivityId);
-        await this.database.prepare("INSERT INTO activities (id, group_id, name, material_icon, sort_order, archived_at, source_system, source_id) VALUES (?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM activities), ?, ?, ?) ON CONFLICT(id) DO NOTHING").bind(fallbackActivityId, fallbackGroupId, "Imported goal link", "link", new Date().toISOString(), "daylio", `__unlinked_goal_${sourceId}__`).run();
-      }
-    }
     const allStatements = [
       ...payload.moods.map((item) => this.database.prepare("INSERT INTO mood_levels (id, score, name, emoji, color, sort_order, source_system, source_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name=excluded.name, score=excluded.score, emoji=excluded.emoji, source_system=excluded.source_system, source_id=excluded.source_id").bind(moodIds.get(item.sourceId), item.score, item.name, item.emoji ?? "🙂", "#9aa4ae", item.score * -1, "daylio", item.sourceId)),
       ...payload.groups.map((item) => this.database.prepare("INSERT INTO activity_groups (id, name, sort_order, source_system, source_id) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name=excluded.name, sort_order=excluded.sort_order").bind(groupIds.get(item.sourceId), item.name, item.sortOrder, "daylio", item.sourceId)),
       ...payload.activities.map((item) => this.database.prepare("INSERT INTO activities (id, group_id, name, material_icon, source_icon_id, source_state, sort_order, source_system, source_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name=excluded.name, group_id=excluded.group_id, material_icon=excluded.material_icon, source_state=excluded.source_state, sort_order=excluded.sort_order").bind(activityIds.get(item.sourceId), groupIds.get(item.groupSourceId ?? "") ?? "", item.name, iconForActivity(item.name, item.sourceIconId), item.sourceIconId ?? null, item.sourceState ?? null, item.sortOrder, "daylio", item.sourceId)),
-      ...payload.goals.map((item) => this.database.prepare("INSERT INTO goals (id, activity_id, name, schedule_type, target_per_week, weekdays_mask, sort_order, reminder_enabled, reminder_time, source_system, source_id, source_state) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name=excluded.name, activity_id=excluded.activity_id, source_state=excluded.source_state").bind(goalIds.get(item.sourceId), activityIds.get(item.activitySourceId) ?? "", item.name, item.scheduleType, item.targetPerWeek ?? null, item.weekdaysMask ?? null, item.sortOrder, item.reminderEnabled ? 1 : 0, item.reminderTime ?? null, "daylio", item.sourceId, item.sourceState ?? null)),
+      ...payload.goals.map((item) => this.database.prepare("INSERT INTO goals (id, activity_id, name, schedule_type, target_per_week, weekdays_mask, sort_order, reminder_enabled, reminder_time, source_system, source_id, source_state) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name=excluded.name, activity_id=excluded.activity_id, source_state=excluded.source_state").bind(goalIds.get(item.sourceId), item.activitySourceId ? activityIds.get(item.activitySourceId) ?? null : null, item.name, item.scheduleType, item.targetPerWeek ?? null, item.weekdaysMask ?? null, item.sortOrder, item.reminderEnabled ? 1 : 0, item.reminderTime ?? null, "daylio", item.sourceId, item.sourceState ?? null)),
     ];
     for (let index = 0; index < allStatements.length; index += 50) await this.database.batch(allStatements.slice(index, index + 50));
     for (const item of payload.entries) {

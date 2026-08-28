@@ -37,7 +37,13 @@ async function waitForServer() {
 
 async function json(path, init) {
   const response = await fetch(`${baseUrl}${path}`, { ...init, headers: { "content-type": "application/json", ...(init?.headers ?? {}) } });
-  const body = await response.json();
+  const rawBody = await response.text();
+  let body;
+  try {
+    body = JSON.parse(rawBody);
+  } catch {
+    throw new Error(`Expected JSON for ${init?.method ?? "GET"} ${path}; received HTTP ${response.status}: ${rawBody}`);
+  }
   return { response, body };
 }
 
@@ -51,6 +57,10 @@ test("Wrangler-backed API covers persistence, catalog, calendar, pagination, imp
 
   await run(wrangler, ["d1", "migrations", "apply", "daylio-clone", "--local", "--config", "wrangler.jsonc", "--persist-to", persistence]);
   server = spawn(process.execPath, [wrangler, "dev", "--config", "dist/server/wrangler.json", "--local", "--persist-to", persistence, "--port", String(port)], { cwd: root, env: { ...process.env, CI: "1", NO_COLOR: "1" }, stdio: ["ignore", "pipe", "pipe"] });
+  // Wrangler emits request and inspector logs while the test runs. Drain both
+  // pipes so the child cannot block and restart its worker on a full buffer.
+  server.stdout.on("data", () => {});
+  server.stderr.on("data", () => {});
   await waitForServer();
 
   const health = await json("/api/health");
@@ -85,6 +95,22 @@ test("Wrangler-backed API covers persistence, catalog, calendar, pagination, imp
   assert.equal(standaloneOffAgain.response.status, 200);
   const standaloneEmpty = await json(`/api/entries/${selectionDate}`);
   assert.deepEqual(standaloneEmpty.body.daySelections.activityIds, []);
+
+  const linkedGoalDate = "2026-01-13";
+  const linkedGoalOn = await json(`/api/goal-completions/${linkedGoalDate}/goal-move`, { method: "PUT", body: JSON.stringify({ completed: true }) });
+  assert.equal(linkedGoalOn.response.status, 200);
+  assert.deepEqual(linkedGoalOn.body.selection, { logicalDate: linkedGoalDate, activityId: "activity-gym", selected: true });
+  assert.deepEqual(linkedGoalOn.body.affectedGoalCompletions.map((item) => item.goalId), ["goal-move"]);
+  const linkedGoalState = await json(`/api/entries/${linkedGoalDate}`);
+  assert.equal(linkedGoalState.response.status, 404);
+  assert.deepEqual(linkedGoalState.body.completedGoalIds, ["goal-move"]);
+  assert.deepEqual(linkedGoalState.body.daySelections.activityIds, ["activity-gym"]);
+  const linkedGoalOff = await json(`/api/goal-completions/${linkedGoalDate}/goal-move`, { method: "PUT", body: JSON.stringify({ completed: false }) });
+  assert.equal(linkedGoalOff.response.status, 200);
+  assert.equal(linkedGoalOff.body.selection.selected, false);
+  const linkedGoalEmpty = await json(`/api/entries/${linkedGoalDate}`);
+  assert.deepEqual(linkedGoalEmpty.body.completedGoalIds, []);
+  assert.deepEqual(linkedGoalEmpty.body.daySelections.activityIds, []);
 
   const invalidMoodSelection = await json(`/api/day-selections/${selectionDate}/mood`, { method: "PUT", body: JSON.stringify({ moodId: "mood-missing" }) });
   assert.equal(invalidMoodSelection.response.status, 400);
@@ -161,6 +187,64 @@ test("Wrangler-backed API covers persistence, catalog, calendar, pagination, imp
   assert.equal(activity.body.activity.icon, "menu_book");
   const goal = await json("/api/catalog", { method: "POST", body: JSON.stringify({ kind: "goal", name: "Test goal", activityId: activity.body.activity.id, scheduleType: "daily" }) });
   assert.equal(goal.response.status, 201);
+  const sharedGoalA = await json("/api/catalog", { method: "POST", body: JSON.stringify({ kind: "goal", name: "Shared goal A", activityId: "activity-gym", scheduleType: "daily" }) });
+  assert.equal(sharedGoalA.response.status, 201);
+  const sharedGoalB = await json("/api/catalog", { method: "POST", body: JSON.stringify({ kind: "goal", name: "Shared goal B", activityId: "activity-gym", scheduleType: "daily" }) });
+  assert.equal(sharedGoalB.response.status, 201);
+  const unlinkedGoal = await json("/api/catalog", { method: "POST", body: JSON.stringify({ kind: "goal", name: "Unlinked goal", activityId: null, scheduleType: "daily" }) });
+  assert.equal(unlinkedGoal.response.status, 201);
+  assert.equal(unlinkedGoal.body.goal.activityId, null);
+  const relinkableGoal = await json("/api/catalog", { method: "POST", body: JSON.stringify({ kind: "goal", name: "Relinkable goal", activityId: activity.body.activity.id, scheduleType: "daily" }) });
+  assert.equal(relinkableGoal.response.status, 201);
+  const unlinkedPatch = await json(`/api/catalog/goal/${relinkableGoal.body.goal.id}`, { method: "PATCH", body: JSON.stringify({ activityId: null }) });
+  assert.equal(unlinkedPatch.response.status, 200);
+  assert.equal(unlinkedPatch.body.goal.activityId, null);
+  const invalidGoalLink = await json(`/api/catalog/goal/${relinkableGoal.body.goal.id}`, { method: "PATCH", body: JSON.stringify({ activityId: "activity-missing" }) });
+  assert.equal(invalidGoalLink.response.status, 400);
+  const relinkedGoal = await json(`/api/catalog/goal/${relinkableGoal.body.goal.id}`, { method: "PATCH", body: JSON.stringify({ activityId: activity.body.activity.id }) });
+  assert.equal(relinkedGoal.response.status, 200);
+  assert.equal(relinkedGoal.body.goal.activityId, activity.body.activity.id);
+
+  const archivedSharedGoal = await json("/api/catalog", { method: "POST", body: JSON.stringify({ kind: "goal", name: "Archived shared goal", activityId: "activity-gym", scheduleType: "daily" }) });
+  assert.equal(archivedSharedGoal.response.status, 201);
+  const archivedDate = "2026-02-07";
+  const archivedOn = await json(`/api/goal-completions/${archivedDate}/${archivedSharedGoal.body.goal.id}`, { method: "PUT", body: JSON.stringify({ completed: true }) });
+  assert.equal(archivedOn.response.status, 200);
+  const archived = await json(`/api/catalog/goal/${archivedSharedGoal.body.goal.id}`, { method: "PATCH", body: JSON.stringify({ archived: true }) });
+  assert.equal(archived.response.status, 200);
+  assert.equal(archived.body.goal.archived, true);
+  const archivedActivityOff = await json(`/api/day-selections/${archivedDate}/activities/activity-gym`, { method: "PUT", body: JSON.stringify({ selected: false }) });
+  assert.equal(archivedActivityOff.response.status, 200);
+  assert.equal(archivedActivityOff.body.affectedGoalCompletions.some((item) => item.goalId === archivedSharedGoal.body.goal.id), false);
+  const archivedState = await json(`/api/entries/${archivedDate}`);
+  assert.deepEqual(archivedState.body.completedGoalIds, [archivedSharedGoal.body.goal.id]);
+  assert.deepEqual(archivedState.body.daySelections.activityIds, []);
+
+  const sharedDate = "2026-02-05";
+  const sharedOn = await json(`/api/day-selections/${sharedDate}/activities/activity-gym`, { method: "PUT", body: JSON.stringify({ selected: true }) });
+  assert.equal(sharedOn.response.status, 200);
+  assert.deepEqual(sharedOn.body.affectedGoalCompletions.map((item) => item.goalId).sort(), ["goal-move", sharedGoalA.body.goal.id, sharedGoalB.body.goal.id].sort());
+  const sharedOnState = await json(`/api/entries/${sharedDate}`);
+  assert.deepEqual(sharedOnState.body.completedGoalIds.sort(), ["goal-move", sharedGoalA.body.goal.id, sharedGoalB.body.goal.id].sort());
+  assert.deepEqual(sharedOnState.body.daySelections.activityIds, ["activity-gym"]);
+  const sharedOff = await json(`/api/day-selections/${sharedDate}/activities/activity-gym`, { method: "PUT", body: JSON.stringify({ selected: false }) });
+  assert.equal(sharedOff.response.status, 200);
+  assert.deepEqual(sharedOff.body.affectedGoalCompletions.map((item) => item.goalId).sort(), ["goal-move", sharedGoalA.body.goal.id, sharedGoalB.body.goal.id].sort());
+  const sharedOffState = await json(`/api/entries/${sharedDate}`);
+  assert.deepEqual(sharedOffState.body.completedGoalIds, []);
+  assert.deepEqual(sharedOffState.body.daySelections.activityIds, []);
+
+  const unlinkedDate = "2026-02-06";
+  const unlinkedOn = await json(`/api/goal-completions/${unlinkedDate}/${unlinkedGoal.body.goal.id}`, { method: "PUT", body: JSON.stringify({ completed: true }) });
+  assert.equal(unlinkedOn.response.status, 200);
+  assert.equal(unlinkedOn.body.selection, undefined);
+  assert.deepEqual(unlinkedOn.body.affectedActivitySelections, []);
+  const unlinkedState = await json(`/api/entries/${unlinkedDate}`);
+  assert.deepEqual(unlinkedState.body.completedGoalIds, [unlinkedGoal.body.goal.id]);
+  assert.deepEqual(unlinkedState.body.daySelections.activityIds, []);
+  const unlinkedOff = await json(`/api/goal-completions/${unlinkedDate}/${unlinkedGoal.body.goal.id}`, { method: "PUT", body: JSON.stringify({ completed: false }) });
+  assert.equal(unlinkedOff.response.status, 200);
+  assert.deepEqual((await json(`/api/entries/${unlinkedDate}`)).body.completedGoalIds, []);
 
   const rename = await json(`/api/catalog/group/${group.body.group.id}`, { method: "PATCH", body: JSON.stringify({ name: "Renamed", sortOrder: 0 }) });
   assert.equal(rename.body.group.name, "Renamed");
@@ -206,11 +290,11 @@ test("Wrangler-backed API covers persistence, catalog, calendar, pagination, imp
   assert.equal(recreated.body.entry.id, saved.body.entry.id);
   assert.equal(recreated.body.entry.version, 1);
   assert.deepEqual(recreated.body.entry.activityIds, [activity.body.activity.id]);
-  assert.deepEqual(recreated.body.entry.completedGoalIds, [goal.body.goal.id]);
+  assert.deepEqual(recreated.body.entry.completedGoalIds.sort(), [goal.body.goal.id, relinkableGoal.body.goal.id].sort());
   const reloaded = await json("/api/entries/2026-02-03");
   assert.equal(reloaded.response.status, 200);
   assert.deepEqual(reloaded.body.entry.activityIds, [activity.body.activity.id]);
-  assert.deepEqual(reloaded.body.entry.completedGoalIds, [goal.body.goal.id]);
+  assert.deepEqual(reloaded.body.entry.completedGoalIds.sort(), [goal.body.goal.id, relinkableGoal.body.goal.id].sort());
 
   const importPayload = {
     sourceSystem: "daylio",
@@ -218,16 +302,19 @@ test("Wrangler-backed API covers persistence, catalog, calendar, pagination, imp
     moods: [{ sourceId: "1", name: "rad", score: 5 }, { sourceId: "2", name: "good", score: 4 }, { sourceId: "3", name: "meh", score: 3 }, { sourceId: "4", name: "bad", score: 2 }, { sourceId: "5", name: "awful", score: 1 }],
     groups: [{ sourceId: "1", name: "Imported", sortOrder: 0 }],
     activities: [{ sourceId: "1", groupSourceId: "1", name: "Imported book", sourceIconId: "123", sortOrder: 0, sourceState: 0 }],
-    goals: [{ sourceId: "1", activitySourceId: "-1", name: "Unlinked goal", scheduleType: "daily", sortOrder: 0, sourceState: 1 }],
+    goals: [{ sourceId: "1", activitySourceId: null, name: "Unlinked goal", scheduleType: "daily", sortOrder: 0, sourceState: 1 }],
     entries: [{ sourceId: "1", logicalDate: "2026-02-04", localTime: "20:00", moodSourceId: "2", activitySourceIds: ["1"] }],
     completions: [{ sourceId: "1", goalSourceId: "1", logicalDate: "2026-02-04", localTime: "20:00:00" }],
   };
   const imported = await json("/api/import", { method: "POST", body: JSON.stringify(importPayload) });
   assert.equal(imported.response.status, 200);
+  assert.equal(imported.body.bootstrap.goals.find((item) => item.id === "daylio-goal-1").activityId, null);
   const importedEntry = await json("/api/entries/2026-02-04");
   assert.equal(importedEntry.body.entry.completedGoalIds.length, 1);
   const exported = await json("/api/export");
   assert.equal(exported.body.formatVersion, 1);
   assert.equal(exported.body.tables.import_runs.length, 1);
   assert.equal(exported.body.tables.import_runs[0].status, "completed");
+  assert.equal(exported.body.tables.goals.find((item) => item.id === "daylio-goal-1").activity_id, null);
+  assert.equal(exported.body.tables.activities.some((item) => item.id.includes("unlinked-goal")), false);
 });

@@ -65,7 +65,7 @@ export const entryActivities = sqliteTable("entry_activities", {
 
 export const goals = sqliteTable("goals", {
   id: text("id").primaryKey(),
-  activityId: text("activity_id").notNull().references(() => activities.id),
+  activityId: text("activity_id").references(() => activities.id),
   name: text("name").notNull(),
   scheduleType: text("schedule_type").notNull(),
   targetPerWeek: integer("target_per_week"),

@@ -28,7 +28,7 @@ export type Activity = {
 
 export type Goal = {
   id: string;
-  activityId: string;
+  activityId: string | null;
   name: string;
   scheduleType: "daily" | "weekdays" | "times_per_week";
   targetPerWeek?: number;
@@ -62,6 +62,13 @@ export type GoalCompletion = {
   logicalDate: string;
   completed: boolean;
   entryId?: string;
+};
+
+export type SelectionMutationResult = {
+  completion?: GoalCompletion;
+  selection?: DayActivitySelection;
+  affectedGoalCompletions: GoalCompletion[];
+  affectedActivitySelections: DayActivitySelection[];
 };
 
 export type DayMoodSelection = {
@@ -133,7 +140,7 @@ export type ImportPayload = {
   }>;
   goals: Array<{
     sourceId: string;
-    activitySourceId: string;
+    activitySourceId?: string | null;
     name: string;
     scheduleType: Goal["scheduleType"];
     targetPerWeek?: number;
@@ -339,10 +346,7 @@ export class DaylioMemoryStore {
     return { logicalDate, moodId };
   }
 
-  setActivitySelection(logicalDate: string, activityId: string, selected: boolean): DayActivitySelection {
-    if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
-    if (typeof activityId !== "string" || !this.activities.has(activityId)) throw new Error("One activity is no longer available.");
-    if (typeof selected !== "boolean") throw new Error("Activity selection must be a boolean.");
+  private storeActivitySelection(logicalDate: string, activityId: string, selected: boolean): DayActivitySelection {
     const timestamp = nowIso();
     const key = dayActivitySelectionKey(logicalDate, activityId);
     const current = this.dayActivitySelections.get(key);
@@ -350,30 +354,73 @@ export class DaylioMemoryStore {
     return { logicalDate, activityId, selected };
   }
 
+  setActivitySelection(logicalDate: string, activityId: string, selected: boolean): SelectionMutationResult {
+    if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
+    if (typeof activityId !== "string" || !this.activities.has(activityId)) throw new Error("One activity is no longer available.");
+    if (typeof selected !== "boolean") throw new Error("Activity selection must be a boolean.");
+    const selection = this.storeActivitySelection(logicalDate, activityId, selected);
+    const affectedGoals = [...this.goals.values()].filter((goal) => !goal.archived && goal.activityId === activityId);
+    const entry = this.entries.get(logicalDate);
+    const timestamp = nowIso();
+    const entryId = entry && !entry.deletedAt ? entry.id : undefined;
+    for (const goal of affectedGoals) {
+      const key = goalCompletionKey(logicalDate, goal.id);
+      if (!selected) {
+        this.goalCompletions.delete(key);
+        continue;
+      }
+      const current = this.goalCompletions.get(key);
+      this.goalCompletions.set(key, { goalId: goal.id, logicalDate, entryId, createdAt: current?.createdAt ?? timestamp, updatedAt: timestamp });
+    }
+    if (entry && !entry.deletedAt) entry.completedGoalIds = this.completedGoalIdsForDate(logicalDate);
+    return {
+      selection,
+      affectedGoalCompletions: affectedGoals.map((goal) => ({ goalId: goal.id, logicalDate, completed: selected, entryId })),
+      affectedActivitySelections: [selection],
+    };
+  }
+
   getGoalCompletionIds(logicalDate: string) {
     if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
     return this.completedGoalIdsForDate(logicalDate);
   }
 
-  setGoalCompletion(logicalDate: string, goalId: string, completed: boolean): GoalCompletion {
+  setGoalCompletion(logicalDate: string, goalId: string, completed: boolean): SelectionMutationResult {
     if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
     if (typeof goalId !== "string" || !goalId.trim() || !this.goals.has(goalId)) throw new Error("One goal is no longer available.");
     if (typeof completed !== "boolean") throw new Error("Goal completion must be a boolean.");
 
-    const key = goalCompletionKey(logicalDate, goalId);
+    const goal = this.goals.get(goalId)!;
+    const affectedGoals = goal.activityId
+      ? [...this.goals.values()].filter((candidate) => !candidate.archived && candidate.activityId === goal.activityId)
+      : [goal];
     const entry = this.entries.get(logicalDate);
-    if (!completed) {
-      this.goalCompletions.delete(key);
-      if (entry && !entry.deletedAt) entry.completedGoalIds = this.completedGoalIdsForDate(logicalDate);
-      return { goalId, logicalDate, completed: false, entryId: entry && !entry.deletedAt ? entry.id : undefined };
-    }
-
     const timestamp = nowIso();
-    const current = this.goalCompletions.get(key);
     const entryId = entry && !entry.deletedAt ? entry.id : undefined;
-    this.goalCompletions.set(key, { goalId, logicalDate, entryId, createdAt: current?.createdAt ?? timestamp, updatedAt: timestamp });
+    for (const affectedGoal of affectedGoals) {
+      const key = goalCompletionKey(logicalDate, affectedGoal.id);
+      if (!completed) {
+        this.goalCompletions.delete(key);
+        continue;
+      }
+      const current = this.goalCompletions.get(key);
+      this.goalCompletions.set(key, { goalId: affectedGoal.id, logicalDate, entryId, createdAt: current?.createdAt ?? timestamp, updatedAt: timestamp });
+    }
     if (entry && !entry.deletedAt) entry.completedGoalIds = this.completedGoalIdsForDate(logicalDate);
-    return { goalId, logicalDate, completed: true, entryId };
+    const selection = goal.activityId
+      ? this.storeActivitySelection(logicalDate, goal.activityId, completed)
+      : undefined;
+    return {
+      completion: { goalId, logicalDate, completed, entryId },
+      selection,
+      affectedGoalCompletions: affectedGoals.map((affectedGoal) => ({
+        goalId: affectedGoal.id,
+        logicalDate,
+        completed,
+        entryId,
+      })),
+      affectedActivitySelections: selection ? [selection] : [],
+    };
   }
 
   saveEntry(logicalDate: string, input: unknown) {
@@ -470,11 +517,11 @@ export class DaylioMemoryStore {
     return next;
   }
 
-  createGoal(input: Pick<Goal, "name" | "activityId" | "scheduleType"> & Partial<Pick<Goal, "targetPerWeek" | "reminderEnabled" | "reminderTime">>) {
-    if (!this.activities.has(input.activityId)) throw new Error("Choose an activity for the goal.");
+  createGoal(input: { name: string; activityId?: string | null; scheduleType: Goal["scheduleType"]; targetPerWeek?: number; reminderEnabled?: boolean; reminderTime?: string }) {
+    if (input.activityId !== null && input.activityId !== undefined && !this.activities.has(input.activityId)) throw new Error("Choose an activity for the goal.");
     const goal: Goal = {
       id: newId("goal"),
-      activityId: input.activityId,
+      activityId: input.activityId ?? null,
       name: input.name.trim() || "Activity goal",
       scheduleType: input.scheduleType,
       targetPerWeek: input.targetPerWeek,
@@ -490,6 +537,7 @@ export class DaylioMemoryStore {
   updateGoal(id: string, patch: Partial<Goal>) {
     const goal = this.goals.get(id);
     if (!goal) throw new Error("Goal not found.");
+    if (patch.activityId !== undefined && patch.activityId !== null && !this.activities.has(patch.activityId)) throw new Error("Choose an activity for the goal.");
     const next = { ...goal, ...patch };
     this.goals.set(id, next);
     return next;
@@ -530,7 +578,7 @@ export class DaylioMemoryStore {
     for (const goal of payload.goals) {
       const id = `daylio-goal-${goal.sourceId}`;
       goalIds.set(goal.sourceId, id);
-      this.goals.set(id, { id, activityId: activityIds.get(goal.activitySourceId) ?? "", name: goal.name || "Activity goal", scheduleType: goal.scheduleType, targetPerWeek: goal.targetPerWeek, weekdaysMask: goal.weekdaysMask, sortOrder: goal.sortOrder, archived: Boolean(goal.archived), reminderEnabled: Boolean(goal.reminderEnabled), reminderTime: goal.reminderTime, sourceState: goal.sourceState });
+      this.goals.set(id, { id, activityId: activityIds.get(goal.activitySourceId ?? "") ?? null, name: goal.name || "Activity goal", scheduleType: goal.scheduleType, targetPerWeek: goal.targetPerWeek, weekdaysMask: goal.weekdaysMask, sortOrder: goal.sortOrder, archived: Boolean(goal.archived), reminderEnabled: Boolean(goal.reminderEnabled), reminderTime: goal.reminderTime, sourceState: goal.sourceState });
     }
     for (const item of payload.entries) {
       this.entries.set(item.logicalDate, { id: `daylio-entry-${item.sourceId}`, logicalDate: item.logicalDate, localTime: item.localTime, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, timezoneOffsetMinutes: item.timezoneOffsetMinutes, moodId: moodIds.get(item.moodSourceId) ?? "mood-meh", activityIds: item.activitySourceIds.map((id) => activityIds.get(id)).filter(Boolean) as string[], completedGoalIds: [], legacyNoteTitle: item.legacyNoteTitle, legacyNote: item.legacyNote, version: 1, createdAt: nowIso(), updatedAt: nowIso() });

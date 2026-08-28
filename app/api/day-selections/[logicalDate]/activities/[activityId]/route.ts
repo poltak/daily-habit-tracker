@@ -14,8 +14,7 @@ export async function PUT(request: Request, context: { params: Promise<{ logical
     const input = await readJson<unknown>(request);
     if (!input || typeof input !== "object" || Array.isArray(input) || typeof (input as ActivitySelectionInput).selected !== "boolean") throw new Error("Activity selection must be a boolean.");
     const store = await getServerStore();
-    const selection = await store.setActivitySelection(logicalDate, activityId, (input as ActivitySelectionInput).selected);
-    return Response.json({ selection });
+    return Response.json(await store.setActivitySelection(logicalDate, activityId, (input as ActivitySelectionInput).selected));
   } catch (error) {
     return jsonError(error);
   }
