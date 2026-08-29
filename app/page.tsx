@@ -8,8 +8,14 @@ import {
   type DaySelections,
   type Entry,
   type Goal,
+  type GoalHistory,
+  type GoalRepeatType,
   type Mood,
+  ALL_WEEKDAYS_MASK,
+  goalRepeatType,
+  goalWeekdayMask,
   isLogicalDate,
+  logicalDateFromDate,
 } from "../lib/daylio";
 import {
   clearStoredDraft,
@@ -26,9 +32,9 @@ import {
 } from "../lib/activity-groups";
 import { createLatestRequestGate } from "../lib/latest-request-gate";
 import { Icon } from "./components/icon";
-import { SetupView } from "./components/setup-view";
+import { IconPicker, SetupView } from "./components/setup-view";
 
-type View = "log" | "calendar" | "entries" | "settings";
+type View = "log" | "calendar" | "entries" | "settings" | "goal";
 type ConnectionState = "checking" | "online" | "offline" | "error";
 type Notice = { kind: "success" | "error" | "info"; text: string };
 
@@ -38,6 +44,24 @@ const EMPTY_DRAFT: Draft = {
   completedGoalIds: [],
   localTime: "23:00",
 };
+
+type GoalConfigDraft = {
+  name: string;
+  repeatType: GoalRepeatType;
+  weekdaysMask: number;
+  targetPerWeek: number;
+  materialIcon: string;
+};
+
+function goalConfigFromGoal(goal: Goal): GoalConfigDraft {
+  return {
+    name: goal.name,
+    repeatType: goalRepeatType(goal),
+    weekdaysMask: goalWeekdayMask(goal),
+    targetPerWeek: Math.min(7, Math.max(1, goal.targetPerWeek ?? 1)),
+    materialIcon: goal.materialIcon,
+  };
+}
 
 function friendlyDate(value: string) {
   const [year, month, day] = value.split("-").map(Number);
@@ -185,6 +209,14 @@ export default function Home() {
   const [calendarMonth, setCalendarMonth] = useState("");
   const [calendarDates, setCalendarDates] = useState<string[]>([]);
   const [isLoadingCalendar, setIsLoadingCalendar] = useState(false);
+  const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null);
+  const [goalHistoryMonth, setGoalHistoryMonth] = useState("");
+  const [goalHistory, setGoalHistory] = useState<GoalHistory | null>(null);
+  const [goalHistoryRevision, setGoalHistoryRevision] = useState(0);
+  const [isLoadingGoalHistory, setIsLoadingGoalHistory] = useState(false);
+  const [goalConfigDraft, setGoalConfigDraft] = useState<GoalConfigDraft | null>(null);
+  const [isSavingGoalConfig, setIsSavingGoalConfig] = useState(false);
+  const [goalIconPickerOpen, setGoalIconPickerOpen] = useState(false);
   const [hasLocalDraft, setHasLocalDraft] = useState(false);
   const [connectionState, setConnectionState] =
     useState<ConnectionState>("checking");
@@ -198,6 +230,11 @@ export default function Home() {
   const draftRef = useRef(EMPTY_DRAFT);
   const dateRequestGate = useRef(createLatestRequestGate());
   const bootstrapRequestGate = useRef(createLatestRequestGate());
+  const goalHistoryRequestGate = useRef(createLatestRequestGate());
+  const pendingGoalConfigRef = useRef(false);
+  const goalConfigSaveSequenceRef = useRef(0);
+  const activeGoalConfigSaveRef = useRef<{ sequence: number; goalId: string } | null>(null);
+  const selectedGoalIdRef = useRef<string | null>(null);
   const pendingGoalRef = useRef<Set<string>>(new Set());
   const pendingSelectionRef = useRef<Set<string>>(new Set());
   const failedSelectionRef = useRef<Set<string>>(new Set());
@@ -205,6 +242,7 @@ export default function Home() {
   const selectedDateRef = useRef("");
   const selectedDateEpochRef = useRef(0);
   draftRef.current = draft;
+  selectedGoalIdRef.current = selectedGoalId;
 
   function markLocalDraft(value: boolean) {
     hasLocalDraftRef.current = value;
@@ -213,8 +251,36 @@ export default function Home() {
 
   function changeView(nextView: View) {
     if (isSetupBusy && view === "settings" && nextView !== "settings") return;
+    if (pendingGoalConfigRef.current && view === "goal" && nextView !== "goal") {
+      setMessage({ kind: "info", text: "Wait for the goal update to finish before leaving this goal." });
+      return;
+    }
     setView(nextView);
     setMessage(null);
+  }
+
+  function openGoal(goalId: string) {
+    if (pendingGoalConfigRef.current) return;
+    const goal = data?.goals.find((candidate) => candidate.id === goalId && !candidate.archived);
+    if (!goal) return;
+    setSelectedGoalId(goalId);
+    setGoalConfigDraft(goalConfigFromGoal(goal));
+    setGoalHistory(null);
+    setGoalHistoryMonth((selectedDate || data?.today || "").slice(0, 7));
+    changeView("goal");
+  }
+
+  function closeGoal() {
+    if (pendingGoalConfigRef.current) {
+      setMessage({ kind: "info", text: "Wait for the goal update to finish before leaving this goal." });
+      return;
+    }
+    goalHistoryRequestGate.current.cancel();
+    setGoalIconPickerOpen(false);
+    setSelectedGoalId(null);
+    setGoalHistory(null);
+    setGoalConfigDraft(null);
+    changeView("log");
   }
 
   function applyBootstrap(
@@ -316,6 +382,7 @@ export default function Home() {
     () => () => {
       dateRequestGate.current.cancel();
       bootstrapRequestGate.current.cancel();
+      goalHistoryRequestGate.current.cancel();
     },
     [],
   );
@@ -356,6 +423,41 @@ export default function Home() {
       cancelled = true;
     };
   }, [calendarMonth, view]);
+
+  useEffect(() => {
+    if (view !== "goal" || !selectedGoalId || !/^\d{4}-\d{2}$/.test(goalHistoryMonth)) return;
+    const gate = goalHistoryRequestGate.current;
+    const request = gate.begin();
+    Promise.resolve()
+      .then(() => {
+        if (!request.isCurrent()) return null;
+        setIsLoadingGoalHistory(true);
+        const search = new URLSearchParams({ month: goalHistoryMonth, asOf: logicalDateFromDate() });
+        return fetch(`/api/goals/${selectedGoalId}/history?${search}`, { cache: "no-store", signal: request.signal });
+      })
+      .then(async (response) => {
+        if (!response) return null;
+        const result = (await response.json()) as GoalHistory & { error?: string };
+        if (!response.ok) throw new Error(result.error ?? "Could not load goal history.");
+        return result;
+      })
+      .then((result) => {
+        if (!result || !request.isCurrent()) return;
+        setGoalHistory(result);
+        setConnectionState("online");
+      })
+      .catch((error: Error) => {
+        if (request.signal.aborted || !request.isCurrent()) return;
+        setConnectionState(navigator.onLine ? "error" : "offline");
+        setMessage({ kind: "error", text: error.message });
+      })
+      .finally(() => {
+        if (request.isCurrent()) setIsLoadingGoalHistory(false);
+    });
+    return () => {
+      if (!request.signal.aborted) gate.cancel();
+    };
+  }, [goalHistoryMonth, goalHistoryRevision, selectedGoalId, view]);
 
   async function chooseDate(nextDate: string) {
     if (!isLogicalDate(nextDate)) return;
@@ -885,6 +987,85 @@ export default function Home() {
     }
   }
 
+  async function saveGoalConfig() {
+    const goalId = selectedGoalId;
+    const config = goalConfigDraft;
+    const currentGoal = data?.goals.find((goal) => goal.id === goalId);
+    if (!goalId || !config || !currentGoal || isSavingGoalConfig || pendingGoalConfigRef.current) return;
+    const name = config.name.trim();
+    if (!name) {
+      setMessage({ kind: "error", text: "Goal name is required." });
+      return;
+    }
+    if (config.repeatType === "daily" && (config.weekdaysMask < 1 || config.weekdaysMask > ALL_WEEKDAYS_MASK)) {
+      setMessage({ kind: "error", text: "Choose at least one weekday for a daily goal." });
+      return;
+    }
+    if (config.repeatType === "weekly" && (config.targetPerWeek < 1 || config.targetPerWeek > 7)) {
+      setMessage({ kind: "error", text: "Choose between 1 and 7 days per week." });
+      return;
+    }
+    if (!navigator.onLine) {
+      setMessage({ kind: "error", text: "You’re offline. Reconnect before updating a goal." });
+      setConnectionState("offline");
+      return;
+    }
+    const scheduleType: Goal["scheduleType"] = config.repeatType === "weekly" ? "times_per_week" : config.weekdaysMask === ALL_WEEKDAYS_MASK ? "daily" : "weekdays";
+    const patch = {
+      name,
+      materialIcon: config.materialIcon,
+      repeatType: config.repeatType,
+      scheduleType,
+      targetPerWeek: config.repeatType === "weekly" ? config.targetPerWeek : null,
+      weekdaysMask: config.repeatType === "daily" ? config.weekdaysMask : null,
+    };
+    const previousGoal = currentGoal;
+    const optimisticGoal = { ...currentGoal, ...patch };
+    const sequence = goalConfigSaveSequenceRef.current + 1;
+    goalConfigSaveSequenceRef.current = sequence;
+    activeGoalConfigSaveRef.current = { sequence, goalId };
+    const isCurrentSave = () => activeGoalConfigSaveRef.current?.sequence === sequence;
+    const isCurrentGoal = () => isCurrentSave() && selectedGoalIdRef.current === goalId;
+    pendingGoalConfigRef.current = true;
+    setIsSavingGoalConfig(true);
+    setMessage(null);
+    setData((current) => current ? { ...current, goals: current.goals.map((goal) => goal.id === goalId ? optimisticGoal : goal) } : current);
+    try {
+      const response = await fetch(`/api/catalog/goal/${goalId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      const result = (await response.json()) as { goal?: Goal; error?: string };
+      if (!response.ok || !result.goal) throw new Error(result.error ?? "Could not update the goal.");
+      if (isCurrentSave()) {
+        setData((current) => current ? { ...current, goals: current.goals.map((goal) => goal.id === goalId ? result.goal! : goal) } : current);
+        if (isCurrentGoal()) {
+          setGoalConfigDraft(goalConfigFromGoal(result.goal));
+          setGoalHistory(null);
+          setGoalHistoryRevision((revision) => revision + 1);
+          setConnectionState("online");
+          setMessage({ kind: "success", text: "Goal updated." });
+        }
+      }
+    } catch (error) {
+      if (isCurrentSave()) {
+        setData((current) => current ? { ...current, goals: current.goals.map((goal) => goal.id === goalId ? previousGoal : goal) } : current);
+        if (isCurrentGoal()) {
+          setGoalConfigDraft(config);
+          setConnectionState(navigator.onLine ? "error" : "offline");
+          setMessage({ kind: "error", text: `${(error as Error).message} The goal was restored.` });
+        }
+      }
+    } finally {
+      if (isCurrentSave()) {
+        activeGoalConfigSaveRef.current = null;
+        pendingGoalConfigRef.current = false;
+        setIsSavingGoalConfig(false);
+      }
+    }
+  }
+
   async function saveEntry() {
     if (isSaving || isDeleting) return;
     if (hasPendingGoalToggle(selectedDate) || hasPendingSelectionToggle(selectedDate)) {
@@ -1065,7 +1246,7 @@ export default function Home() {
           className="brand"
           onClick={() => changeView("log")}
           aria-label="Go to log"
-          disabled={isSetupBusy && view === "settings"}
+          disabled={isSavingGoalConfig || (isSetupBusy && view === "settings")}
         >
           <span className="brand-mark" aria-hidden="true" />
           <span>daymark</span>
@@ -1077,6 +1258,8 @@ export default function Home() {
               ? "Your calendar"
               : view === "entries"
                 ? "Your entries"
+                : view === "goal"
+                  ? "Goal history"
                 : "Your setup"}
         </div>
         <div className={`connection-pill ${connectionState}`} role="status">
@@ -1123,6 +1306,7 @@ export default function Home() {
             onActivityQuery={setActivityQuery}
             onToggleActivity={toggleActivity}
             onToggleGoal={toggleGoal}
+            onOpenGoal={openGoal}
             onSave={saveEntry}
             onDelete={deleteSelectedEntry}
             isSaving={isSaving}
@@ -1157,6 +1341,23 @@ export default function Home() {
             isLoadingMore={isLoadingMore}
           />
         )}
+        {view === "goal" && selectedGoalId && goalConfigDraft && (
+          <GoalDetailView
+            goal={data.goals.find((candidate) => candidate.id === selectedGoalId) ?? null}
+            history={goalHistory}
+            month={goalHistoryMonth}
+            config={goalConfigDraft}
+            isLoadingHistory={isLoadingGoalHistory}
+            isSavingConfig={isSavingGoalConfig}
+            iconPickerOpen={goalIconPickerOpen}
+            onBack={closeGoal}
+            onMonth={setGoalHistoryMonth}
+            onConfig={(next) => setGoalConfigDraft(next)}
+            onSaveConfig={() => void saveGoalConfig()}
+            onOpenIconPicker={() => setGoalIconPickerOpen(true)}
+            onCloseIconPicker={() => setGoalIconPickerOpen(false)}
+          />
+        )}
         {view === "settings" && (
           <SetupView
             data={data}
@@ -1170,12 +1371,12 @@ export default function Home() {
       <nav
         className="bottom-nav"
         aria-label="Primary navigation"
-        aria-busy={isSetupBusy && view === "settings"}
+        aria-busy={isSavingGoalConfig || (isSetupBusy && view === "settings")}
       >
         <button
           className={view === "log" ? "active" : ""}
           onClick={() => changeView("log")}
-          disabled={isSetupBusy && view === "settings"}
+          disabled={isSavingGoalConfig || (isSetupBusy && view === "settings")}
         >
           <span className="nav-icon">
             <Icon name={UI_ICONS.log} />
@@ -1185,7 +1386,7 @@ export default function Home() {
         <button
           className={view === "calendar" ? "active" : ""}
           onClick={() => changeView("calendar")}
-          disabled={isSetupBusy && view === "settings"}
+          disabled={isSavingGoalConfig || (isSetupBusy && view === "settings")}
         >
           <span className="nav-icon">
             <Icon name={UI_ICONS.calendar} />
@@ -1195,7 +1396,7 @@ export default function Home() {
         <button
           className={view === "entries" ? "active" : ""}
           onClick={() => changeView("entries")}
-          disabled={isSetupBusy && view === "settings"}
+          disabled={isSavingGoalConfig || (isSetupBusy && view === "settings")}
         >
           <span className="nav-icon">
             <Icon name={UI_ICONS.entries} />
@@ -1205,7 +1406,7 @@ export default function Home() {
         <button
           className={view === "settings" ? "active" : ""}
           onClick={() => changeView("settings")}
-          disabled={isSetupBusy && view === "settings"}
+          disabled={isSavingGoalConfig || (isSetupBusy && view === "settings")}
         >
           <span className="nav-icon">
             <Icon name={UI_ICONS.settings} />
@@ -1229,6 +1430,7 @@ function LogView({
   onActivityQuery,
   onToggleActivity,
   onToggleGoal,
+  onOpenGoal,
   onSave,
   onDelete,
   isSaving,
@@ -1248,6 +1450,7 @@ function LogView({
   onActivityQuery: (value: string) => void;
   onToggleActivity: (id: string) => void;
   onToggleGoal: (id: string) => void;
+  onOpenGoal: (id: string) => void;
   onSave: () => void;
   onDelete: () => void;
   isSaving: boolean;
@@ -1349,6 +1552,7 @@ function LogView({
                   onToggle={() => {
                     void onToggleGoal(goal.id);
                   }}
+                  onOpen={() => onOpenGoal(goal.id)}
                 />
               ))}
           </div>
@@ -1565,6 +1769,7 @@ function GoalRow({
   pending,
   disabled,
   onToggle,
+  onOpen,
 }: {
   goal: Goal;
   activity?: Activity;
@@ -1572,42 +1777,219 @@ function GoalRow({
   pending: boolean;
   disabled: boolean;
   onToggle: () => void;
+  onOpen: () => void;
 }) {
-  const detail =
-    goal.scheduleType === "daily"
+  const detail = goalRepeatType(goal) === "weekly"
+    ? `${goal.targetPerWeek ?? 1} ${goal.targetPerWeek === 7 ? "days" : goal.targetPerWeek === 1 ? "day" : "days"} this week`
+    : goalWeekdayMask(goal) === ALL_WEEKDAYS_MASK
       ? "Every day"
-      : goal.scheduleType === "times_per_week"
-        ? `${goal.targetPerWeek ?? 1} times this week`
-        : "Selected days";
+      : "Selected weekdays";
   const unavailable = pending || disabled;
   return (
-    <button
-      className={`goal-row ${checked ? "checked" : ""}`}
-      onClick={onToggle}
-      disabled={unavailable}
-      aria-pressed={checked}
-      aria-busy={pending}
-      aria-disabled={unavailable}
-    >
-      <span className="goal-checkbox">
+    <div className={`goal-row ${checked ? "checked" : ""}`} aria-busy={pending} aria-disabled={unavailable}>
+      <button
+        className="goal-checkbox"
+        onClick={onToggle}
+        disabled={unavailable}
+        aria-label={`${checked ? "Mark" : "Mark"} ${goal.name} ${checked ? "not completed" : "completed"}`}
+        aria-pressed={checked}
+        aria-busy={pending}
+      >
         {checked && <Icon name={UI_ICONS.check} />}
-      </span>
-      <span className="goal-copy">
-        <strong>{goal.name}</strong>
-        <small>
-          {pending
-            ? "Saving…"
-            : disabled
-              ? "Loading day…"
-              : `${detail}${activity ? ` · ${activity.name}` : ""}`}
-        </small>
-      </span>
-      {pending && (
-        <span className="sr-only" role="status">
-          Saving {goal.name}…
+      </button>
+      <button className="goal-main" onClick={onOpen} disabled={unavailable} aria-label={`Open ${goal.name} goal`}>
+        <span className="goal-copy">
+          <strong><Icon name={goal.materialIcon} /> {goal.name}</strong>
+          <small>
+            {pending
+              ? "Saving…"
+              : disabled
+                ? "Loading day…"
+                : `${detail}${activity ? ` · ${activity.name}` : ""}`}
+          </small>
         </span>
-      )}
-    </button>
+        <span className="goal-arrow"><Icon name="chevron_right" /></span>
+      </button>
+      {pending && <span className="sr-only" role="status">Saving {goal.name}…</span>}
+    </div>
+  );
+}
+
+function GoalDetailView({
+  goal,
+  history,
+  month,
+  config,
+  isLoadingHistory,
+  isSavingConfig,
+  iconPickerOpen,
+  onBack,
+  onMonth,
+  onConfig,
+  onSaveConfig,
+  onOpenIconPicker,
+  onCloseIconPicker,
+}: {
+  goal: Goal | null;
+  history: GoalHistory | null;
+  month: string;
+  config: GoalConfigDraft;
+  isLoadingHistory: boolean;
+  isSavingConfig: boolean;
+  iconPickerOpen: boolean;
+  onBack: () => void;
+  onMonth: (month: string) => void;
+  onConfig: (config: GoalConfigDraft) => void;
+  onSaveConfig: () => void;
+  onOpenIconPicker: () => void;
+  onCloseIconPicker: () => void;
+}) {
+  if (!goal) {
+    return (
+      <section className="page-section">
+        <button className="ghost-button" onClick={onBack} disabled={isSavingConfig}>Back to goals</button>
+        <p className="empty-inline">That goal is no longer available.</p>
+      </section>
+    );
+  }
+  const resolvedMonth = /^\d{4}-\d{2}$/.test(month) ? month : new Date().toISOString().slice(0, 7);
+  const [year, monthNumber] = resolvedMonth.split("-").map(Number);
+  const firstDay = new Date(year, monthNumber - 1, 1).getDay();
+  const daysInMonth = new Date(year, monthNumber, 0).getDate();
+  const historyDays = new Map((history?.days ?? []).map((day) => [day.logicalDate, day]));
+  const cells = [
+    ...Array(firstDay).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, index) => `${resolvedMonth}-${String(index + 1).padStart(2, "0")}`),
+  ];
+  const label = new Intl.DateTimeFormat("en", { month: "long", year: "numeric" }).format(new Date(year, monthNumber - 1, 1));
+  const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const isDirty = config.name !== goal.name || config.materialIcon !== goal.materialIcon || config.repeatType !== goalRepeatType(goal) || config.weekdaysMask !== goalWeekdayMask(goal) || config.targetPerWeek !== Math.min(7, Math.max(1, goal.targetPerWeek ?? 1));
+
+  function shiftMonth(amount: number) {
+    const next = new Date(year, monthNumber - 1 + amount, 1);
+    onMonth(`${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}`);
+  }
+
+  function toggleWeekday(index: number) {
+    const nextMask = config.weekdaysMask ^ (1 << index);
+    onConfig({ ...config, weekdaysMask: nextMask });
+  }
+
+  function statusLabel(status: GoalHistory["weeks"][number]["status"]) {
+    return status === "accomplished" ? "Accomplished" : status === "not_accomplished" ? "Not accomplished" : status === "in_progress" ? "In progress" : "Upcoming";
+  }
+
+  return (
+    <section className="page-section goal-detail-page">
+      <div className="page-intro goal-detail-intro">
+        <button className="back-button" onClick={onBack} disabled={isSavingConfig}><Icon name="arrow_back" /> Goals</button>
+        <div className="goal-detail-title">
+          <span className="goal-detail-icon"><Icon name={goal.materialIcon} /></span>
+          <div>
+            <p className="eyebrow">Goal history</p>
+            <h1>{goal.name}</h1>
+            <p className="muted">Completed days and weekly progress for this goal.</p>
+          </div>
+        </div>
+      </div>
+
+      <section className="settings-card goal-config-card" aria-busy={isSavingConfig}>
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Goal settings</p>
+            <h2>Repeat and icon</h2>
+            <p className="muted small-copy">Daily goals count only their selected weekdays. Weekly goals count completed days toward their target.</p>
+          </div>
+        </div>
+        <label className="goal-config-field">
+          <span>Name</span>
+          <input value={config.name} onChange={(event) => onConfig({ ...config, name: event.target.value })} disabled={isSavingConfig} />
+        </label>
+        <div className="goal-config-row">
+          <label className="goal-config-field">
+            <span>Repeat</span>
+            <select aria-label="Repeat" value={config.repeatType} onChange={(event) => onConfig({ ...config, repeatType: event.target.value as GoalRepeatType })} disabled={isSavingConfig}>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+            </select>
+          </label>
+          <div className="goal-icon-setting">
+            <span>Icon</span>
+            <button className="goal-icon-button" onClick={onOpenIconPicker} disabled={isSavingConfig} aria-label="Choose goal icon">
+              <Icon name={config.materialIcon} />
+              <span>Change icon</span>
+            </button>
+          </div>
+        </div>
+
+        {config.repeatType === "daily" ? (
+          <fieldset className="weekday-picker" disabled={isSavingConfig}>
+            <legend>Days expected</legend>
+            <div className="weekday-options">
+              {weekdays.map((weekday, index) => (
+                <label className={`weekday-option ${config.weekdaysMask & (1 << index) ? "selected" : ""}`} key={weekday}>
+                  <input type="checkbox" checked={Boolean(config.weekdaysMask & (1 << index))} onChange={() => toggleWeekday(index)} />
+                  <span>{weekday}</span>
+                </label>
+              ))}
+            </div>
+            <small className="muted">Select at least one day.</small>
+          </fieldset>
+        ) : (
+          <fieldset className="weekly-target-picker" disabled={isSavingConfig}>
+            <legend>Days per week</legend>
+            <div className="weekly-target-options">
+              {Array.from({ length: 7 }, (_, index) => index + 1).map((count) => (
+                <label className={`weekly-target-option ${config.targetPerWeek === count ? "selected" : ""}`} key={count}>
+                  <input type="radio" name="goal-target-per-week" value={count} checked={config.targetPerWeek === count} onChange={() => onConfig({ ...config, targetPerWeek: count })} />
+                  <span>{count === 7 ? "Every day" : `${count} ${count === 1 ? "day" : "days"} per week`}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        )}
+        <div className="goal-config-actions">
+          <button className="primary-button" onClick={onSaveConfig} disabled={isSavingConfig || !isDirty} aria-busy={isSavingConfig}>{isSavingConfig ? "Saving…" : "Save goal"}</button>
+          {isDirty && !isSavingConfig && <span className="muted small-copy">Unsaved goal changes</span>}
+        </div>
+      </section>
+
+      <section className="calendar-card goal-history-card" aria-busy={isLoadingHistory}>
+        <div className="calendar-heading">
+          <button className={`icon-button ${isLoadingHistory ? "pending-action" : ""}`} aria-label="Previous month" aria-busy={isLoadingHistory} disabled={isLoadingHistory} onClick={() => shiftMonth(-1)}><Icon name={isLoadingHistory ? UI_ICONS.sync : "chevron_left"} /></button>
+          <h2>{label}</h2>
+          <button className={`icon-button ${isLoadingHistory ? "pending-action" : ""}`} aria-label="Next month" aria-busy={isLoadingHistory} disabled={isLoadingHistory} onClick={() => shiftMonth(1)}><Icon name={isLoadingHistory ? UI_ICONS.sync : "chevron_right"} /></button>
+        </div>
+        <p className="muted goal-history-explainer">{goalRepeatType(goal) === "daily" ? "Green days are completed; pale days are not completed. A dash marks an expected day." : `Green days are completed. Each week needs ${goal.targetPerWeek ?? 1} completed ${(goal.targetPerWeek ?? 1) === 1 ? "day" : "days"}.`}</p>
+        <div className="calendar-weekdays">{weekdays.map((weekday) => <span key={weekday}>{weekday}</span>)}</div>
+        <div className="calendar-grid goal-calendar-grid">
+          {cells.map((date, index) => {
+            if (!date) return <span className="calendar-blank" key={`blank-${index}`} />;
+            const day = historyDays.get(date);
+            const state = day?.completed ? "completed" : "not-completed";
+            const scheduleLabel = day?.scheduled ? ", expected" : "";
+            return <div className={`calendar-day goal-day ${state}`} key={date} aria-label={`${date}: ${state.replaceAll("-", " ")}${scheduleLabel}`}><span>{Number(date.slice(-2))}</span>{day?.scheduled && <Icon name={day.completed ? UI_ICONS.check : "remove"} />}</div>;
+          })}
+        </div>
+        {isLoadingHistory && <p className="calendar-loading" role="status">Checking this month…</p>}
+        <div className="calendar-legend goal-calendar-legend">
+          <span><i className="legend-dot goal-completed" /> Completed</span>
+          <span><i className="legend-dot goal-not-completed" /> Not completed</span>
+        </div>
+      </section>
+
+      <section className="goal-week-history" aria-live="polite">
+        <div className="section-heading"><div><p className="eyebrow">Weekly result</p><h2>Was the goal accomplished?</h2></div></div>
+        {!history && isLoadingHistory ? <p className="inline-loading">Loading weekly results…</p> : history?.weeks.map((week) => (
+          <div className={`goal-week-row ${week.status}`} key={week.weekStart}>
+            <span className={`goal-week-status ${week.status}`} aria-label={statusLabel(week.status)}><Icon name={week.status === "accomplished" ? UI_ICONS.check : week.status === "not_accomplished" ? "close" : week.status === "upcoming" ? "event" : "hourglass_top"} /></span>
+            <span className="goal-week-copy"><strong>{shortDate(week.weekStart)} – {shortDate(week.weekEnd)}</strong><small>{statusLabel(week.status)} · {week.completedCount}/{week.expectedCount} {week.repeatType === "daily" ? "scheduled days" : "days"}</small></span>
+          </div>
+        ))}
+      </section>
+
+      {iconPickerOpen && <IconPicker activityName={config.name || goal.name} itemType="Goal" currentIcon={config.materialIcon} isSaving={isSavingConfig} onClose={onCloseIconPicker} onSelect={(icon) => { onConfig({ ...config, materialIcon: icon }); onCloseIconPicker(); }} />}
+    </section>
   );
 }
 

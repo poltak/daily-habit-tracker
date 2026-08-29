@@ -6,13 +6,19 @@ import {
   type DaySelections,
   type Entry,
   type Goal,
+  type GoalHistory,
+  type GoalHistoryRequest,
+  type GoalRepeatType,
   type ImportPayload,
   type Mood,
   type SelectionMutationResult,
+  buildGoalHistory,
   DaylioMemoryStore,
   MOODS,
   addDays,
+  isGoalIcon,
   isLogicalDate,
+  normalizeGoalConfig,
   store as memoryStore,
 } from "./daylio";
 import { validateEntryInput, validateEntryReferences as assertEntryReferences, type EntryInputCandidate } from "./entry-validation";
@@ -37,7 +43,7 @@ type EntryRow = {
 type MoodRow = { id: string; name: string; score: number; emoji: string; color: string };
 type GroupRow = { id: string; name: string; sort_order: number; archived_at: string | null };
 type ActivityRow = { id: string; group_id: string; name: string; material_icon: string; source_icon_id: string | null; sort_order: number; archived_at: string | null };
-type GoalRow = { id: string; activity_id: string | null; name: string; schedule_type: Goal["scheduleType"]; target_per_week: number | null; weekdays_mask: number | null; sort_order: number; archived_at: string | null; reminder_enabled: number; reminder_time: string | null; source_state: number | null };
+type GoalRow = { id: string; activity_id: string | null; name: string; material_icon: string | null; repeat_type: GoalRepeatType | null; schedule_type: Goal["scheduleType"]; target_per_week: number | null; weekdays_mask: number | null; start_date: string | null; end_date: string | null; sort_order: number; archived_at: string | null; reminder_enabled: number; reminder_time: string | null; source_state: number | null };
 type GoalCompletionRow = { id: string; goal_id: string; logical_date: string; entry_id: string | null; created_at: string; updated_at: string };
 type DayMoodSelectionRow = { logical_date: string; mood_id: string; created_at: string; updated_at: string };
 type DayActivitySelectionRow = { logical_date: string; activity_id: string; selected: number; created_at: string; updated_at: string };
@@ -78,8 +84,8 @@ async function seedDatabase(database: Database) {
     ["activity-family", "group-people", "Family", "💛", 7], ["activity-friends", "group-people", "Friends", "🎉", 8], ["activity-reading", "group-leisure", "Reading", "📚", 9], ["activity-gaming", "group-leisure", "Gaming", "🎮", 10], ["activity-music", "group-leisure", "Music", "🎵", 11],
   ];
   statements.push(...activities.map(([id, groupId, name, icon, order]) => database.prepare("INSERT INTO activities (id, group_id, name, material_icon, sort_order) VALUES (?, ?, ?, ?, ?)").bind(id, groupId, name, icon, order)));
-  statements.push(database.prepare("INSERT INTO goals (id, activity_id, name, schedule_type, target_per_week, sort_order, reminder_enabled) VALUES (?, ?, ?, ?, ?, ?, ?)").bind("goal-move", "activity-gym", "Move your body", "times_per_week", 3, 0, 0));
-  statements.push(database.prepare("INSERT INTO goals (id, activity_id, name, schedule_type, sort_order, reminder_enabled) VALUES (?, ?, ?, ?, ?, ?)").bind("goal-read", "activity-reading", "Read", "daily", 1, 0));
+  statements.push(database.prepare("INSERT INTO goals (id, activity_id, name, material_icon, repeat_type, schedule_type, target_per_week, weekdays_mask, sort_order, reminder_enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").bind("goal-move", "activity-gym", "Move your body", "fitness_center", "weekly", "times_per_week", 3, null, 0, 0));
+  statements.push(database.prepare("INSERT INTO goals (id, activity_id, name, material_icon, repeat_type, schedule_type, weekdays_mask, sort_order, reminder_enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").bind("goal-read", "activity-reading", "Read", "menu_book", "daily", "daily", 127, 1, 0));
   await database.batch(statements);
 }
 
@@ -100,8 +106,9 @@ function toActivity(row: { id: string; group_id: string; name: string; material_
   return { id: row.id, groupId: row.group_id, name: row.name, icon: iconForActivity(row.name, row.material_icon !== "✨" ? row.material_icon : row.source_icon_id ?? undefined), sourceIconId: row.source_icon_id ?? undefined, sortOrder: row.sort_order, archived: Boolean(row.archived_at) };
 }
 
-function toGoal(row: { id: string; activity_id: string | null; name: string; schedule_type: Goal["scheduleType"]; target_per_week: number | null; weekdays_mask: number | null; sort_order: number; archived_at: string | null; reminder_enabled: number; reminder_time: string | null; source_state: number | null }): Goal {
-  return { id: row.id, activityId: row.activity_id, name: row.name, scheduleType: row.schedule_type, targetPerWeek: row.target_per_week ?? undefined, weekdaysMask: row.weekdays_mask ?? undefined, sortOrder: row.sort_order, archived: Boolean(row.archived_at), reminderEnabled: Boolean(row.reminder_enabled), reminderTime: row.reminder_time ?? undefined, sourceState: row.source_state ?? undefined };
+function toGoal(row: { id: string; activity_id: string | null; name: string; material_icon?: string | null; repeat_type?: GoalRepeatType | null; schedule_type: Goal["scheduleType"]; target_per_week: number | null; weekdays_mask: number | null; start_date?: string | null; end_date?: string | null; sort_order: number; archived_at: string | null; reminder_enabled: number; reminder_time: string | null; source_state: number | null }): Goal {
+  const repeatType = row.repeat_type === "weekly" || row.schedule_type === "times_per_week" ? "weekly" : "daily";
+  return { id: row.id, activityId: row.activity_id, name: row.name, materialIcon: isGoalIcon(row.material_icon) ? row.material_icon : "task_alt", repeatType, scheduleType: row.schedule_type, targetPerWeek: row.target_per_week ?? undefined, weekdaysMask: row.weekdays_mask ?? undefined, startDate: row.start_date ?? undefined, endDate: row.end_date ?? undefined, sortOrder: row.sort_order, archived: Boolean(row.archived_at), reminderEnabled: Boolean(row.reminder_enabled), reminderTime: row.reminder_time ?? undefined, sourceState: row.source_state ?? undefined };
 }
 
 function toEntry(row: EntryRow, activityIds: string[], completedGoalIds: string[], moodId = row.mood_id): Entry {
@@ -116,7 +123,7 @@ export class D1DaylioStore {
       rows<MoodRow>(this.database, this.database.prepare("SELECT id, name, score, emoji, color FROM mood_levels ORDER BY score DESC")),
       rows<GroupRow>(this.database, this.database.prepare("SELECT id, name, sort_order, archived_at FROM activity_groups ORDER BY sort_order")),
       rows<ActivityRow>(this.database, this.database.prepare("SELECT id, group_id, name, material_icon, source_icon_id, sort_order, archived_at FROM activities ORDER BY sort_order")),
-      rows<GoalRow>(this.database, this.database.prepare("SELECT id, activity_id, name, schedule_type, target_per_week, weekdays_mask, sort_order, archived_at, reminder_enabled, reminder_time, source_state FROM goals ORDER BY sort_order")),
+      rows<GoalRow>(this.database, this.database.prepare("SELECT id, activity_id, name, material_icon, repeat_type, schedule_type, target_per_week, weekdays_mask, start_date, end_date, sort_order, archived_at, reminder_enabled, reminder_time, source_state FROM goals ORDER BY sort_order")),
       rows<EntryRow>(this.database, this.database.prepare("SELECT * FROM entries WHERE deleted_at IS NULL ORDER BY logical_date DESC LIMIT ? OFFSET ?").bind(entryLimit, entryOffset)),
       rows<{ entry_id: string; activity_id: string }>(this.database, this.database.prepare("SELECT entry_id, activity_id FROM entry_activities")),
       rows<{ entry_id: string | null; goal_id: string; logical_date: string }>(this.database, this.database.prepare("SELECT entry_id, goal_id, logical_date FROM goal_completions")),
@@ -337,27 +344,43 @@ export class D1DaylioStore {
     return toActivity(result);
   }
 
-  async createGoal(input: { name: string; activityId?: string | null; scheduleType: Goal["scheduleType"]; targetPerWeek?: number; reminderEnabled?: boolean; reminderTime?: string }) {
+  async createGoal(input: { name: string; activityId?: string | null; repeatType?: GoalRepeatType; scheduleType?: Goal["scheduleType"]; targetPerWeek?: number | null; weekdaysMask?: number | null; materialIcon?: string; reminderEnabled?: boolean; reminderTime?: string }) {
     if (input.activityId !== undefined && input.activityId !== null) {
       const activity = await this.database.prepare("SELECT id FROM activities WHERE id = ? LIMIT 1").bind(input.activityId).first<{ id: string }>();
       if (!activity) throw new Error("Choose an activity for the goal.");
     }
+    const config = normalizeGoalConfig(input);
     const id = `goal-${crypto.randomUUID()}`;
-    const result = await this.database.prepare("INSERT INTO goals (id, activity_id, name, schedule_type, target_per_week, sort_order, reminder_enabled, reminder_time) VALUES (?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM goals), ?, ?) RETURNING id, activity_id, name, schedule_type, target_per_week, weekdays_mask, sort_order, archived_at, reminder_enabled, reminder_time, source_state").bind(id, input.activityId ?? null, input.name.trim() || "Activity goal", input.scheduleType, input.targetPerWeek ?? null, input.reminderEnabled ? 1 : 0, input.reminderTime ?? null).first<{ id: string; activity_id: string | null; name: string; schedule_type: Goal["scheduleType"]; target_per_week: number | null; weekdays_mask: number | null; sort_order: number; archived_at: string | null; reminder_enabled: number; reminder_time: string | null; source_state: number | null }>();
+    const result = await this.database.prepare("INSERT INTO goals (id, activity_id, name, material_icon, repeat_type, schedule_type, target_per_week, weekdays_mask, sort_order, reminder_enabled, reminder_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM goals), ?, ?) RETURNING id, activity_id, name, material_icon, repeat_type, schedule_type, target_per_week, weekdays_mask, start_date, end_date, sort_order, archived_at, reminder_enabled, reminder_time, source_state").bind(id, input.activityId ?? null, input.name.trim() || "Activity goal", isGoalIcon(input.materialIcon) ? input.materialIcon : "task_alt", config.repeatType, config.scheduleType, config.targetPerWeek, config.weekdaysMask, input.reminderEnabled ? 1 : 0, input.reminderTime ?? null).first<GoalRow>();
     if (!result) throw new Error("Could not create the goal.");
     return toGoal(result);
   }
 
   async updateGoal(id: string, patch: Partial<Goal>) {
-    const current = await this.database.prepare("SELECT id, activity_id, name, schedule_type, target_per_week, weekdays_mask, sort_order, archived_at, reminder_enabled, reminder_time, source_state FROM goals WHERE id = ?").bind(id).first<{ id: string; activity_id: string | null; name: string; schedule_type: Goal["scheduleType"]; target_per_week: number | null; weekdays_mask: number | null; sort_order: number; archived_at: string | null; reminder_enabled: number; reminder_time: string | null; source_state: number | null }>();
+    const current = await this.database.prepare("SELECT id, activity_id, name, material_icon, repeat_type, schedule_type, target_per_week, weekdays_mask, start_date, end_date, sort_order, archived_at, reminder_enabled, reminder_time, source_state FROM goals WHERE id = ?").bind(id).first<GoalRow>();
     if (!current) throw new Error("Goal not found.");
     if (patch.activityId !== undefined && patch.activityId !== null) {
       const activity = await this.database.prepare("SELECT id FROM activities WHERE id = ? LIMIT 1").bind(patch.activityId).first<{ id: string }>();
       if (!activity) throw new Error("Choose an activity for the goal.");
     }
-    const result = await this.database.prepare("UPDATE goals SET name = ?, activity_id = ?, schedule_type = ?, target_per_week = ?, sort_order = ?, reminder_enabled = ?, reminder_time = ?, archived_at = ? WHERE id = ? RETURNING id, activity_id, name, schedule_type, target_per_week, weekdays_mask, sort_order, archived_at, reminder_enabled, reminder_time, source_state").bind(patch.name?.trim() || current.name, patch.activityId === undefined ? current.activity_id : patch.activityId, patch.scheduleType ?? current.schedule_type, patch.targetPerWeek ?? current.target_per_week, patch.sortOrder ?? current.sort_order, patch.reminderEnabled === undefined ? current.reminder_enabled : patch.reminderEnabled ? 1 : 0, patch.reminderTime ?? current.reminder_time, patch.archived === undefined ? current.archived_at : patch.archived ? new Date().toISOString() : null, id).first<{ id: string; activity_id: string | null; name: string; schedule_type: Goal["scheduleType"]; target_per_week: number | null; weekdays_mask: number | null; sort_order: number; archived_at: string | null; reminder_enabled: number; reminder_time: string | null; source_state: number | null }>();
+    const config = normalizeGoalConfig({
+      repeatType: patch.repeatType ?? (patch.scheduleType ? patch.scheduleType === "times_per_week" ? "weekly" : "daily" : current.repeat_type === "weekly" || current.schedule_type === "times_per_week" ? "weekly" : "daily"),
+      scheduleType: patch.scheduleType ?? current.schedule_type,
+      targetPerWeek: patch.targetPerWeek === undefined ? current.target_per_week : patch.targetPerWeek,
+      weekdaysMask: patch.weekdaysMask === undefined ? current.weekdays_mask : patch.weekdaysMask,
+    });
+    const result = await this.database.prepare("UPDATE goals SET name = ?, activity_id = ?, material_icon = ?, repeat_type = ?, schedule_type = ?, target_per_week = ?, weekdays_mask = ?, sort_order = ?, reminder_enabled = ?, reminder_time = ?, archived_at = ? WHERE id = ? RETURNING id, activity_id, name, material_icon, repeat_type, schedule_type, target_per_week, weekdays_mask, start_date, end_date, sort_order, archived_at, reminder_enabled, reminder_time, source_state").bind(patch.name?.trim() || current.name, patch.activityId === undefined ? current.activity_id : patch.activityId, isGoalIcon(patch.materialIcon) ? patch.materialIcon : patch.materialIcon === undefined ? current.material_icon ?? "task_alt" : "task_alt", config.repeatType, config.scheduleType, config.targetPerWeek, config.weekdaysMask, patch.sortOrder ?? current.sort_order, patch.reminderEnabled === undefined ? current.reminder_enabled : patch.reminderEnabled ? 1 : 0, patch.reminderTime ?? current.reminder_time, patch.archived === undefined ? current.archived_at : patch.archived ? new Date().toISOString() : null, id).first<GoalRow>();
     if (!result) throw new Error("Could not update the goal.");
     return toGoal(result);
+  }
+
+  async getGoalHistory({ goalId, startDate, endDate, asOf }: GoalHistoryRequest): Promise<GoalHistory> {
+    if (!isLogicalDate(startDate) || !isLogicalDate(endDate) || startDate > endDate) throw new Error("Choose a valid history range.");
+    const goalRow = await this.database.prepare("SELECT id, activity_id, name, material_icon, repeat_type, schedule_type, target_per_week, weekdays_mask, start_date, end_date, sort_order, archived_at, reminder_enabled, reminder_time, source_state FROM goals WHERE id = ? LIMIT 1").bind(goalId).first<GoalRow>();
+    if (!goalRow) throw new Error("Goal not found.");
+    const goal = toGoal(goalRow);
+    const completionRows = await rows<{ logical_date: string }>(this.database, this.database.prepare("SELECT logical_date FROM goal_completions WHERE goal_id = ? AND logical_date BETWEEN ? AND ? ORDER BY logical_date").bind(goalId, addDays(startDate, -7), addDays(endDate, 7)));
+    return buildGoalHistory({ goal, startDate, endDate, completedDates: completionRows.map((row) => row.logical_date), asOf });
   }
 
   async exportData() {
@@ -399,7 +422,10 @@ export class D1DaylioStore {
       ...payload.moods.map((item) => this.database.prepare("INSERT INTO mood_levels (id, score, name, emoji, color, sort_order, source_system, source_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name=excluded.name, score=excluded.score, emoji=excluded.emoji, source_system=excluded.source_system, source_id=excluded.source_id").bind(moodIds.get(item.sourceId), item.score, item.name, item.emoji ?? "🙂", "#9aa4ae", item.score * -1, "daylio", item.sourceId)),
       ...payload.groups.map((item) => this.database.prepare("INSERT INTO activity_groups (id, name, sort_order, source_system, source_id) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name=excluded.name, sort_order=excluded.sort_order").bind(groupIds.get(item.sourceId), item.name, item.sortOrder, "daylio", item.sourceId)),
       ...payload.activities.map((item) => this.database.prepare("INSERT INTO activities (id, group_id, name, material_icon, source_icon_id, source_state, sort_order, source_system, source_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name=excluded.name, group_id=excluded.group_id, material_icon=excluded.material_icon, source_state=excluded.source_state, sort_order=excluded.sort_order").bind(activityIds.get(item.sourceId), groupIds.get(item.groupSourceId ?? "") ?? "", item.name, iconForActivity(item.name, item.sourceIconId), item.sourceIconId ?? null, item.sourceState ?? null, item.sortOrder, "daylio", item.sourceId)),
-      ...payload.goals.map((item) => this.database.prepare("INSERT INTO goals (id, activity_id, name, schedule_type, target_per_week, weekdays_mask, sort_order, reminder_enabled, reminder_time, source_system, source_id, source_state) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name=excluded.name, activity_id=excluded.activity_id, source_state=excluded.source_state").bind(goalIds.get(item.sourceId), item.activitySourceId ? activityIds.get(item.activitySourceId) ?? null : null, item.name, item.scheduleType, item.targetPerWeek ?? null, item.weekdaysMask ?? null, item.sortOrder, item.reminderEnabled ? 1 : 0, item.reminderTime ?? null, "daylio", item.sourceId, item.sourceState ?? null)),
+      ...payload.goals.map((item) => {
+        const config = normalizeGoalConfig({ repeatType: item.repeatType, scheduleType: item.scheduleType, targetPerWeek: item.targetPerWeek, weekdaysMask: item.weekdaysMask });
+        return this.database.prepare("INSERT INTO goals (id, activity_id, name, material_icon, repeat_type, schedule_type, target_per_week, weekdays_mask, sort_order, reminder_enabled, reminder_time, source_system, source_id, source_state) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name=excluded.name, activity_id=excluded.activity_id, material_icon=excluded.material_icon, repeat_type=excluded.repeat_type, schedule_type=excluded.schedule_type, target_per_week=excluded.target_per_week, weekdays_mask=excluded.weekdays_mask, source_state=excluded.source_state").bind(goalIds.get(item.sourceId), item.activitySourceId ? activityIds.get(item.activitySourceId) ?? null : null, item.name, isGoalIcon(item.materialIcon) ? item.materialIcon : "task_alt", config.repeatType, config.scheduleType, config.targetPerWeek, config.weekdaysMask, item.sortOrder, item.reminderEnabled ? 1 : 0, item.reminderTime ?? null, "daylio", item.sourceId, item.sourceState ?? null);
+      }),
     ];
     for (let index = 0; index < allStatements.length; index += 50) await this.database.batch(allStatements.slice(index, index + 50));
     for (const item of payload.entries) {

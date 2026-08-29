@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Bootstrap, Goal } from "../../lib/daylio";
+import { ALL_WEEKDAYS_MASK, goalRepeatType, goalWeekdayMask, type Bootstrap, type Goal } from "../../lib/daylio";
 import { filterActivityGroups } from "../../lib/activity-groups";
 import { ACTIVITY_ICON_CHOICES, UI_ICONS } from "../../lib/icons";
 import { applyTheme, THEME_MEDIA_QUERY, THEME_STORAGE_KEY, readStoredThemePreference, type ThemePreference } from "../../lib/theme";
@@ -73,14 +73,16 @@ function iconLabel(name: string) {
   return name.replaceAll("_", " ");
 }
 
-function IconPicker({
+export function IconPicker({
   activityName,
+  itemType = "Activity",
   currentIcon,
   isSaving,
   onClose,
   onSelect,
 }: {
   activityName: string;
+  itemType?: "Activity" | "Goal";
   currentIcon: string;
   isSaving: boolean;
   onClose: () => void;
@@ -121,7 +123,7 @@ function IconPicker({
       >
         <div className="icon-picker-header">
           <div>
-            <p className="eyebrow">Activity icon</p>
+            <p className="eyebrow">{itemType} icon</p>
             <h2 id="icon-picker-title">Choose an icon</h2>
             <p className="muted">For {activityName}</p>
           </div>
@@ -180,6 +182,7 @@ export function SetupView({ data, onRefresh, onMessage, onBusyChange }: SetupVie
   const [goalSchedule, setGoalSchedule] = useState<Goal["scheduleType"]>("daily");
   const [activityQuery, setActivityQuery] = useState("");
   const [iconPickerActivity, setIconPickerActivity] = useState<{ id: string; name: string; icon: string } | null>(null);
+  const [iconPickerGoal, setIconPickerGoal] = useState<{ id: string; name: string; icon: string } | null>(null);
   const [themePreference, setThemePreference] = useState<ThemePreference>("system");
   const { isPending, runPending } = usePendingActions({ onBusyChange });
   const [catalogOverrides, setCatalogOverrides] = useState<CatalogOverrides>({});
@@ -329,6 +332,16 @@ export function SetupView({ data, onRefresh, onMessage, onBusyChange }: SetupVie
     if (result.status === "saved" || result.status === "refresh-failed") setIconPickerActivity(null);
   }
 
+  async function chooseGoalIcon(icon: string) {
+    if (isPending("reorder:goal")) return;
+    if (!iconPickerGoal || icon === iconPickerGoal.icon) {
+      setIconPickerGoal(null);
+      return;
+    }
+    const result = await patchCatalog({ kind: "goal", id: iconPickerGoal.id, patch: { materialIcon: icon }, optimistic: { materialIcon: icon }, success: "Goal icon updated." });
+    if (result.status === "saved" || result.status === "refresh-failed") setIconPickerGoal(null);
+  }
+
   async function move({
     kind,
     item,
@@ -416,9 +429,12 @@ export function SetupView({ data, onRefresh, onMessage, onBusyChange }: SetupVie
 
   async function cycleGoal({ goal }: { goal: Goal }) {
     if (isPending("reorder:goal")) return;
-    const next: Goal["scheduleType"] = goal.scheduleType === "daily" ? "weekdays" : goal.scheduleType === "weekdays" ? "times_per_week" : "daily";
-    const targetPerWeek = next === "times_per_week" ? Number(window.prompt("How many times per week?", String(goal.targetPerWeek ?? 3))) : undefined;
-    const patch = { scheduleType: next, ...(targetPerWeek && targetPerWeek >= 1 && targetPerWeek <= 7 ? { targetPerWeek } : {}) };
+    const nextRepeat = goalRepeatType(goal) === "daily" ? "weekly" : "daily";
+    const targetPerWeek = nextRepeat === "weekly" ? Number(window.prompt("How many days per week?", String(goal.targetPerWeek ?? 3))) : undefined;
+    if (nextRepeat === "weekly" && (!targetPerWeek || targetPerWeek < 1 || targetPerWeek > 7)) return;
+    const patch = nextRepeat === "weekly"
+      ? { repeatType: "weekly" as const, scheduleType: "times_per_week" as const, targetPerWeek }
+      : { repeatType: "daily" as const, scheduleType: "daily" as const, weekdaysMask: goalWeekdayMask(goal) || ALL_WEEKDAYS_MASK };
     await patchCatalog({
       kind: "goal",
       id: goal.id,
@@ -622,13 +638,14 @@ export function SetupView({ data, onRefresh, onMessage, onBusyChange }: SetupVie
               const reordering = isKindReordering("goal");
               const pending = isPending(actionKey) || reordering;
               return <div className={`management-row ${archived ? "archived" : ""}`} key={goal.id}>
-                <span className="management-icon"><Icon name="task_alt" /></span>
+                <span className="management-icon"><Icon name={goal.materialIcon} /></span>
                 <span className="management-copy">
                   <strong>{goal.name}</strong>
                   <small>{goal.scheduleType === "daily" ? "Every day" : goal.scheduleType === "times_per_week" ? `${goal.targetPerWeek ?? 1} times this week` : "Selected days"} · {effectiveActivities.find((activity) => activity.id === goal.activityId)?.name ?? "Unlinked"}{archived ? " · archived" : ""}</small>
                 </span>
                 <span className="management-actions">
                   <button className={`tiny-button ${pending ? "pending-action" : ""}`} aria-label={pending ? `Updating ${goal.name}…` : `Rename ${goal.name}`} aria-busy={pending} disabled={pending} onClick={() => void rename({ kind: "goal", id: goal.id, current: goal.name })}><Icon name={pending ? UI_ICONS.sync : UI_ICONS.edit} /></button>
+                  <button className={`tiny-button ${pending ? "pending-action" : ""}`} aria-label={pending ? `Updating ${goal.name}…` : `Choose icon for ${goal.name}`} aria-busy={pending} disabled={pending} onClick={() => setIconPickerGoal({ id: goal.id, name: goal.name, icon: goal.materialIcon })}><Icon name={pending ? UI_ICONS.sync : "palette"} /></button>
                   <select className={`tiny-select ${pending ? "pending-action" : ""}`} aria-label={`Change activity for ${goal.name}`} aria-busy={pending} disabled={pending} value={goal.activityId ?? ""} onChange={(event) => { const activityId = event.target.value || null; void patchCatalog({ kind: "goal", id: goal.id, patch: { activityId }, optimistic: { activityId } }); }}><option value="">No linked activity</option>{goalActivityOptions(goal).map((activity) => <option key={activity.id} value={activity.id}>{activity.name}{activity.archived ? " (archived)" : ""}</option>)}</select>
                   <button className={`tiny-button ${pending ? "pending-action" : ""}`} aria-label={pending ? `Updating ${goal.name}…` : `Cycle schedule for ${goal.name}`} aria-busy={pending} disabled={pending} onClick={() => void cycleGoal({ goal })}><Icon name={pending ? UI_ICONS.sync : "repeat"} /></button>
                   <button className={`tiny-button ${reordering ? "pending-action" : ""}`} aria-label={reordering ? `Updating ${goal.name}…` : `Move ${goal.name} up`} aria-busy={reordering} disabled={index === 0 || reordering || pending} onClick={() => void move({ kind: "goal", item: goal, items: all, direction: -1 })}><Icon name={reordering ? UI_ICONS.sync : UI_ICONS.moveUp} /></button>
@@ -683,6 +700,16 @@ export function SetupView({ data, onRefresh, onMessage, onBusyChange }: SetupVie
           isSaving={isPending(catalogActionKey({ kind: "activity", id: iconPickerActivity.id })) || isKindReordering("activity")}
           onClose={() => setIconPickerActivity(null)}
           onSelect={(icon) => void chooseIcon(icon)}
+        />
+      )}
+      {iconPickerGoal && (
+        <IconPicker
+          activityName={iconPickerGoal.name}
+          itemType="Goal"
+          currentIcon={iconPickerGoal.icon}
+          isSaving={isPending(catalogActionKey({ kind: "goal", id: iconPickerGoal.id })) || isKindReordering("goal")}
+          onClose={() => setIconPickerGoal(null)}
+          onSelect={(icon) => void chooseGoalIcon(icon)}
         />
       )}
     </>

@@ -1,5 +1,5 @@
-import { iconForActivity } from "./icons";
-import { isValidTime, validateEntryInput, validateEntryReferences } from "./entry-validation";
+import { ACTIVITY_ICON_CHOICES, iconForActivity } from "./icons.ts";
+import { isValidTime, validateEntryInput, validateEntryReferences } from "./entry-validation.ts";
 
 export type Mood = {
   id: string;
@@ -30,14 +30,53 @@ export type Goal = {
   id: string;
   activityId: string | null;
   name: string;
+  materialIcon: string;
+  repeatType: GoalRepeatType;
   scheduleType: "daily" | "weekdays" | "times_per_week";
-  targetPerWeek?: number;
-  weekdaysMask?: number;
+  targetPerWeek?: number | null;
+  weekdaysMask?: number | null;
+  startDate?: string;
+  endDate?: string;
   sortOrder: number;
   archived: boolean;
   reminderEnabled: boolean;
   reminderTime?: string;
   sourceState?: number;
+};
+
+export type GoalRepeatType = "daily" | "weekly";
+
+export type GoalHistoryDay = {
+  logicalDate: string;
+  completed: boolean;
+  scheduled: boolean;
+};
+
+export type GoalHistoryWeek = {
+  weekStart: string;
+  weekEnd: string;
+  completedCount: number;
+  expectedCount: number;
+  repeatType: GoalRepeatType;
+  status: "accomplished" | "not_accomplished" | "in_progress" | "upcoming";
+  accomplished: boolean | null;
+};
+
+export type GoalHistory = {
+  goal: Goal;
+  month: string;
+  startDate: string;
+  endDate: string;
+  asOf: string;
+  days: GoalHistoryDay[];
+  weeks: GoalHistoryWeek[];
+};
+
+export type GoalHistoryRequest = {
+  goalId: string;
+  startDate: string;
+  endDate: string;
+  asOf: string;
 };
 
 export type Entry = {
@@ -142,6 +181,8 @@ export type ImportPayload = {
     sourceId: string;
     activitySourceId?: string | null;
     name: string;
+    materialIcon?: string;
+    repeatType?: GoalRepeatType;
     scheduleType: Goal["scheduleType"];
     targetPerWeek?: number;
     weekdaysMask?: number;
@@ -153,6 +194,8 @@ export type ImportPayload = {
   }>;
   completions: Array<{ sourceId: string; goalSourceId: string; logicalDate: string; localTime?: string }>;
 };
+
+export const ALL_WEEKDAYS_MASK = 0b1111111;
 
 export const MOODS: Mood[] = [
   { id: "mood-rad", name: "Rad", score: 5, emoji: "😍", color: "#ee8f6d" },
@@ -198,6 +241,8 @@ const seedGoals: Goal[] = [
     id: "goal-move",
     activityId: "activity-gym",
     name: "Move your body",
+    materialIcon: "fitness_center",
+    repeatType: "weekly",
     scheduleType: "times_per_week",
     targetPerWeek: 3,
     sortOrder: 0,
@@ -208,7 +253,10 @@ const seedGoals: Goal[] = [
     id: "goal-read",
     activityId: "activity-reading",
     name: "Read",
+    materialIcon: "menu_book",
+    repeatType: "daily",
     scheduleType: "daily",
+    weekdaysMask: ALL_WEEKDAYS_MASK,
     sortOrder: 1,
     archived: false,
     reminderEnabled: false,
@@ -237,6 +285,118 @@ export function isLogicalDate(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const parsed = new Date(`${value}T00:00:00`);
   return !Number.isNaN(parsed.valueOf()) && logicalDateFromDate(parsed) === value;
+}
+
+export function isGoalIcon(value: unknown): value is string {
+  return typeof value === "string" && ACTIVITY_ICON_CHOICES.some((choice) => choice.name === value);
+}
+
+export function goalRepeatType(goal: Pick<Goal, "repeatType" | "scheduleType"> | { repeatType?: GoalRepeatType; scheduleType?: Goal["scheduleType"] }): GoalRepeatType {
+  if (goal.repeatType === "weekly" || goal.repeatType === "daily") return goal.repeatType;
+  return goal.scheduleType === "times_per_week" ? "weekly" : "daily";
+}
+
+export function normalizeGoalConfig(input: {
+  repeatType?: GoalRepeatType;
+  scheduleType?: Goal["scheduleType"];
+  targetPerWeek?: number | null;
+  weekdaysMask?: number | null;
+}) {
+  if (input.scheduleType !== undefined && !["daily", "weekdays", "times_per_week"].includes(input.scheduleType)) throw new Error("Choose Daily or Weekly for goal repeat.");
+  if (input.repeatType !== undefined && input.repeatType !== "daily" && input.repeatType !== "weekly") throw new Error("Choose Daily or Weekly for goal repeat.");
+  if (input.targetPerWeek !== undefined && input.targetPerWeek !== null && typeof input.targetPerWeek !== "number") throw new Error("Weekly goal target must be a number.");
+  if (input.weekdaysMask !== undefined && input.weekdaysMask !== null && typeof input.weekdaysMask !== "number") throw new Error("Daily goal weekdays must be a number.");
+  const repeatType = input.repeatType ?? (input.scheduleType === "times_per_week" ? "weekly" : "daily");
+  if (repeatType === "weekly") {
+    const targetPerWeek = input.targetPerWeek ?? 1;
+    if (!Number.isInteger(targetPerWeek) || targetPerWeek < 1 || targetPerWeek > 7) throw new Error("Weekly goals must target between 1 and 7 days.");
+    return { repeatType, scheduleType: "times_per_week" as const, targetPerWeek, weekdaysMask: null };
+  }
+  const rawMask = input.weekdaysMask ?? ALL_WEEKDAYS_MASK;
+  const weekdaysMask = rawMask;
+  if (!Number.isInteger(weekdaysMask) || weekdaysMask < 1 || weekdaysMask > ALL_WEEKDAYS_MASK) throw new Error("Daily goals must include at least one weekday.");
+  return { repeatType: "daily" as const, scheduleType: weekdaysMask === ALL_WEEKDAYS_MASK ? "daily" as const : "weekdays" as const, targetPerWeek: null, weekdaysMask };
+}
+
+export function goalWeekdayMask(goal: Pick<Goal, "repeatType" | "scheduleType" | "weekdaysMask">) {
+  if (goalRepeatType(goal) === "weekly") return ALL_WEEKDAYS_MASK;
+  const mask = goal.weekdaysMask ?? ALL_WEEKDAYS_MASK;
+  return Number.isInteger(mask) && mask > 0 ? mask & ALL_WEEKDAYS_MASK : ALL_WEEKDAYS_MASK;
+}
+
+export function dayOfWeek(logicalDate: string) {
+  const [year, month, day] = logicalDate.split("-").map(Number);
+  return new Date(year, month - 1, day).getDay();
+}
+
+export function startOfWeek(logicalDate: string) {
+  return addDays(logicalDate, -dayOfWeek(logicalDate));
+}
+
+export function endOfWeek(logicalDate: string) {
+  return addDays(startOfWeek(logicalDate), 6);
+}
+
+function isGoalDateActive(goal: Pick<Goal, "startDate" | "endDate">, logicalDate: string) {
+  return (!goal.startDate || logicalDate >= goal.startDate) && (!goal.endDate || logicalDate <= goal.endDate);
+}
+
+export function isGoalDateScheduled(goal: Pick<Goal, "repeatType" | "scheduleType" | "weekdaysMask" | "startDate" | "endDate">, logicalDate: string) {
+  if (!isGoalDateActive(goal, logicalDate)) return false;
+  return (goalWeekdayMask(goal) & (1 << dayOfWeek(logicalDate))) !== 0;
+}
+
+export function buildGoalHistory({
+  goal,
+  startDate,
+  endDate,
+  completedDates,
+  asOf = logicalDateFromDate(),
+}: {
+  goal: Goal;
+  startDate: string;
+  endDate: string;
+  completedDates: Iterable<string>;
+  asOf?: string;
+}): GoalHistory {
+  if (!isLogicalDate(startDate) || !isLogicalDate(endDate) || startDate > endDate || !isLogicalDate(asOf)) throw new Error("Choose a valid history range.");
+  const completed = new Set(completedDates);
+  const days: GoalHistoryDay[] = [];
+  for (let date = startDate; date <= endDate; date = addDays(date, 1)) {
+    days.push({ logicalDate: date, completed: completed.has(date), scheduled: isGoalDateScheduled(goal, date) });
+  }
+
+  const weeks: GoalHistoryWeek[] = [];
+  const repeatType = goalRepeatType(goal);
+  for (let weekStart = startOfWeek(startDate); weekStart <= endDate; weekStart = addDays(weekStart, 7)) {
+    const weekEnd = endOfWeek(weekStart);
+    const weekDates: string[] = [];
+    for (let date = weekStart; date <= weekEnd; date = addDays(date, 1)) weekDates.push(date);
+    const evaluationDates = repeatType === "weekly"
+      ? weekDates.filter((date) => isGoalDateActive(goal, date))
+      : weekDates.filter((date) => isGoalDateScheduled(goal, date));
+    if (evaluationDates.length === 0) continue;
+    const completedCount = evaluationDates.filter((date) => completed.has(date)).length;
+    const expectedCount = repeatType === "weekly"
+      ? Math.min(goal.targetPerWeek ?? 1, evaluationDates.length)
+      : evaluationDates.length;
+    const firstEvaluationDate = evaluationDates[0];
+    const lastEvaluationDate = evaluationDates[evaluationDates.length - 1];
+    const future = firstEvaluationDate > asOf;
+    const targetReached = completedCount >= expectedCount;
+    const past = lastEvaluationDate < asOf;
+    const accomplished = future ? null : targetReached ? true : past ? false : null;
+    weeks.push({
+      weekStart,
+      weekEnd,
+      completedCount,
+      expectedCount,
+      repeatType,
+      status: future ? "upcoming" : targetReached ? "accomplished" : past ? "not_accomplished" : "in_progress",
+      accomplished,
+    });
+  }
+  return { goal, month: startDate.slice(0, 7), startDate, endDate, asOf, days, weeks };
 }
 
 export function isTime(value: string) {
@@ -517,14 +677,15 @@ export class DaylioMemoryStore {
     return next;
   }
 
-  createGoal(input: { name: string; activityId?: string | null; scheduleType: Goal["scheduleType"]; targetPerWeek?: number; reminderEnabled?: boolean; reminderTime?: string }) {
+  createGoal(input: { name: string; activityId?: string | null; repeatType?: GoalRepeatType; scheduleType?: Goal["scheduleType"]; targetPerWeek?: number | null; weekdaysMask?: number | null; materialIcon?: string; reminderEnabled?: boolean; reminderTime?: string }) {
     if (input.activityId !== null && input.activityId !== undefined && !this.activities.has(input.activityId)) throw new Error("Choose an activity for the goal.");
+    const config = normalizeGoalConfig(input);
     const goal: Goal = {
       id: newId("goal"),
       activityId: input.activityId ?? null,
       name: input.name.trim() || "Activity goal",
-      scheduleType: input.scheduleType,
-      targetPerWeek: input.targetPerWeek,
+      materialIcon: isGoalIcon(input.materialIcon) ? input.materialIcon : "task_alt",
+      ...config,
       sortOrder: this.goals.size,
       archived: false,
       reminderEnabled: input.reminderEnabled ?? false,
@@ -538,9 +699,25 @@ export class DaylioMemoryStore {
     const goal = this.goals.get(id);
     if (!goal) throw new Error("Goal not found.");
     if (patch.activityId !== undefined && patch.activityId !== null && !this.activities.has(patch.activityId)) throw new Error("Choose an activity for the goal.");
-    const next = { ...goal, ...patch };
+    const config = normalizeGoalConfig({
+      repeatType: patch.repeatType ?? (patch.scheduleType ? patch.scheduleType === "times_per_week" ? "weekly" : "daily" : goalRepeatType(goal)),
+      scheduleType: patch.scheduleType ?? goal.scheduleType,
+      targetPerWeek: patch.targetPerWeek === undefined ? goal.targetPerWeek : patch.targetPerWeek,
+      weekdaysMask: patch.weekdaysMask === undefined ? goalWeekdayMask(goal) : patch.weekdaysMask,
+    });
+    const next = { ...goal, ...patch, ...config, materialIcon: isGoalIcon(patch.materialIcon) ? patch.materialIcon : patch.materialIcon === undefined ? goal.materialIcon : "task_alt" };
     this.goals.set(id, next);
     return next;
+  }
+
+  getGoalHistory({ goalId, startDate, endDate, asOf }: GoalHistoryRequest): GoalHistory {
+    if (!isLogicalDate(startDate) || !isLogicalDate(endDate) || startDate > endDate) throw new Error("Choose a valid history range.");
+    const goal = this.goals.get(goalId);
+    if (!goal) throw new Error("Goal not found.");
+    const completedDates = [...this.goalCompletions.values()]
+      .filter((completion) => completion.goalId === goalId && completion.logicalDate >= startOfWeek(startDate) && completion.logicalDate <= endOfWeek(endDate))
+      .map((completion) => completion.logicalDate);
+    return buildGoalHistory({ goal, startDate, endDate, completedDates, asOf });
   }
 
   exportData() {
@@ -578,7 +755,8 @@ export class DaylioMemoryStore {
     for (const goal of payload.goals) {
       const id = `daylio-goal-${goal.sourceId}`;
       goalIds.set(goal.sourceId, id);
-      this.goals.set(id, { id, activityId: activityIds.get(goal.activitySourceId ?? "") ?? null, name: goal.name || "Activity goal", scheduleType: goal.scheduleType, targetPerWeek: goal.targetPerWeek, weekdaysMask: goal.weekdaysMask, sortOrder: goal.sortOrder, archived: Boolean(goal.archived), reminderEnabled: Boolean(goal.reminderEnabled), reminderTime: goal.reminderTime, sourceState: goal.sourceState });
+      const config = normalizeGoalConfig({ repeatType: goal.repeatType, scheduleType: goal.scheduleType, targetPerWeek: goal.targetPerWeek, weekdaysMask: goal.weekdaysMask });
+      this.goals.set(id, { id, activityId: activityIds.get(goal.activitySourceId ?? "") ?? null, name: goal.name || "Activity goal", materialIcon: isGoalIcon(goal.materialIcon) ? goal.materialIcon : "task_alt", ...config, sortOrder: goal.sortOrder, archived: Boolean(goal.archived), reminderEnabled: Boolean(goal.reminderEnabled), reminderTime: goal.reminderTime, sourceState: goal.sourceState });
     }
     for (const item of payload.entries) {
       this.entries.set(item.logicalDate, { id: `daylio-entry-${item.sourceId}`, logicalDate: item.logicalDate, localTime: item.localTime, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, timezoneOffsetMinutes: item.timezoneOffsetMinutes, moodId: moodIds.get(item.moodSourceId) ?? "mood-meh", activityIds: item.activitySourceIds.map((id) => activityIds.get(id)).filter(Boolean) as string[], completedGoalIds: [], legacyNoteTitle: item.legacyNoteTitle, legacyNote: item.legacyNote, version: 1, createdAt: nowIso(), updatedAt: nowIso() });

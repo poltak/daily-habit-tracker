@@ -154,10 +154,12 @@ button:disabled { cursor: wait; opacity: .68; }
 .goal-list { display: grid; gap: 8px; }
 .goal-row { width: 100%; display: flex; align-items: center; gap: 12px; border: 1px solid var(--line); background: var(--surface); padding: 12px 13px; border-radius: 15px; text-align: left; color: var(--ink); }
 .goal-row.checked { background: var(--surface-selected); border-color: var(--focus); }
-.goal-checkbox { width: 24px; height: 24px; border: 1px solid var(--line-strong); display: grid; place-items: center; border-radius: 8px; color: var(--ink-inverse); background: var(--surface); font-weight: 900; }
+.goal-checkbox { width: 24px; height: 24px; flex: 0 0 auto; border: 1px solid var(--line-strong); display: grid; place-items: center; border-radius: 8px; color: var(--ink-inverse); background: var(--surface); font-weight: 900; padding: 0; }
 .goal-row.checked .goal-checkbox { background: #6fa779; border-color: #6fa779; }
+.goal-main { min-width: 0; flex: 1; display: flex; align-items: center; gap: 10px; border: 0; padding: 0; background: transparent; color: inherit; text-align: left; }
 .goal-copy { flex: 1; display: grid; gap: 3px; }
 .goal-copy strong { font-size: 14px; }
+.goal-copy strong .material-symbols-rounded { color: var(--positive-muted); font-size: 19px; vertical-align: -4px; }
 .goal-copy small, .settings-row small { color: var(--muted); font-size: 12px; }
 .goal-arrow, .timeline-arrow { color: var(--muted); font-size: 22px; }
 .save-bar { margin-top: 18px; padding: 17px 20px; border-radius: 20px; background: var(--save-bg); color: var(--save-foreground); display: flex; align-items: center; justify-content: space-between; gap: 16px; box-shadow: var(--shadow); }
@@ -208,6 +210,49 @@ button:disabled { cursor: wait; opacity: .68; }
 .calendar-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .legend-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--calendar-empty); border: 1px solid var(--line); }
 .legend-dot.filled { background: #78ad82; border-color: #78ad82; }
+.goal-detail-intro { margin-bottom: 18px; }
+.back-button { border: 0; background: transparent; color: var(--positive-muted); padding: 0; display: inline-flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 800; }
+.goal-detail-title { display: flex; align-items: center; gap: 13px; margin-top: 18px; }
+.goal-detail-title h1 { margin-bottom: 8px; }
+.goal-detail-icon { width: 48px; height: 48px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 16px; color: var(--positive-muted); background: var(--surface-success); font-size: 27px; }
+.goal-config-card { display: grid; gap: 15px; }
+.goal-config-card .section-heading { margin-bottom: 0; }
+.goal-config-field, .goal-icon-setting { display: grid; gap: 6px; min-width: 0; }
+.goal-config-field > span, .goal-icon-setting > span, .weekday-picker legend, .weekly-target-picker legend { color: var(--muted); font-size: 12px; font-weight: 800; }
+.goal-config-field input, .goal-config-field select { min-width: 0; border: 1px solid var(--line); border-radius: 11px; padding: 10px 11px; background: var(--surface-subtle); color: var(--ink); outline: 0; }
+.goal-config-field input:focus, .goal-config-field select:focus { border-color: var(--focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 30%, transparent); }
+.goal-config-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.goal-icon-button { min-height: 41px; display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 11px; padding: 8px 10px; background: var(--surface-subtle); color: var(--ink); font-weight: 750; }
+.goal-icon-button .material-symbols-rounded { color: var(--positive-muted); font-size: 22px; }
+.weekday-picker, .weekly-target-picker { border: 0; padding: 0; margin: 0; min-width: 0; }
+.weekday-picker legend, .weekly-target-picker legend { padding: 0; margin-bottom: 8px; }
+.weekday-options { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.weekday-option { min-width: 0; display: grid; place-items: center; gap: 5px; border: 1px solid var(--line); border-radius: 10px; padding: 7px 3px; color: var(--muted); cursor: pointer; font-size: 11px; font-weight: 800; }
+.weekday-option input, .weekly-target-option input { accent-color: var(--positive); }
+.weekday-option.selected { border-color: var(--focus); color: var(--positive-strong); background: var(--surface-selected); }
+.weekly-target-options { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; }
+.weekly-target-option { min-width: 0; display: flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 10px; padding: 9px 8px; color: var(--muted); cursor: pointer; font-size: 11px; font-weight: 750; }
+.weekly-target-option.selected { border-color: var(--focus); color: var(--positive-strong); background: var(--surface-selected); }
+.goal-config-actions { display: flex; align-items: center; gap: 11px; }
+.goal-history-card { margin-top: 18px; }
+.goal-history-explainer { font-size: 12px; margin: -4px 0 15px; }
+.goal-day.not-completed { background: var(--surface-error); color: var(--danger); border-color: color-mix(in srgb, var(--danger) 24%, var(--surface-error)); }
+.goal-day.completed { background: var(--calendar-filled); color: var(--calendar-filled-text); border-color: var(--focus); }
+.goal-day .material-symbols-rounded { font-size: 13px; }
+.goal-calendar-legend { flex-wrap: wrap; }
+.legend-dot.goal-completed { background: #78ad82; border-color: #78ad82; }
+.legend-dot.goal-not-completed { background: var(--surface-error); border-color: var(--danger-soft); }
+.goal-week-history { margin-top: 18px; padding: 22px 25px; border: 1px solid var(--line-strong); border-radius: 24px; background: var(--card); box-shadow: var(--shadow); }
+.goal-week-history .section-heading { margin-bottom: 10px; }
+.goal-week-row { display: flex; align-items: center; gap: 11px; border-top: 1px solid var(--line); padding: 11px 0; }
+.goal-week-status { width: 30px; height: 30px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 10px; }
+.goal-week-status.accomplished { color: var(--positive-strong); background: var(--surface-success); }
+.goal-week-status.not_accomplished { color: var(--danger); background: var(--surface-error); }
+.goal-week-status.in_progress { color: var(--info); background: var(--surface-info); }
+.goal-week-status.upcoming { color: var(--muted); background: var(--surface-muted); }
+.goal-week-copy { min-width: 0; display: grid; gap: 3px; }
+.goal-week-copy strong { font-size: 13px; }
+.goal-week-copy small { color: var(--muted); font-size: 11px; }
 .settings-page { padding-bottom: 10px; }
 .settings-card { padding: 21px; }
 .appearance-card .section-heading { margin-bottom: 14px; }
@@ -296,6 +341,9 @@ button:disabled { cursor: wait; opacity: .68; }
   .date-switcher button, .date-input { padding: 8px 10px; }
   .panel, .settings-card { padding: 19px 16px; border-radius: 20px; }
   .theme-options { grid-template-columns: 1fr; }
+  .goal-config-row { grid-template-columns: 1fr; }
+  .weekly-target-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .goal-week-history { padding: 19px 16px; }
   .mood-grid { gap: 5px; }
   .mood-option { min-height: 78px; border-radius: 13px; font-size: 10px; }
   .mood-emoji { font-size: 25px; }

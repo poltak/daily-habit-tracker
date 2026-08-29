@@ -67,6 +67,8 @@ export const goals = sqliteTable("goals", {
   id: text("id").primaryKey(),
   activityId: text("activity_id").references(() => activities.id),
   name: text("name").notNull(),
+  materialIcon: text("material_icon").notNull().default("task_alt"),
+  repeatType: text("repeat_type").notNull().default("daily"),
   scheduleType: text("schedule_type").notNull(),
   targetPerWeek: integer("target_per_week"),
   weekdaysMask: integer("weekdays_mask"),
