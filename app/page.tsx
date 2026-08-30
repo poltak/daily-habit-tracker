@@ -5,6 +5,7 @@ import {
   type Activity,
   type ActivityGroup,
   type Bootstrap,
+  type CalendarEntryDay,
   type DaySelections,
   type Entry,
   type Goal,
@@ -34,7 +35,7 @@ import { createLatestRequestGate } from "../lib/latest-request-gate";
 import { Icon } from "./components/icon";
 import { IconPicker, SetupView } from "./components/setup-view";
 
-type View = "log" | "calendar" | "entries" | "settings" | "goal";
+type View = "log" | "calendar" | "settings" | "goal";
 type ConnectionState = "checking" | "online" | "offline" | "error";
 type Notice = { kind: "success" | "error" | "info"; text: string };
 type Route = { view: View; goalId?: string };
@@ -45,7 +46,8 @@ function routeFromLocation(location: Location): Route {
   const params = new URLSearchParams(location.search);
   const requestedView = params.get("view");
   if (requestedView === "goal" && params.get("goal")) return { view: "goal", goalId: params.get("goal")! };
-  if (requestedView === "calendar" || requestedView === "entries" || requestedView === "settings") {
+  if (requestedView === "entries") return { view: "calendar" };
+  if (requestedView === "calendar" || requestedView === "settings") {
     return { view: requestedView };
   }
   return { view: "log" };
@@ -228,10 +230,8 @@ export default function Home() {
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSetupBusy, setIsSetupBusy] = useState(false);
-  const [hasMoreEntries, setHasMoreEntries] = useState(true);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState("");
-  const [calendarDates, setCalendarDates] = useState<string[]>([]);
+  const [calendarDays, setCalendarDays] = useState<CalendarEntryDay[]>([]);
   const [isLoadingCalendar, setIsLoadingCalendar] = useState(false);
   const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null);
   const [goalHistoryMonth, setGoalHistoryMonth] = useState("");
@@ -376,6 +376,7 @@ export default function Home() {
 
     function handlePopState(event: PopStateEvent) {
       const nextRoute = routeFromLocation(window.location);
+      const isLegacyEntriesRoute = new URLSearchParams(window.location.search).get("view") === "entries";
       const nextState = event.state as { [HISTORY_STATE_KEY]?: boolean; daymarkDepth?: number } | null;
       routeDepthRef.current = nextState?.[HISTORY_STATE_KEY] && Number.isInteger(nextState.daymarkDepth) ? nextState.daymarkDepth! : 0;
       if (pendingGoalConfigRef.current && viewRef.current === "goal" && (nextRoute.view !== "goal" || nextRoute.goalId !== selectedGoalIdRef.current)) {
@@ -388,7 +389,7 @@ export default function Home() {
         restoreCurrentRoute();
         return;
       }
-      applyRoute(nextRoute);
+      applyRoute(nextRoute, { replace: isLegacyEntriesRoute });
     }
 
     window.addEventListener("popstate", handlePopState);
@@ -413,7 +414,6 @@ export default function Home() {
     setData(next);
     setSelectedDate(nextDate);
     setCalendarMonth((current) => current || nextDate.slice(0, 7));
-    setHasMoreEntries(next.entries.length >= 30);
     setDraft(recovered.draft);
     markLocalDraft(recovered.restored);
     if (viewRef.current === "goal" && selectedGoalIdRef.current) {
@@ -518,6 +518,7 @@ export default function Home() {
       .then(() => {
         if (cancelled) return null;
         setIsLoadingCalendar(true);
+        setCalendarDays([]);
         return fetch(`/api/calendar?month=${calendarMonth}`, {
           cache: "no-store",
         });
@@ -525,11 +526,16 @@ export default function Home() {
       .then(async (response) => {
         if (!response) return null;
         if (!response.ok) throw new Error("Could not load that month.");
-        return (await response.json()) as { dates: string[] };
+        return (await response.json()) as {
+          days?: CalendarEntryDay[];
+          dates?: string[];
+        };
       })
       .then((result) => {
         if (result && !cancelled) {
-          setCalendarDates(result.dates);
+          setCalendarDays(
+            result.days ?? (result.dates ?? []).map((logicalDate) => ({ logicalDate, moodId: "" })),
+          );
           setConnectionState("online");
           setMessage(null);
         }
@@ -1317,45 +1323,6 @@ export default function Home() {
     }
   }
 
-  async function loadOlderEntries() {
-    if (!data || isLoadingMore || !hasMoreEntries) return;
-    setIsLoadingMore(true);
-    try {
-      const response = await fetch(
-        `/api/entries?limit=30&offset=${data.entries.length}`,
-        { cache: "no-store" },
-      );
-      if (!response.ok) throw new Error("Could not load older entries.");
-      const result = (await response.json()) as {
-        entries: Entry[];
-        hasMore: boolean;
-      };
-      setData((current) =>
-        current
-          ? {
-              ...current,
-              entries: [
-                ...current.entries,
-                ...result.entries.filter(
-                  (entry) =>
-                    !current.entries.some(
-                      (existing) => existing.id === entry.id,
-                    ),
-                ),
-              ],
-            }
-          : current,
-      );
-      setHasMoreEntries(result.hasMore);
-      setConnectionState("online");
-    } catch (error) {
-      setConnectionState(navigator.onLine ? "error" : "offline");
-      setMessage({ kind: "error", text: (error as Error).message });
-    } finally {
-      setIsLoadingMore(false);
-    }
-  }
-
   if (!data)
     return (
       <main className="app-loading">
@@ -1381,10 +1348,8 @@ export default function Home() {
             ? friendlyDate(selectedDate)
             : view === "calendar"
               ? "Your calendar"
-              : view === "entries"
-                ? "Your entries"
-                : view === "goal"
-                  ? "Goal history"
+              : view === "goal"
+                ? "Goal history"
                 : "Your setup"}
         </div>
         <div className={`connection-pill ${connectionState}`} role="status">
@@ -1444,7 +1409,8 @@ export default function Home() {
         {view === "calendar" && (
           <CalendarView
             month={calendarMonth}
-            dates={calendarDates}
+            days={calendarDays}
+            moods={data.moods}
             today={data.today}
             isLoading={isLoadingCalendar}
             onMonth={setCalendarMonth}
@@ -1452,18 +1418,6 @@ export default function Home() {
               changeView("log");
               void chooseDate(date);
             }}
-          />
-        )}
-        {view === "entries" && (
-          <EntriesView
-            data={data}
-            onEdit={(date) => {
-              changeView("log");
-              void chooseDate(date);
-            }}
-            onLoadMore={loadOlderEntries}
-            hasMore={hasMoreEntries}
-            isLoadingMore={isLoadingMore}
           />
         )}
         {view === "goal" && selectedGoalId && goalConfigDraft && (
@@ -1519,16 +1473,6 @@ export default function Home() {
             <Icon name={UI_ICONS.calendar} />
           </span>
           <span>Calendar</span>
-        </button>
-        <button
-          className={view === "entries" ? "active" : ""}
-          onClick={() => changeView("entries")}
-          disabled={isSavingGoalConfig || (isSetupBusy && view === "settings")}
-        >
-          <span className="nav-icon">
-            <Icon name={UI_ICONS.entries} />
-          </span>
-          <span>Entries</span>
         </button>
         <button
           className={view === "settings" ? "active" : ""}
@@ -2132,94 +2076,18 @@ function GoalDetailView({
   );
 }
 
-function EntriesView({
-  data,
-  onEdit,
-  onLoadMore,
-  hasMore,
-  isLoadingMore,
-}: {
-  data: Bootstrap;
-  onEdit: (date: string) => void;
-  onLoadMore: () => void;
-  hasMore: boolean;
-  isLoadingMore: boolean;
-}) {
-  return (
-    <section className="page-section">
-      <div className="page-intro">
-        <p className="eyebrow">Your history</p>
-        <h1>Recent entries</h1>
-        <p className="muted">
-          A quiet timeline of the days you have chosen to remember.
-        </p>
-      </div>
-      {data.entries.length === 0 ? (
-        <div className="empty-state">
-          <span className="empty-icon">
-            <Icon name="event_available" />
-          </span>
-          <h2>Your timeline starts here</h2>
-          <p>Save your first daily check-in and it will appear here.</p>
-        </div>
-      ) : (
-        <>
-          <div className="timeline">
-            {data.entries.map((entry) => {
-              const mood = moodFor(data.moods, entry.moodId);
-              return (
-                <button
-                  className="timeline-card"
-                  key={entry.id}
-                  onClick={() => onEdit(entry.logicalDate)}
-                >
-                  <span
-                    className="timeline-mood"
-                    style={{ background: mood?.color }}
-                  >
-                    {mood?.emoji}
-                  </span>
-                  <span className="timeline-copy">
-                    <strong>{shortDate(entry.logicalDate)}</strong>
-                    <span>
-                      {mood?.name} · {entry.activityIds.length} activities
-                      {entry.completedGoalIds.length
-                        ? ` · ${entry.completedGoalIds.length} goals`
-                        : ""}
-                    </span>
-                  </span>
-                  <span className="timeline-arrow">
-                    <Icon name="chevron_right" />
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-          {hasMore && (
-            <button
-              className="load-more-button"
-              onClick={onLoadMore}
-              disabled={isLoadingMore}
-            >
-              {isLoadingMore ? "Loading older entries…" : "Load older entries"}
-            </button>
-          )}
-        </>
-      )}
-    </section>
-  );
-}
-
 function CalendarView({
   month,
-  dates,
+  days,
+  moods,
   today,
   isLoading,
   onMonth,
   onOpenDate,
 }: {
   month: string;
-  dates: string[];
+  days: CalendarEntryDay[];
+  moods: Mood[];
   today: string;
   isLoading: boolean;
   onMonth: (month: string) => void;
@@ -2229,7 +2097,7 @@ function CalendarView({
   const [year, monthNumber] = resolvedMonth.split("-").map(Number);
   const firstDay = new Date(year, monthNumber - 1, 1).getDay();
   const daysInMonth = new Date(year, monthNumber, 0).getDate();
-  const filled = new Set(dates);
+  const entriesByDate = new Map(days.map((day) => [day.logicalDate, day]));
   const cells = [
     ...Array(firstDay).fill(null),
     ...Array.from(
@@ -2253,7 +2121,7 @@ function CalendarView({
         <p className="eyebrow">Your history</p>
         <h1>Calendar</h1>
         <p className="muted">
-          Filled days have an entry. Select any day to open or add its check-in.
+          Each entry day shows its mood. Select any day to open or add its check-in.
         </p>
       </div>
       <section className="calendar-card">
@@ -2284,21 +2152,23 @@ function CalendarView({
           ))}
         </div>
         <div className="calendar-grid">
-          {cells.map((date, index) =>
-            date ? (
+          {cells.map((date, index) => {
+            if (!date) return <span className="calendar-blank" key={`blank-${index}`} />;
+            const entry = entriesByDate.get(date);
+            const mood = entry ? moodFor(moods, entry.moodId) : undefined;
+            return (
               <button
                 key={date}
-                className={`calendar-day ${filled.has(date) ? "filled" : ""} ${date === today ? "today" : ""}`}
+                className={`calendar-day ${entry ? "filled" : ""} ${date === today ? "today" : ""}`}
+                style={mood ? ({ "--calendar-mood-color": mood.color } as React.CSSProperties) : undefined}
                 onClick={() => onOpenDate(date)}
-                aria-label={`${date}${filled.has(date) ? ", entry exists" : ", empty"}`}
+                aria-label={`${friendlyDate(date)}${mood ? `, ${mood.name} mood, entry exists` : entry ? ", entry exists" : ", empty"}`}
               >
                 <span>{Number(date.slice(-2))}</span>
-                {filled.has(date) && <Icon name={UI_ICONS.check} />}
+                {mood && <span className="calendar-mood-emoji" aria-hidden="true">{mood.emoji}</span>}
               </button>
-            ) : (
-              <span className="calendar-blank" key={`blank-${index}`} />
-            ),
-          )}
+            );
+          })}
         </div>
         {isLoading && (
           <p className="calendar-loading" role="status">
@@ -2307,7 +2177,7 @@ function CalendarView({
         )}
         <div className="calendar-legend">
           <span>
-            <i className="legend-dot filled" /> Entry
+            <i className="legend-dot filled" /> Entry with mood
           </span>
           <span>
             <i className="legend-dot" /> Empty

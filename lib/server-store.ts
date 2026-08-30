@@ -2,6 +2,7 @@ import {
   type Activity,
   type ActivityGroup,
   type Bootstrap,
+  type CalendarEntryDay,
   type DayMoodSelection,
   type DaySelections,
   type Entry,
@@ -144,8 +145,13 @@ export class D1DaylioStore {
   }
 
   async listEntryDates(startDate: string, endDate: string) {
-    const results = await rows<{ logical_date: string }>(this.database, this.database.prepare("SELECT logical_date FROM entries WHERE deleted_at IS NULL AND logical_date BETWEEN ? AND ? ORDER BY logical_date").bind(startDate, endDate));
-    return results.map((row) => row.logical_date);
+    const results = await this.listEntryDays(startDate, endDate);
+    return results.map((day) => day.logicalDate);
+  }
+
+  async listEntryDays(startDate: string, endDate: string): Promise<CalendarEntryDay[]> {
+    const results = await rows<{ logical_date: string; mood_id: string }>(this.database, this.database.prepare("SELECT entries.logical_date, COALESCE(day_mood_selections.mood_id, entries.mood_id) AS mood_id FROM entries LEFT JOIN day_mood_selections ON day_mood_selections.logical_date = entries.logical_date WHERE entries.deleted_at IS NULL AND entries.logical_date BETWEEN ? AND ? ORDER BY entries.logical_date").bind(startDate, endDate));
+    return results.map((row) => ({ logicalDate: row.logical_date, moodId: row.mood_id }));
   }
 
   async getEntry(logicalDate: string) {

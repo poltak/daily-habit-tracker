@@ -60,6 +60,23 @@ test("bootstrap refreshes and setup navigation use a latest-request gate", () =>
   assert.match(pageSource, /disabled=\{isSavingGoalConfig \|\| \(isSetupBusy && view === "settings"\)\}/);
 });
 
+test("calendar shows entry moods and replaces the Entries route", () => {
+  const calendarView = pageSource.slice(pageSource.indexOf("function CalendarView"));
+  assert.match(pageSource, /type View = "log" \| "calendar" \| "settings" \| "goal"/);
+  assert.match(pageSource, /if \(requestedView === "entries"\) return \{ view: "calendar" \}/);
+  assert.doesNotMatch(pageSource, /function EntriesView/);
+  assert.doesNotMatch(pageSource, /<span>Entries<\/span>/);
+  assert.match(pageSource, /<span>Log<\/span>/);
+  assert.match(pageSource, /<span>Calendar<\/span>/);
+  assert.match(pageSource, /<span>Setup<\/span>/);
+  assert.match(calendarView, /days: CalendarEntryDay\[\]/);
+  assert.match(calendarView, /moodFor\(moods, entry\.moodId\)/);
+  assert.match(calendarView, /className="calendar-mood-emoji"/);
+  assert.doesNotMatch(calendarView, /UI_ICONS\.check/);
+  assert.match(stylesSource, /--calendar-mood-color/);
+  assert.match(stylesSource, /\.calendar-mood-emoji/);
+});
+
 test("goals are above mood and persist through a dedicated optimistic toggle", () => {
   const goalsIndex = pageSource.indexOf('<section className="panel goals-panel"');
   const moodIndex = pageSource.indexOf('<section className="panel mood-panel">');

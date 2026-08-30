@@ -146,7 +146,7 @@ test("goal migration adds explicit icon and repeat columns with legacy backfill"
 });
 
 test("goal UI separates completion from detail navigation and exposes repeat controls", () => {
-  assert.match(pageSource, /type View = "log" \| "calendar" \| "entries" \| "settings" \| "goal"/);
+  assert.match(pageSource, /type View = "log" \| "calendar" \| "settings" \| "goal"/);
   assert.match(pageSource, /onOpenGoal=\{openGoal\}/);
   assert.match(pageSource, /pushState\(state/);
   assert.match(pageSource, /addEventListener\("popstate"/);

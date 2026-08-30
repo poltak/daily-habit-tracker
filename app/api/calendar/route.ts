@@ -12,5 +12,6 @@ export async function GET(request: Request) {
   const endDate = `${month}-${String(lastDay).padStart(2, "0")}`;
   if (!isLogicalDate(startDate) || !isLogicalDate(endDate)) return Response.json({ error: "Choose a valid month." }, { status: 400 });
   const store = await getServerStore();
-  return Response.json({ month, startDate, endDate, dates: await store.listEntryDates(startDate, endDate), previousMonth: addDays(startDate, -1).slice(0, 7), nextMonth: addDays(endDate, 1).slice(0, 7) });
+  const days = await store.listEntryDays(startDate, endDate);
+  return Response.json({ month, startDate, endDate, dates: days.map((day) => day.logicalDate), days, previousMonth: addDays(startDate, -1).slice(0, 7), nextMonth: addDays(endDate, 1).slice(0, 7) });
 }

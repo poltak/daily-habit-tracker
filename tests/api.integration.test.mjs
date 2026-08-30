@@ -130,6 +130,9 @@ test("Wrangler-backed API covers persistence, catalog, calendar, pagination, imp
   const effectiveOverride = await json(`/api/entries/${overrideDate}`);
   assert.equal(effectiveOverride.body.entry.moodId, "mood-rad");
   assert.deepEqual(effectiveOverride.body.entry.activityIds, ["activity-gym", "activity-sleep"]);
+  const overrideCalendar = await json("/api/calendar?month=2026-01");
+  assert.equal(overrideCalendar.response.status, 200);
+  assert.equal(overrideCalendar.body.days.find((day) => day.logicalDate === overrideDate).moodId, "mood-rad");
   const finalizedOverride = await json(`/api/entries/${overrideDate}`, { method: "PUT", body: JSON.stringify({ moodId: "mood-good", activityIds: ["activity-gym", "activity-walk"], completedGoalIds: [], localTime: "20:00" }) });
   assert.equal(finalizedOverride.response.status, 200);
   assert.equal(finalizedOverride.body.entry.moodId, "mood-rad");
@@ -290,6 +293,10 @@ test("Wrangler-backed API covers persistence, catalog, calendar, pagination, imp
   assert.equal(loaded.body.entry.localTime, "21:30");
   const calendar = await json("/api/calendar?month=2026-02");
   assert.deepEqual(calendar.body.dates, ["2026-02-02", "2026-02-03"]);
+  assert.deepEqual(calendar.body.days, [
+    { logicalDate: "2026-02-02", moodId: "mood-meh" },
+    { logicalDate: "2026-02-03", moodId: "mood-good" },
+  ]);
 
   const page = await json("/api/entries?limit=1&offset=0");
   assert.equal(page.response.status, 200);

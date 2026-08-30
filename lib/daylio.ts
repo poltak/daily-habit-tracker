@@ -129,6 +129,11 @@ export type DaySelections = {
   activityOverrideIds: string[];
 };
 
+export type CalendarEntryDay = {
+  logicalDate: string;
+  moodId: string;
+};
+
 export type EntryInput = {
   moodId: string;
   activityIds: string[];
@@ -458,10 +463,17 @@ export class DaylioMemoryStore {
   }
 
   listEntryDates(startDate: string, endDate: string) {
+    return this.listEntryDays(startDate, endDate).map((day) => day.logicalDate);
+  }
+
+  listEntryDays(startDate: string, endDate: string): CalendarEntryDay[] {
     return [...this.entries.values()]
       .filter((entry) => !entry.deletedAt && entry.logicalDate >= startDate && entry.logicalDate <= endDate)
-      .map((entry) => entry.logicalDate)
-      .sort();
+      .map((entry) => ({
+        logicalDate: entry.logicalDate,
+        moodId: this.dayMoodSelections.get(entry.logicalDate)?.moodId ?? entry.moodId,
+      }))
+      .sort((a, b) => a.logicalDate.localeCompare(b.logicalDate));
   }
 
   getEntry(logicalDate: string) {

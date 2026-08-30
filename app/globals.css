@@ -161,7 +161,7 @@ button:disabled { cursor: wait; opacity: .68; }
 .goal-copy strong { font-size: 14px; }
 .goal-copy strong .material-symbols-rounded { color: var(--positive-muted); font-size: 19px; vertical-align: -4px; }
 .goal-copy small, .settings-row small { color: var(--muted); font-size: 12px; }
-.goal-arrow, .timeline-arrow { color: var(--muted); font-size: 22px; }
+.goal-arrow { color: var(--muted); font-size: 22px; }
 .save-bar { margin-top: 18px; padding: 17px 20px; border-radius: 20px; background: var(--save-bg); color: var(--save-foreground); display: flex; align-items: center; justify-content: space-between; gap: 16px; box-shadow: var(--shadow); }
 .save-bar > div:first-child { display: grid; gap: 4px; }
 .save-bar span { color: var(--save-muted); font-size: 12px; }
@@ -184,15 +184,6 @@ button:disabled { cursor: wait; opacity: .68; }
 .empty-icon { width: 50px; height: 50px; display: grid; place-items: center; margin: 0 auto 14px; border-radius: 18px; background: var(--surface-raised); color: var(--positive-muted); font-size: 27px; }
 .empty-state h2 { margin: 0 0 8px; letter-spacing: -.03em; }
 .empty-state p { color: var(--muted); margin: 0; }
-.timeline { display: grid; gap: 10px; }
-.timeline-card { display: flex; align-items: center; gap: 13px; width: 100%; text-align: left; border: 1px solid var(--line); border-radius: 17px; background: var(--card); padding: 13px; color: var(--ink); }
-.timeline-card:hover { border-color: var(--focus); }
-.timeline-mood { width: 43px; height: 43px; display: grid; place-items: center; border-radius: 14px; font-size: 23px; }
-.timeline-copy { display: grid; gap: 4px; flex: 1; }
-.timeline-copy strong { font-size: 15px; }
-.timeline-copy span { color: var(--muted); font-size: 12px; }
-.load-more-button { display: block; width: 100%; margin-top: 15px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); color: var(--ink); padding: 12px; font-weight: 800; }
-.load-more-button:disabled { color: var(--muted); }
 .calendar-card { background: var(--card); border: 1px solid var(--line); border-radius: 24px; padding: 18px; box-shadow: var(--shadow); }
 .calendar-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
 .calendar-heading h2 { margin: 0; font-size: 20px; letter-spacing: -.04em; }
@@ -201,9 +192,10 @@ button:disabled { cursor: wait; opacity: .68; }
 .calendar-weekdays, .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
 .calendar-weekdays { color: var(--muted); font-size: 11px; font-weight: 800; text-align: center; margin-bottom: 7px; }
 .calendar-day { aspect-ratio: 1; min-height: 42px; border: 1px solid transparent; border-radius: 13px; background: var(--calendar-empty); color: var(--ink); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 13px; font-weight: 800; }
-.calendar-day.filled { background: var(--calendar-filled); color: var(--calendar-filled-text); border-color: var(--focus); }
+.calendar-day.filled { background: color-mix(in srgb, var(--calendar-mood-color, #78ad82) 20%, var(--card)); color: var(--calendar-mood-color, var(--calendar-filled-text)); border-color: color-mix(in srgb, var(--calendar-mood-color, #78ad82) 55%, var(--line)); }
 .calendar-day.today { box-shadow: inset 0 0 0 2px var(--accent); }
 .calendar-day .material-symbols-rounded { font-size: 13px; }
+.calendar-mood-emoji { font-size: 22px; line-height: 1; }
 .calendar-blank { aspect-ratio: 1; min-height: 42px; }
 .calendar-loading { color: var(--muted); text-align: center; font-size: 12px; margin: 13px 0 0; }
 .calendar-legend { display: flex; gap: 18px; color: var(--muted); font-size: 12px; margin-top: 18px; }
