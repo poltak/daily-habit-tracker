@@ -332,6 +332,13 @@ test("Wrangler-backed API covers persistence, catalog, calendar, pagination, imp
   };
   const imported = await json("/api/import", { method: "POST", body: JSON.stringify(importPayload) });
   assert.equal(imported.response.status, 200);
+  assert.deepEqual(Object.fromEntries(imported.body.bootstrap.moods.filter((item) => item.id.startsWith("mood-")).map((item) => [item.id, item.emoji])), {
+    "mood-rad": "😄",
+    "mood-good": "🙂",
+    "mood-meh": "😐",
+    "mood-bad": "☹️",
+    "mood-awful": "😫",
+  });
   assert.equal(imported.body.bootstrap.goals.find((item) => item.id === "daylio-goal-1").activityId, null);
   const importedEntry = await json("/api/entries/2026-02-04");
   assert.equal(importedEntry.body.entry.completedGoalIds.length, 1);

@@ -43,6 +43,13 @@
       "when": 1788077112000,
       "tag": "0005_unlink_imported_goal_placeholders",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788083613000,
+      "tag": "0006_correct_standard_mood_emojis",
+      "breakpoints": true
     }
   ]
 }

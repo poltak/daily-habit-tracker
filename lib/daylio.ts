@@ -203,11 +203,11 @@ export type ImportPayload = {
 export const ALL_WEEKDAYS_MASK = 0b1111111;
 
 export const MOODS: Mood[] = [
-  { id: "mood-rad", name: "Rad", score: 5, emoji: "😍", color: "#ee8f6d" },
+  { id: "mood-rad", name: "Rad", score: 5, emoji: "😄", color: "#ee8f6d" },
   { id: "mood-good", name: "Good", score: 4, emoji: "🙂", color: "#f4b85f" },
   { id: "mood-meh", name: "Meh", score: 3, emoji: "😐", color: "#9aa4ae" },
-  { id: "mood-bad", name: "Bad", score: 2, emoji: "🙁", color: "#809bc5" },
-  { id: "mood-awful", name: "Awful", score: 1, emoji: "😣", color: "#9b82b6" },
+  { id: "mood-bad", name: "Bad", score: 2, emoji: "☹️", color: "#809bc5" },
+  { id: "mood-awful", name: "Awful", score: 1, emoji: "😫", color: "#9b82b6" },
 ];
 
 const seedGroups: ActivityGroup[] = [
