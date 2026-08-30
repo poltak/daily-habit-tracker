@@ -148,10 +148,17 @@ test("goal migration adds explicit icon and repeat columns with legacy backfill"
 test("goal UI separates completion from detail navigation and exposes repeat controls", () => {
   assert.match(pageSource, /type View = "log" \| "calendar" \| "entries" \| "settings" \| "goal"/);
   assert.match(pageSource, /onOpenGoal=\{openGoal\}/);
+  assert.match(pageSource, /pushState\(state/);
+  assert.match(pageSource, /addEventListener\("popstate"/);
+  assert.match(pageSource, /history\.back\(\)/);
+  assert.match(pageSource, /if \(goal\) \{\s*if \(!goalConfigDraft\) setGoalConfigDraft\(goalConfigFromGoal\(goal\)\);\s*\} else \{/);
   assert.match(pageSource, /className="goal-checkbox"/);
   assert.match(pageSource, /className="goal-main" onClick=\{onOpen\}/);
   assert.match(pageSource, /<option value="daily">Daily<\/option>/);
   assert.match(pageSource, /<option value="weekly">Weekly<\/option>/);
+  assert.match(pageSource, /<option value="">No associated activity<\/option>/);
+  assert.match(pageSource, /activityId: config\.activityId/);
+  assert.match(pageSource, /config\.activityId !== goal\.activityId/);
   assert.match(pageSource, /Days expected/);
   assert.match(pageSource, /Every day/);
   assert.match(pageSource, /api\/goals\/\$\{selectedGoalId\}\/history/);
@@ -162,7 +169,9 @@ test("goal UI separates completion from detail navigation and exposes repeat con
   assert.match(pageSource, /goal-day \$\{state/);
   assert.doesNotMatch(pageSource, /goal-not-scheduled/);
   assert.match(setupSource, /itemType = "Activity"/);
-  assert.match(setupSource, /Choose icon for \$\{goal\.name\}/);
+  assert.match(setupSource, /Configure \$\{goal\.name\}/);
+  assert.doesNotMatch(setupSource, /Choose icon for \$\{goal\.name\}/);
+  assert.doesNotMatch(setupSource, /Change activity for \$\{goal\.name\}/);
   assert.match(stylesSource, /\.goal-config-card/);
   assert.match(stylesSource, /\.goal-day\.not-completed/);
   assert.doesNotMatch(stylesSource, /goal-not-scheduled/);

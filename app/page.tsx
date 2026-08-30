@@ -37,6 +37,28 @@ import { IconPicker, SetupView } from "./components/setup-view";
 type View = "log" | "calendar" | "entries" | "settings" | "goal";
 type ConnectionState = "checking" | "online" | "offline" | "error";
 type Notice = { kind: "success" | "error" | "info"; text: string };
+type Route = { view: View; goalId?: string };
+
+const HISTORY_STATE_KEY = "daymarkRoute";
+
+function routeFromLocation(location: Location): Route {
+  const params = new URLSearchParams(location.search);
+  const requestedView = params.get("view");
+  if (requestedView === "goal" && params.get("goal")) return { view: "goal", goalId: params.get("goal")! };
+  if (requestedView === "calendar" || requestedView === "entries" || requestedView === "settings") {
+    return { view: requestedView };
+  }
+  return { view: "log" };
+}
+
+function routeUrl(route: Route) {
+  const url = new URL(window.location.href);
+  if (route.view === "log") url.searchParams.delete("view");
+  else url.searchParams.set("view", route.view);
+  if (route.view === "goal" && route.goalId) url.searchParams.set("goal", route.goalId);
+  else url.searchParams.delete("goal");
+  return `${url.pathname}${url.search}${url.hash}`;
+}
 
 const EMPTY_DRAFT: Draft = {
   moodId: "",
@@ -47,6 +69,7 @@ const EMPTY_DRAFT: Draft = {
 
 type GoalConfigDraft = {
   name: string;
+  activityId: string | null;
   repeatType: GoalRepeatType;
   weekdaysMask: number;
   targetPerWeek: number;
@@ -56,6 +79,7 @@ type GoalConfigDraft = {
 function goalConfigFromGoal(goal: Goal): GoalConfigDraft {
   return {
     name: goal.name,
+    activityId: goal.activityId,
     repeatType: goalRepeatType(goal),
     weekdaysMask: goalWeekdayMask(goal),
     targetPerWeek: Math.min(7, Math.max(1, goal.targetPerWeek ?? 1)),
@@ -241,7 +265,15 @@ export default function Home() {
   const hasLocalDraftRef = useRef(false);
   const selectedDateRef = useRef("");
   const selectedDateEpochRef = useRef(0);
+  const dataRef = useRef<Bootstrap | null>(null);
+  const viewRef = useRef<View>(view);
+  const setupBusyRef = useRef(false);
+  const navigationReadyRef = useRef(false);
+  const routeDepthRef = useRef(0);
   draftRef.current = draft;
+  dataRef.current = data;
+  viewRef.current = view;
+  setupBusyRef.current = isSetupBusy;
   selectedGoalIdRef.current = selectedGoalId;
 
   function markLocalDraft(value: boolean) {
@@ -249,12 +281,62 @@ export default function Home() {
     setHasLocalDraft(value);
   }
 
-  function changeView(nextView: View) {
+  function updateGoalRoute(goalId: string | null) {
+    if (goalId) {
+      const goal = dataRef.current?.goals.find((candidate) => candidate.id === goalId && !candidate.archived);
+      if (dataRef.current && !goal) return false;
+      setSelectedGoalId(goalId);
+      setGoalConfigDraft(goal ? goalConfigFromGoal(goal) : null);
+      setGoalHistory(null);
+      setGoalHistoryMonth((selectedDateRef.current || dataRef.current?.today || logicalDateFromDate()).slice(0, 7));
+    } else {
+      goalHistoryRequestGate.current.cancel();
+      setGoalIconPickerOpen(false);
+      setSelectedGoalId(null);
+      setGoalHistory(null);
+      setGoalConfigDraft(null);
+    }
+    return true;
+  }
+
+  function writeRoute(route: Route, { replace = false }: { replace?: boolean } = {}) {
+    if (typeof window === "undefined") return;
+    const depth = replace ? routeDepthRef.current : routeDepthRef.current + 1;
+    const state = { ...(window.history.state ?? {}), [HISTORY_STATE_KEY]: true, daymarkView: route.view, daymarkGoalId: route.goalId ?? null, daymarkDepth: depth };
+    if (replace) window.history.replaceState(state, "", routeUrl(route));
+    else window.history.pushState(state, "", routeUrl(route));
+    routeDepthRef.current = depth;
+  }
+
+  function restoreCurrentRoute() {
+    const currentView = viewRef.current;
+    writeRoute({ view: currentView, goalId: currentView === "goal" ? selectedGoalIdRef.current ?? undefined : undefined });
+  }
+
+  function applyRoute(route: Route, { replace = false }: { replace?: boolean } = {}) {
+    if (route.view === "goal" && !route.goalId) route = { view: "log" };
+    if (route.view === "goal" && !updateGoalRoute(route.goalId!)) {
+      route = { view: "log" };
+      replace = true;
+    }
+    if (route.view !== "goal") updateGoalRoute(null);
+    setView(route.view);
+    setMessage(null);
+    if (replace) writeRoute(route, { replace: true });
+  }
+
+  function changeView(nextView: View, { goalId }: { goalId?: string } = {}) {
     if (isSetupBusy && view === "settings" && nextView !== "settings") return;
     if (pendingGoalConfigRef.current && view === "goal" && nextView !== "goal") {
       setMessage({ kind: "info", text: "Wait for the goal update to finish before leaving this goal." });
       return;
     }
+    const nextGoalId = nextView === "goal" ? goalId ?? selectedGoalId : undefined;
+    if (nextView === "goal" && !nextGoalId) return;
+    if (nextView === view && (nextView !== "goal" || nextGoalId === selectedGoalId)) return;
+    if (nextView === "goal") updateGoalRoute(nextGoalId!);
+    else updateGoalRoute(null);
+    writeRoute({ view: nextView, goalId: nextGoalId ?? undefined });
     setView(nextView);
     setMessage(null);
   }
@@ -267,7 +349,7 @@ export default function Home() {
     setGoalConfigDraft(goalConfigFromGoal(goal));
     setGoalHistory(null);
     setGoalHistoryMonth((selectedDate || data?.today || "").slice(0, 7));
-    changeView("goal");
+    changeView("goal", { goalId });
   }
 
   function closeGoal() {
@@ -275,13 +357,45 @@ export default function Home() {
       setMessage({ kind: "info", text: "Wait for the goal update to finish before leaving this goal." });
       return;
     }
-    goalHistoryRequestGate.current.cancel();
-    setGoalIconPickerOpen(false);
-    setSelectedGoalId(null);
-    setGoalHistory(null);
-    setGoalConfigDraft(null);
-    changeView("log");
+    if (navigationReadyRef.current && routeDepthRef.current > 0) {
+      window.history.back();
+      return;
+    }
+    updateGoalRoute(null);
+    setView("log");
+    writeRoute({ view: "log" }, { replace: true });
   }
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const initialRoute = routeFromLocation(window.location);
+    const initialState = window.history.state as { [HISTORY_STATE_KEY]?: boolean; daymarkDepth?: number } | null;
+    routeDepthRef.current = initialState?.[HISTORY_STATE_KEY] && Number.isInteger(initialState.daymarkDepth) ? initialState.daymarkDepth! : 0;
+    navigationReadyRef.current = true;
+    Promise.resolve().then(() => applyRoute(initialRoute, { replace: true }));
+
+    function handlePopState(event: PopStateEvent) {
+      const nextRoute = routeFromLocation(window.location);
+      const nextState = event.state as { [HISTORY_STATE_KEY]?: boolean; daymarkDepth?: number } | null;
+      routeDepthRef.current = nextState?.[HISTORY_STATE_KEY] && Number.isInteger(nextState.daymarkDepth) ? nextState.daymarkDepth! : 0;
+      if (pendingGoalConfigRef.current && viewRef.current === "goal" && (nextRoute.view !== "goal" || nextRoute.goalId !== selectedGoalIdRef.current)) {
+        setMessage({ kind: "info", text: "Wait for the goal update to finish before leaving this goal." });
+        restoreCurrentRoute();
+        return;
+      }
+      if (setupBusyRef.current && viewRef.current === "settings" && nextRoute.view !== "settings") {
+        setMessage({ kind: "info", text: "Wait for the setup update to finish before leaving setup." });
+        restoreCurrentRoute();
+        return;
+      }
+      applyRoute(nextRoute);
+    }
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+    // The listener reads changing route data from refs and must be installed only once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function applyBootstrap(
     next: Bootstrap,
@@ -302,6 +416,16 @@ export default function Home() {
     setHasMoreEntries(next.entries.length >= 30);
     setDraft(recovered.draft);
     markLocalDraft(recovered.restored);
+    if (viewRef.current === "goal" && selectedGoalIdRef.current) {
+      const goal = next.goals.find((candidate) => candidate.id === selectedGoalIdRef.current && !candidate.archived);
+      if (goal) {
+        if (!goalConfigDraft) setGoalConfigDraft(goalConfigFromGoal(goal));
+      } else {
+        updateGoalRoute(null);
+        setView("log");
+        writeRoute({ view: "log" }, { replace: true });
+      }
+    }
     if (announceRestore && recovered.restored)
       setMessage({
         kind: "info",
@@ -1013,6 +1137,7 @@ export default function Home() {
     const scheduleType: Goal["scheduleType"] = config.repeatType === "weekly" ? "times_per_week" : config.weekdaysMask === ALL_WEEKDAYS_MASK ? "daily" : "weekdays";
     const patch = {
       name,
+      activityId: config.activityId,
       materialIcon: config.materialIcon,
       repeatType: config.repeatType,
       scheduleType,
@@ -1344,6 +1469,7 @@ export default function Home() {
         {view === "goal" && selectedGoalId && goalConfigDraft && (
           <GoalDetailView
             goal={data.goals.find((candidate) => candidate.id === selectedGoalId) ?? null}
+            activities={data.activities}
             history={goalHistory}
             month={goalHistoryMonth}
             config={goalConfigDraft}
@@ -1364,6 +1490,7 @@ export default function Home() {
             onRefresh={loadBootstrap}
             onMessage={setMessage}
             onBusyChange={setIsSetupBusy}
+            onOpenGoal={openGoal}
           />
         )}
       </main>
@@ -1817,6 +1944,7 @@ function GoalRow({
 
 function GoalDetailView({
   goal,
+  activities,
   history,
   month,
   config,
@@ -1831,6 +1959,7 @@ function GoalDetailView({
   onCloseIconPicker,
 }: {
   goal: Goal | null;
+  activities: Activity[];
   history: GoalHistory | null;
   month: string;
   config: GoalConfigDraft;
@@ -1863,7 +1992,9 @@ function GoalDetailView({
   ];
   const label = new Intl.DateTimeFormat("en", { month: "long", year: "numeric" }).format(new Date(year, monthNumber - 1, 1));
   const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const isDirty = config.name !== goal.name || config.materialIcon !== goal.materialIcon || config.repeatType !== goalRepeatType(goal) || config.weekdaysMask !== goalWeekdayMask(goal) || config.targetPerWeek !== Math.min(7, Math.max(1, goal.targetPerWeek ?? 1));
+  const linkedActivity = activities.find((activity) => activity.id === config.activityId);
+  const activityOptions = activities.filter((activity) => !activity.archived || activity.id === config.activityId);
+  const isDirty = config.name !== goal.name || config.activityId !== goal.activityId || config.materialIcon !== goal.materialIcon || config.repeatType !== goalRepeatType(goal) || config.weekdaysMask !== goalWeekdayMask(goal) || config.targetPerWeek !== Math.min(7, Math.max(1, goal.targetPerWeek ?? 1));
 
   function shiftMonth(amount: number) {
     const next = new Date(year, monthNumber - 1 + amount, 1);
@@ -1897,8 +2028,8 @@ function GoalDetailView({
         <div className="section-heading">
           <div>
             <p className="eyebrow">Goal settings</p>
-            <h2>Repeat and icon</h2>
-            <p className="muted small-copy">Daily goals count only their selected weekdays. Weekly goals count completed days toward their target.</p>
+            <h2>Repeat, activity, and icon</h2>
+            <p className="muted small-copy">Choose when this goal is expected, and optionally link it to an activity.</p>
           </div>
         </div>
         <label className="goal-config-field">
@@ -1921,6 +2052,14 @@ function GoalDetailView({
             </button>
           </div>
         </div>
+        <label className="goal-config-field">
+          <span>Associated activity</span>
+          <select aria-label="Associated activity" value={config.activityId ?? ""} onChange={(event) => onConfig({ ...config, activityId: event.target.value || null })} disabled={isSavingConfig}>
+            <option value="">No associated activity</option>
+            {activityOptions.map((activity) => <option key={activity.id} value={activity.id}>{activity.name}{activity.archived ? " (archived)" : ""}</option>)}
+          </select>
+          {linkedActivity?.archived && <small className="muted">This activity is archived but remains linked.</small>}
+        </label>
 
         {config.repeatType === "daily" ? (
           <fieldset className="weekday-picker" disabled={isSavingConfig}>

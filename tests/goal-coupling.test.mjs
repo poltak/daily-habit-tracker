@@ -7,6 +7,7 @@ const daylioSource = await readFile(new URL("../lib/daylio.ts", import.meta.url)
 const serverStoreSource = await readFile(new URL("../lib/server-store.ts", import.meta.url), "utf8");
 const pageSource = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
 const migrationSource = await readFile(new URL("../drizzle/0003_stormy_cammi.sql", import.meta.url), "utf8");
+const placeholderMigration = await readFile(new URL("../drizzle/0005_unlink_imported_goal_placeholders.sql", import.meta.url), "utf8");
 const migrationSnapshot = JSON.parse(await readFile(new URL("../drizzle/meta/0003_snapshot.json", import.meta.url), "utf8"));
 
 test("goals allow a nullable activity link in the schema and migration", () => {
@@ -43,4 +44,14 @@ test("archived linked goals stay out of coupled toggles", () => {
   );
   assert.match(pageSource, /filter\(\(goal\) => !goal\.archived && goal\.activityId === id\)/);
   assert.match(pageSource, /filter\(\(goal\) => !goal\.archived && goal\.activityId === linkedActivityId\)/);
+});
+
+test("the placeholder cleanup migration only unlinks identified imported goal activities", () => {
+  assert.match(placeholderMigration, /UPDATE `goals`[\s\S]*SET `activity_id` = NULL/);
+  assert.match(placeholderMigration, /source_system` = 'daylio'/);
+  assert.match(placeholderMigration, /id` GLOB 'daylio-activity-unlinked-goal-\*'/);
+  assert.match(placeholderMigration, /source_id` GLOB '__unlinked_goal_\*__'/);
+  assert.match(placeholderMigration, /group_id` = 'daylio-group-unlinked-goals'/);
+  assert.doesNotMatch(placeholderMigration, /name`\s*=\s*'Imported goal link'/);
+  assert.doesNotMatch(placeholderMigration, /DELETE\s+FROM/);
 });

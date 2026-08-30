@@ -78,11 +78,13 @@ test("goals are above mood and persist through a dedicated optimistic toggle", (
 });
 
 test("goal setup supports linked and unlinked activities", () => {
-  assert.match(setupSource, /No linked activity/);
-  assert.match(setupSource, /activityId: goalActivity \|\| null/);
-  assert.match(setupSource, /value=\{goal\.activityId \?\? ""\}/);
-  assert.match(setupSource, /const activityId = event\.target\.value \|\| null/);
-  assert.match(setupSource, /patch: \{ activityId \}, optimistic: \{ activityId \}/);
+  assert.match(pageSource, /No associated activity/);
+  assert.match(pageSource, /activityId: config\.activityId/);
+  assert.match(pageSource, /event\.target\.value \|\| null/);
+  assert.match(setupSource, /onOpenGoal: \(goalId: string\) => void/);
+  assert.match(setupSource, /Configure \$\{goal\.name\}/);
+  assert.doesNotMatch(setupSource, /No linked activity/);
+  assert.doesNotMatch(setupSource, /Change activity for \$\{goal\.name\}/);
 });
 
 test("mood and activity selections persist independently with optimistic pending guards", () => {
