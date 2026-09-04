@@ -144,6 +144,8 @@ button:disabled { cursor: wait; opacity: .68; }
 .activity-groups summary { display: flex; justify-content: space-between; color: var(--ink); font-weight: 800; font-size: 14px; cursor: pointer; list-style: none; }
 .activity-groups summary::-webkit-details-marker, .activity-groups summary::marker { display: none; content: ""; }
 .group-summary-meta { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; font-weight: 650; }
+.add-activity-button { border: 0; background: transparent; color: var(--positive-muted); padding: 4px 3px; font-size: 11px; font-weight: 850; white-space: nowrap; }
+.add-activity-button:hover { color: var(--positive-strong); text-decoration: underline; }
 .group-expand-icon { font-size: 20px; transition: transform .16s ease; }
 .activity-groups details[open] .group-expand-icon { transform: rotate(180deg); }
 .activity-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 11px; }
@@ -203,10 +205,15 @@ button:disabled { cursor: wait; opacity: .68; }
 .legend-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--calendar-empty); border: 1px solid var(--line); }
 .legend-dot.filled { background: #78ad82; border-color: #78ad82; }
 .goal-detail-intro { margin-bottom: 18px; }
+.activity-create-intro { margin-bottom: 18px; }
 .back-button { border: 0; background: transparent; color: var(--positive-muted); padding: 0; display: inline-flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 800; }
 .goal-detail-title { display: flex; align-items: center; gap: 13px; margin-top: 18px; }
 .goal-detail-title h1 { margin-bottom: 8px; }
 .goal-detail-icon { width: 48px; height: 48px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 16px; color: var(--positive-muted); background: var(--surface-success); font-size: 27px; }
+.activity-create-title { display: flex; align-items: center; gap: 13px; margin-top: 18px; }
+.activity-create-title h1 { margin-bottom: 8px; }
+.activity-create-card { max-width: 620px; }
+.activity-create-actions { justify-content: flex-start; }
 .goal-config-card { display: grid; gap: 15px; }
 .goal-config-card .section-heading { margin-bottom: 0; }
 .goal-config-field, .goal-icon-setting { display: grid; gap: 6px; min-width: 0; }

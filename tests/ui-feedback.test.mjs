@@ -57,7 +57,7 @@ test("bootstrap refreshes and setup navigation use a latest-request gate", () =>
   assert.match(pageSource, /bootstrapRequestGate\.current\.begin\(\)/);
   assert.match(pageSource, /if \(request\.isCurrent\(\)\)/);
   assert.match(pageSource, /onBusyChange=\{setIsSetupBusy\}/);
-  assert.match(pageSource, /disabled=\{isSavingGoalConfig \|\| \(isSetupBusy && view === "settings"\)\}/);
+  assert.match(pageSource, /disabled=\{isSavingGoalConfig \|\| isActivityCreateBusy \|\| \(isSetupBusy && view === "settings"\)\}/);
 });
 
 test("calendar shows entry moods and replaces the Entries route", () => {

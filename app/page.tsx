@@ -35,10 +35,11 @@ import { createLatestRequestGate } from "../lib/latest-request-gate";
 import { Icon } from "./components/icon";
 import { IconPicker, SetupView } from "./components/setup-view";
 
-type View = "log" | "calendar" | "settings" | "goal";
+type View = "log" | "calendar" | "settings" | "goal" | "add-activity";
+type ActivityCreationSource = "log" | "settings";
 type ConnectionState = "checking" | "online" | "offline" | "error";
 type Notice = { kind: "success" | "error" | "info"; text: string };
-type Route = { view: View; goalId?: string };
+type Route = { view: View; goalId?: string; groupId?: string; returnView?: ActivityCreationSource };
 
 const HISTORY_STATE_KEY = "daymarkRoute";
 
@@ -46,6 +47,13 @@ function routeFromLocation(location: Location): Route {
   const params = new URLSearchParams(location.search);
   const requestedView = params.get("view");
   if (requestedView === "goal" && params.get("goal")) return { view: "goal", goalId: params.get("goal")! };
+  if (requestedView === "add-activity" || requestedView === "activity") {
+    return {
+      view: "add-activity",
+      groupId: params.get("group") ?? params.get("groupId") ?? undefined,
+      returnView: params.get("from") === "settings" ? "settings" : "log",
+    };
+  }
   if (requestedView === "entries") return { view: "calendar" };
   if (requestedView === "calendar" || requestedView === "settings") {
     return { view: requestedView };
@@ -59,6 +67,15 @@ function routeUrl(route: Route) {
   else url.searchParams.set("view", route.view);
   if (route.view === "goal" && route.goalId) url.searchParams.set("goal", route.goalId);
   else url.searchParams.delete("goal");
+  if (route.view === "add-activity") {
+    if (route.groupId) url.searchParams.set("group", route.groupId);
+    else url.searchParams.delete("group");
+    url.searchParams.set("from", route.returnView === "settings" ? "settings" : "log");
+  } else {
+    url.searchParams.delete("group");
+    url.searchParams.delete("groupId");
+    url.searchParams.delete("from");
+  }
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
@@ -175,6 +192,18 @@ function activityFor(activities: Activity[], id?: string | null) {
   return activities.find((activity) => activity.id === id);
 }
 
+function resolveActiveActivityGroupId({
+  groups,
+  requestedId,
+}: {
+  groups: readonly ActivityGroup[];
+  requestedId?: string;
+}) {
+  return groups.find((group) => group.id === requestedId && !group.archived)?.id
+    ?? groups.find((group) => !group.archived)?.id
+    ?? "";
+}
+
 function applyGoalCompletionStates({
   completedGoalIds,
   completions,
@@ -241,6 +270,9 @@ export default function Home() {
   const [goalConfigDraft, setGoalConfigDraft] = useState<GoalConfigDraft | null>(null);
   const [isSavingGoalConfig, setIsSavingGoalConfig] = useState(false);
   const [goalIconPickerOpen, setGoalIconPickerOpen] = useState(false);
+  const [activityGroupId, setActivityGroupId] = useState<string | undefined>();
+  const [activityReturnView, setActivityReturnView] = useState<ActivityCreationSource>("log");
+  const [isActivityCreateBusy, setIsActivityCreateBusy] = useState(false);
   const [hasLocalDraft, setHasLocalDraft] = useState(false);
   const [connectionState, setConnectionState] =
     useState<ConnectionState>("checking");
@@ -259,6 +291,10 @@ export default function Home() {
   const goalConfigSaveSequenceRef = useRef(0);
   const activeGoalConfigSaveRef = useRef<{ sequence: number; goalId: string } | null>(null);
   const selectedGoalIdRef = useRef<string | null>(null);
+  const activityReturnViewRef = useRef<ActivityCreationSource>("log");
+  const activityGroupIdRef = useRef<string | undefined>(undefined);
+  const activityCreateBusyRef = useRef(false);
+  const pendingRouteNoticeRef = useRef<Notice | null>(null);
   const pendingGoalRef = useRef<Set<string>>(new Set());
   const pendingSelectionRef = useRef<Set<string>>(new Set());
   const failedSelectionRef = useRef<Set<string>>(new Set());
@@ -275,10 +311,18 @@ export default function Home() {
   viewRef.current = view;
   setupBusyRef.current = isSetupBusy;
   selectedGoalIdRef.current = selectedGoalId;
+  activityReturnViewRef.current = activityReturnView;
+  activityGroupIdRef.current = activityGroupId;
+  activityCreateBusyRef.current = isActivityCreateBusy;
 
   function markLocalDraft(value: boolean) {
     hasLocalDraftRef.current = value;
     setHasLocalDraft(value);
+  }
+
+  function setActivityCreateBusy(busy: boolean) {
+    activityCreateBusyRef.current = busy;
+    setIsActivityCreateBusy(busy);
   }
 
   function updateGoalRoute(goalId: string | null) {
@@ -310,22 +354,43 @@ export default function Home() {
 
   function restoreCurrentRoute() {
     const currentView = viewRef.current;
-    writeRoute({ view: currentView, goalId: currentView === "goal" ? selectedGoalIdRef.current ?? undefined : undefined });
+    writeRoute({
+      view: currentView,
+      goalId: currentView === "goal" ? selectedGoalIdRef.current ?? undefined : undefined,
+      groupId: currentView === "add-activity" ? activityGroupIdRef.current : undefined,
+      returnView: currentView === "add-activity" ? activityReturnViewRef.current : undefined,
+    });
   }
 
   function applyRoute(route: Route, { replace = false }: { replace?: boolean } = {}) {
+    const routeNotice = pendingRouteNoticeRef.current;
+    pendingRouteNoticeRef.current = null;
     if (route.view === "goal" && !route.goalId) route = { view: "log" };
     if (route.view === "goal" && !updateGoalRoute(route.goalId!)) {
       route = { view: "log" };
       replace = true;
     }
+    if (route.view === "add-activity") {
+      const returnView = route.returnView === "settings" ? "settings" : "log";
+      const groupId = dataRef.current
+        ? resolveActiveActivityGroupId({ groups: dataRef.current.groups, requestedId: route.groupId }) || undefined
+        : route.groupId;
+      if (dataRef.current && (groupId !== route.groupId || returnView !== route.returnView)) replace = true;
+      route = { ...route, groupId, returnView };
+      setActivityGroupId(groupId);
+      setActivityReturnView(returnView);
+    }
     if (route.view !== "goal") updateGoalRoute(null);
     setView(route.view);
-    setMessage(null);
+    setMessage(routeNotice);
     if (replace) writeRoute(route, { replace: true });
   }
 
-  function changeView(nextView: View, { goalId }: { goalId?: string } = {}) {
+  function changeView(nextView: View, { goalId, groupId, returnView }: { goalId?: string; groupId?: string; returnView?: ActivityCreationSource } = {}) {
+    if (activityCreateBusyRef.current && viewRef.current === "add-activity" && nextView !== "add-activity") {
+      setMessage({ kind: "info", text: "Wait for the activity update to finish before leaving this view." });
+      return;
+    }
     if (isSetupBusy && view === "settings" && nextView !== "settings") return;
     if (pendingGoalConfigRef.current && view === "goal" && nextView !== "goal") {
       setMessage({ kind: "info", text: "Wait for the goal update to finish before leaving this goal." });
@@ -334,9 +399,17 @@ export default function Home() {
     const nextGoalId = nextView === "goal" ? goalId ?? selectedGoalId : undefined;
     if (nextView === "goal" && !nextGoalId) return;
     if (nextView === view && (nextView !== "goal" || nextGoalId === selectedGoalId)) return;
+    const nextReturnView = nextView === "add-activity" ? returnView ?? (view === "settings" ? "settings" : "log") : undefined;
+    const nextGroupId = nextView === "add-activity"
+      ? groupId ?? (dataRef.current ? resolveActiveActivityGroupId({ groups: dataRef.current.groups }) || undefined : undefined)
+      : undefined;
     if (nextView === "goal") updateGoalRoute(nextGoalId!);
     else updateGoalRoute(null);
-    writeRoute({ view: nextView, goalId: nextGoalId ?? undefined });
+    if (nextView === "add-activity") {
+      setActivityGroupId(nextGroupId);
+      setActivityReturnView(nextReturnView!);
+    }
+    writeRoute({ view: nextView, goalId: nextGoalId ?? undefined, groupId: nextGroupId, returnView: nextReturnView });
     setView(nextView);
     setMessage(null);
   }
@@ -366,6 +439,19 @@ export default function Home() {
     writeRoute({ view: "log" }, { replace: true });
   }
 
+  function closeAddActivity(notice?: Notice) {
+    if (activityCreateBusyRef.current && !notice) {
+      setMessage({ kind: "info", text: "Wait for the activity update to finish before leaving this view." });
+      return;
+    }
+    pendingRouteNoticeRef.current = notice ?? null;
+    if (navigationReadyRef.current && routeDepthRef.current > 0) {
+      window.history.back();
+      return;
+    }
+    applyRoute({ view: activityReturnViewRef.current }, { replace: true });
+  }
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     const initialRoute = routeFromLocation(window.location);
@@ -386,6 +472,11 @@ export default function Home() {
       }
       if (setupBusyRef.current && viewRef.current === "settings" && nextRoute.view !== "settings") {
         setMessage({ kind: "info", text: "Wait for the setup update to finish before leaving setup." });
+        restoreCurrentRoute();
+        return;
+      }
+      if (activityCreateBusyRef.current && viewRef.current === "add-activity" && nextRoute.view !== "add-activity" && !pendingRouteNoticeRef.current) {
+        setMessage({ kind: "info", text: "Wait for the activity update to finish before leaving this view." });
         restoreCurrentRoute();
         return;
       }
@@ -1338,7 +1429,7 @@ export default function Home() {
           className="brand"
           onClick={() => changeView("log")}
           aria-label="Go to log"
-          disabled={isSavingGoalConfig || (isSetupBusy && view === "settings")}
+          disabled={isSavingGoalConfig || isActivityCreateBusy || (isSetupBusy && view === "settings")}
         >
           <span className="brand-mark" aria-hidden="true" />
           <span>daymark</span>
@@ -1350,7 +1441,9 @@ export default function Home() {
               ? "Your calendar"
               : view === "goal"
                 ? "Goal history"
-                : "Your setup"}
+                : view === "add-activity"
+                  ? "Add activity"
+                  : "Your setup"}
         </div>
         <div className={`connection-pill ${connectionState}`} role="status">
           <Icon
@@ -1397,6 +1490,7 @@ export default function Home() {
             onToggleActivity={toggleActivity}
             onToggleGoal={toggleGoal}
             onOpenGoal={openGoal}
+            onOpenAddActivity={(groupId) => changeView("add-activity", { groupId, returnView: "log" })}
             onSave={saveEntry}
             onDelete={deleteSelectedEntry}
             isSaving={isSaving}
@@ -1438,6 +1532,17 @@ export default function Home() {
             onCloseIconPicker={() => setGoalIconPickerOpen(false)}
           />
         )}
+        {view === "add-activity" && (
+          <AddActivityView
+            data={data}
+            initialGroupId={activityGroupId}
+            sourceView={activityReturnView}
+            onBack={(notice) => closeAddActivity(notice)}
+            onRefresh={loadBootstrap}
+            onMessage={setMessage}
+            onBusyChange={setActivityCreateBusy}
+          />
+        )}
         {view === "settings" && (
           <SetupView
             data={data}
@@ -1445,6 +1550,7 @@ export default function Home() {
             onMessage={setMessage}
             onBusyChange={setIsSetupBusy}
             onOpenGoal={openGoal}
+            onOpenAddActivity={(groupId) => changeView("add-activity", { groupId, returnView: "settings" })}
           />
         )}
       </main>
@@ -1452,12 +1558,12 @@ export default function Home() {
       <nav
         className="bottom-nav"
         aria-label="Primary navigation"
-        aria-busy={isSavingGoalConfig || (isSetupBusy && view === "settings")}
+        aria-busy={isSavingGoalConfig || isActivityCreateBusy || (isSetupBusy && view === "settings")}
       >
         <button
           className={view === "log" ? "active" : ""}
           onClick={() => changeView("log")}
-          disabled={isSavingGoalConfig || (isSetupBusy && view === "settings")}
+          disabled={isSavingGoalConfig || isActivityCreateBusy || (isSetupBusy && view === "settings")}
         >
           <span className="nav-icon">
             <Icon name={UI_ICONS.log} />
@@ -1467,7 +1573,7 @@ export default function Home() {
         <button
           className={view === "calendar" ? "active" : ""}
           onClick={() => changeView("calendar")}
-          disabled={isSavingGoalConfig || (isSetupBusy && view === "settings")}
+          disabled={isSavingGoalConfig || isActivityCreateBusy || (isSetupBusy && view === "settings")}
         >
           <span className="nav-icon">
             <Icon name={UI_ICONS.calendar} />
@@ -1477,7 +1583,7 @@ export default function Home() {
         <button
           className={view === "settings" ? "active" : ""}
           onClick={() => changeView("settings")}
-          disabled={isSavingGoalConfig || (isSetupBusy && view === "settings")}
+          disabled={isSavingGoalConfig || isActivityCreateBusy || (isSetupBusy && view === "settings")}
         >
           <span className="nav-icon">
             <Icon name={UI_ICONS.settings} />
@@ -1502,6 +1608,7 @@ function LogView({
   onToggleActivity,
   onToggleGoal,
   onOpenGoal,
+  onOpenAddActivity,
   onSave,
   onDelete,
   isSaving,
@@ -1522,6 +1629,7 @@ function LogView({
   onToggleActivity: (id: string) => void;
   onToggleGoal: (id: string) => void;
   onOpenGoal: (id: string) => void;
+  onOpenAddActivity: (groupId: string) => void;
   onSave: () => void;
   onDelete: () => void;
   isSaving: boolean;
@@ -1706,6 +1814,7 @@ function LogView({
               isLoadingDate={isLoadingDate}
               pendingSelectionKeys={pendingSelectionKeys}
               onToggleActivity={onToggleActivity}
+              onOpenAddActivity={onOpenAddActivity}
             />
           )}
         </section>
@@ -1754,6 +1863,139 @@ function LogView({
   );
 }
 
+function AddActivityView({
+  data,
+  initialGroupId,
+  sourceView,
+  onBack,
+  onRefresh,
+  onMessage,
+  onBusyChange,
+}: {
+  data: Bootstrap;
+  initialGroupId?: string;
+  sourceView: ActivityCreationSource;
+  onBack: (notice?: Notice) => void;
+  onRefresh: () => Promise<Bootstrap>;
+  onMessage: (message: Notice) => void;
+  onBusyChange: (busy: boolean) => void;
+}) {
+  const activeGroups = useMemo(() => data.groups.filter((group) => !group.archived), [data.groups]);
+  const [name, setName] = useState("");
+  const [icon, setIcon] = useState("category");
+  const [groupId, setGroupId] = useState(() => resolveActiveActivityGroupId({ groups: data.groups, requestedId: initialGroupId }));
+  const [iconPickerOpen, setIconPickerOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const selectedGroupId = resolveActiveActivityGroupId({ groups: data.groups, requestedId: groupId || initialGroupId });
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (isSaving) return;
+    const activityName = name.trim();
+    const activeGroupId = selectedGroupId;
+    if (!activityName) {
+      onMessage({ kind: "error", text: "Activity name is required." });
+      return;
+    }
+    if (!activeGroupId) {
+      onMessage({ kind: "error", text: "Create an active activity group before adding an activity." });
+      return;
+    }
+    if (!navigator.onLine) {
+      onMessage({ kind: "error", text: "You’re offline. Reconnect before adding an activity." });
+      return;
+    }
+    setIsSaving(true);
+    onBusyChange(true);
+    onMessage({ kind: "info", text: "Adding activity…" });
+    try {
+      const response = await fetch("/api/catalog", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ kind: "activity", name: activityName, groupId: activeGroupId, icon }),
+      });
+      const result = (await response.json()) as { activity?: Activity; error?: string };
+      if (!response.ok || !result.activity) throw new Error(result.error ?? "Could not add activity.");
+      try {
+        await onRefresh();
+      } catch (error) {
+        onMessage({ kind: "error", text: `Created, but refresh failed; refresh the page before retrying. ${(error as Error).message}` });
+        return;
+      }
+      onBack({ kind: "success", text: "Activity added." });
+    } catch (error) {
+      onMessage({ kind: "error", text: (error as Error).message });
+    } finally {
+      onBusyChange(false);
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <section className="page-section activity-create-page">
+      <div className="page-intro activity-create-intro">
+        <button className="back-button" onClick={() => onBack()} disabled={isSaving}>
+          <Icon name="arrow_back" /> {sourceView === "settings" ? "Setup" : "Log"}
+        </button>
+        <div className="activity-create-title">
+          <span className="goal-detail-icon"><Icon name={icon} /></span>
+          <div>
+            <p className="eyebrow">Activities</p>
+            <h1>Add new activity</h1>
+            <p className="muted">Add something you want to include in your daily check-in.</p>
+          </div>
+        </div>
+      </div>
+
+      <form className="settings-card goal-config-card activity-create-card" onSubmit={(event) => void submit(event)} aria-busy={isSaving}>
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">New activity</p>
+            <h2>What should we call it?</h2>
+          </div>
+        </div>
+        <label className="goal-config-field">
+          <span>Name</span>
+          <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Activity name" autoFocus disabled={isSaving} required />
+        </label>
+        <label className="goal-config-field">
+          <span>Activity group</span>
+          <select aria-label="Activity group" value={selectedGroupId} onChange={(event) => setGroupId(event.target.value)} disabled={isSaving || activeGroups.length === 0}>
+            {activeGroups.length === 0 && <option value="">No active groups available</option>}
+            {activeGroups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+          </select>
+        </label>
+        <div className="goal-icon-setting">
+          <span>Icon</span>
+          <button type="button" className="goal-icon-button" onClick={() => setIconPickerOpen(true)} disabled={isSaving} aria-label="Choose activity icon">
+            <Icon name={icon} />
+            <span>Change icon</span>
+          </button>
+        </div>
+        <div className="goal-config-actions activity-create-actions">
+          <button type="submit" className="primary-button" disabled={isSaving || activeGroups.length === 0} aria-busy={isSaving}>
+            {isSaving ? "Adding…" : "Add activity"}
+          </button>
+          <button type="button" className="secondary-button" onClick={() => onBack()} disabled={isSaving}>Cancel</button>
+        </div>
+      </form>
+
+      {iconPickerOpen && (
+        <IconPicker
+          activityName={name || "your new activity"}
+          currentIcon={icon}
+          isSaving={isSaving}
+          onClose={() => setIconPickerOpen(false)}
+          onSelect={(nextIcon) => {
+            setIcon(nextIcon);
+            setIconPickerOpen(false);
+          }}
+        />
+      )}
+    </section>
+  );
+}
+
 type ActivityGroupListProps = {
   groups: Array<{ group: ActivityGroup; activities: Activity[] }>;
   activityQuery: string;
@@ -1762,6 +2004,7 @@ type ActivityGroupListProps = {
   isLoadingDate: boolean;
   pendingSelectionKeys: Set<string>;
   onToggleActivity: (id: string) => void;
+  onOpenAddActivity: (groupId: string) => void;
 };
 
 function ActivityGroupList({
@@ -1772,6 +2015,7 @@ function ActivityGroupList({
   isLoadingDate,
   pendingSelectionKeys,
   onToggleActivity,
+  onOpenAddActivity,
 }: ActivityGroupListProps) {
   const hasQuery = activityQuery.trim().length > 0;
 
@@ -1797,6 +2041,18 @@ function ActivityGroupList({
                   {summary.activityCount} {activityLabel} ·{" "}
                   {summary.selectedCount} selected
                 </span>
+                <button
+                  type="button"
+                  className="add-activity-button"
+                  aria-label={`Add new activity to ${group.name}`}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onOpenAddActivity(group.id);
+                  }}
+                >
+                  + Add new
+                </button>
                 <Icon name="expand_more" className="group-expand-icon" />
               </span>
             </summary>

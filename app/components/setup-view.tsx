@@ -17,6 +17,7 @@ export type SetupViewProps = {
   onMessage: (message: SetupMessage) => void;
   onBusyChange: (busy: boolean) => void;
   onOpenGoal: (goalId: string) => void;
+  onOpenAddActivity: (groupId: string) => void;
 };
 
 function usePendingActions({ onBusyChange }: { onBusyChange: (busy: boolean) => void }) {
@@ -174,10 +175,8 @@ export function IconPicker({
   );
 }
 
-export function SetupView({ data, onRefresh, onMessage, onBusyChange, onOpenGoal }: SetupViewProps) {
+export function SetupView({ data, onRefresh, onMessage, onBusyChange, onOpenGoal, onOpenAddActivity }: SetupViewProps) {
   const [groupName, setGroupName] = useState("");
-  const [activityName, setActivityName] = useState("");
-  const [activityGroup, setActivityGroup] = useState(data.groups.find((group) => !group.archived)?.id ?? "");
   const [goalName, setGoalName] = useState("");
   const [activityQuery, setActivityQuery] = useState("");
   const [iconPickerActivity, setIconPickerActivity] = useState<{ id: string; name: string; icon: string } | null>(null);
@@ -550,7 +549,24 @@ export function SetupView({ data, onRefresh, onMessage, onBusyChange, onOpenGoal
                 <details key={group.id} open={Boolean(query) || undefined}>
                   <summary>
                     <span>{group.name}{group.archived ? " · archived" : ""}</span>
-                    <span className="management-group-meta"><span>{totalLabel}</span><Icon name="expand_more" className="group-expand-icon" /></span>
+                    <span className="management-group-meta">
+                      <span>{totalLabel}</span>
+                      {!group.archived && (
+                        <button
+                          type="button"
+                          className="add-activity-button"
+                          aria-label={`Add new activity to ${group.name}`}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            onOpenAddActivity(group.id);
+                          }}
+                        >
+                          + Add new
+                        </button>
+                      )}
+                      <Icon name="expand_more" className="group-expand-icon" />
+                    </span>
                   </summary>
                   <div className="management-list">
                     {activities.map((activity, index, groupActivities) => (
@@ -582,11 +598,6 @@ export function SetupView({ data, onRefresh, onMessage, onBusyChange, onOpenGoal
                 </details>
               );
             })}
-          </div>
-          <div className="inline-form stacked-mobile">
-            <input value={activityName} onChange={(event) => setActivityName(event.target.value)} placeholder="New activity name" aria-busy={isKindReordering("activity") || isPending("create:activity")} disabled={isKindReordering("activity") || isPending("create:activity")} />
-            <select value={activityGroup} onChange={(event) => setActivityGroup(event.target.value)} aria-busy={isKindReordering("activity") || isPending("create:activity")} disabled={isKindReordering("activity") || isPending("create:activity")}>{activeGroups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select>
-            <button className={`secondary-button ${isKindReordering("activity") || isPending("create:activity") ? "pending-action" : ""}`} aria-busy={isKindReordering("activity") || isPending("create:activity")} disabled={isKindReordering("activity") || isPending("create:activity")} onClick={() => void create({ payload: { kind: "activity", name: activityName, groupId: activityGroup }, reset: () => setActivityName("") })}><Icon name={isPending("create:activity") ? UI_ICONS.sync : UI_ICONS.add} /> {isPending("create:activity") ? "Adding…" : isKindReordering("activity") ? "Reordering…" : "Add activity"}</button>
           </div>
         </section>
 
