@@ -70,11 +70,30 @@ unsaved drafts per logical date in device-local storage and clearly reports
 online, offline, and failed-save states; a successful save clears that local
 draft.
 
-## Cloudflare deployment notes
+## Cloudflare deployment
 
-`wrangler.jsonc` declares the D1 binding and migrations. Create/configure the
-real D1 database and deploy the Worker through Wrangler when ready; this
-workspace intentionally does not create or mutate remote Cloudflare resources.
+`wrangler.jsonc` declares the D1 binding and migrations. The GitHub workflow
+`.github/workflows/deploy-production.yml` deploys production on pushes to
+`main` or `master`. It runs lint and the full test command, applies all checked-in
+D1 migrations to the remote `daylio-clone` database, and then runs `npm run deploy`.
+The Worker deploy does not start if lint, tests, or migrations fail. If the
+Worker deploy fails after migrations succeed, the database remains migrated and
+the next workflow run applies only pending migrations before retrying the deploy.
+
+Before the first production push:
+
+1. In Cloudflare, create a scoped API token for this account only. Grant
+   `Workers Scripts: Edit` and `D1: Edit` permissions. Do not grant access to
+   other accounts.
+2. In the GitHub repository, create the `production` environment. Add the
+   `CLOUDFLARE_API_TOKEN` token and the `CLOUDFLARE_ACCOUNT_ID` Cloudflare
+   account ID as environment secrets with these exact names.
+3. Optionally protect the `production` environment with required reviewers or
+   branch rules. The workflow uses this environment for every production deploy.
+
+Keep the token in GitHub Secrets. Do not commit it or print it in workflow logs.
+To retry after a failure, fix the reported issue and push a new commit to
+`main` or `master`.
 
 For the single-user lock, configure Cloudflare Access JWT verification on the
 Worker with:
