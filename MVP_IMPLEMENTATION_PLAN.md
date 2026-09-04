@@ -135,7 +135,7 @@ Never commit the real .daylio file, CSV, extracted JSON, photos, generated SQL c
 
 ## 7. Dependency policy
 
-Start from Cloudflare's current React + Vite Worker scaffold and use npm.
+Start from Cloudflare's current React + Vite Worker scaffold and use pnpm.
 
 Prefer the smallest dependency set:
 
@@ -613,7 +613,7 @@ Each phase should end with passing tests and a small reviewable commit. Do not d
 
 ### Phase 0: scaffold and guardrails
 
-- Create the current Cloudflare React + Vite Worker scaffold with npm.
+- Create the current Cloudflare React + Vite Worker scaffold with pnpm.
 - Establish the repository layout, formatting, typecheck, tests, and build.
 - Add privacy-focused .gitignore rules before touching exports.
 - Add a basic Worker health route and React shell.

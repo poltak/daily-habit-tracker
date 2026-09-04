@@ -10,25 +10,25 @@ Cloudflare D1.
 Prerequisites: Node.js `>=22.13.0` and Python 3.
 
 ```bash
-npm install
-npm run dev
+pnpm install
+pnpm run dev
 ```
 
-`npm run dev` builds the vinext output, applies the checked-in D1 migrations,
+`pnpm run dev` builds the vinext output, applies the checked-in D1 migrations,
 and starts the compiled Worker with `wrangler dev --local` on
 `http://localhost:3000`. It is not a memory-only or Vite-mocked backend. When
 no Cloudflare Access variables are set, local API requests are allowed and the
-configured local D1 binding is used. Use `npm run dev:vite` only when you want
+configured local D1 binding is used. Use `pnpm run dev:vite` only when you want
 the separate HMR-oriented Vite preview.
 
 Useful checks:
 
 ```bash
-npm test
-npm run test:import
-npm run lint
-npm run typecheck
-npm run build
+pnpm test
+pnpm run test:import
+pnpm run lint
+pnpm run typecheck
+pnpm run build
 ```
 
 ## Import a Daylio backup
@@ -75,7 +75,7 @@ draft.
 `wrangler.jsonc` declares the D1 binding and migrations. The GitHub workflow
 `.github/workflows/deploy-production.yml` deploys production on pushes to
 `main` or `master`. It runs lint and the full test command, applies all checked-in
-D1 migrations to the remote `daylio-clone` database, and then runs `npm run deploy`.
+D1 migrations to the remote `daylio-clone` database, and then runs `pnpm run deploy`.
 The Worker deploy does not start if lint, tests, or migrations fail. If the
 Worker deploy fails after migrations succeed, the database remains migrated and
 the next workflow run applies only pending migrations before retrying the deploy.

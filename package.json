@@ -2,18 +2,19 @@
   "name": "daylio-clone",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@11.25.0",
   "engines": {
     "node": ">=22.13.0"
   },
   "scripts": {
-    "dev": "npm run dev:wrangler",
+    "dev": "pnpm run dev:wrangler",
     "dev:vite": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext dev",
     "build": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext build",
     "db:migrate:local": "wrangler d1 migrations apply daylio-clone --local --config wrangler.jsonc --persist-to .wrangler/state",
-    "dev:wrangler": "npm run build && npm run db:migrate:local && wrangler dev --config dist/server/wrangler.json --local --persist-to .wrangler/state --port 3000",
-    "deploy": "npm run build && wrangler deploy --config dist/server/wrangler.json",
+    "dev:wrangler": "pnpm run build && pnpm run db:migrate:local && wrangler dev --config dist/server/wrangler.json --local --persist-to .wrangler/state --port 3000",
+    "deploy": "pnpm run build && wrangler deploy --config dist/server/wrangler.json",
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
-    "test": "npm run build && npm run typecheck && npm run test:import && node --experimental-strip-types --test --test-concurrency=1 tests/*.test.mjs",
+    "test": "pnpm run build && pnpm run typecheck && pnpm run test:import && node --experimental-strip-types --test --test-concurrency=1 tests/*.test.mjs",
     "test:import": "python3 -m unittest discover -s tests -p 'test_*.py'",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "typecheck": "tsc --noEmit",
