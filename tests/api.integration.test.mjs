@@ -36,8 +36,14 @@ async function waitForServer() {
 }
 
 async function json(path, init) {
-  const response = await fetch(`${baseUrl}${path}`, { ...init, headers: { "content-type": "application/json", ...(init?.headers ?? {}) } });
-  const rawBody = await response.text();
+  const request = () => fetch(`${baseUrl}${path}`, { ...init, headers: { "content-type": "application/json", ...(init?.headers ?? {}) } });
+  let response = await request();
+  let rawBody = await response.text();
+  if (init?.method === "PUT" && response.status === 503 && rawBody.includes("Your worker restarted mid-request")) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    response = await request();
+    rawBody = await response.text();
+  }
   let body;
   try {
     body = JSON.parse(rawBody);
