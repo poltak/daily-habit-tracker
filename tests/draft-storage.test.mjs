@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { afterEach } from "node:test";
 
 const { clearStoredDraft, draftMatchesServerVersion, readActiveStoredDraft, readStoredDraft, recoverStoredDraft, rememberDraftDate, writeStoredDraft } = await import("../lib/draft-storage.ts");
+
+const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+afterEach(() => {
+  if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
+  else delete globalThis.window;
+});
 
 function createStorage() {
   const values = new Map();
@@ -48,4 +54,34 @@ test("malformed drafts are ignored", () => {
   globalThis.window = { localStorage };
   localStorage.setItem("daymark:draft:v1:2026-07-31", JSON.stringify({ logicalDate: "2026-07-31", draft: { moodId: 42 } }));
   assert.equal(readStoredDraft("2026-07-31"), null);
+});
+
+test("a failed draft write preserves the last recoverable active draft", () => {
+  const localStorage = createStorage();
+  globalThis.window = { localStorage };
+  writeStoredDraft("2026-07-31", draft);
+
+  const setItem = localStorage.setItem;
+  localStorage.setItem = (key, value) => {
+    if (key === "daymark:draft:v1:2026-08-01") throw new Error("Storage quota exceeded.");
+    setItem(key, value);
+  };
+
+  assert.doesNotThrow(() => writeStoredDraft("2026-08-01", { ...draft, localTime: "22:00" }));
+  assert.equal(readStoredDraft("2026-08-01"), null);
+  assert.equal(readActiveStoredDraft()?.logicalDate, "2026-07-31");
+  assert.deepEqual(readActiveStoredDraft()?.draft, draft);
+});
+
+test("draft writes remain recoverable if the active-date pointer cannot be saved", () => {
+  const localStorage = createStorage();
+  globalThis.window = { localStorage };
+  const setItem = localStorage.setItem;
+  localStorage.setItem = (key, value) => {
+    if (key === "daymark:active-draft-date:v1") throw new Error("Storage unavailable.");
+    setItem(key, value);
+  };
+
+  assert.doesNotThrow(() => writeStoredDraft("2026-07-31", draft));
+  assert.deepEqual(recoverStoredDraft("2026-07-31", entry), draft);
 });

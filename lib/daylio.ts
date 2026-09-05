@@ -684,7 +684,9 @@ export class DaylioMemoryStore {
   updateActivity(id: string, patch: Partial<Pick<Activity, "name" | "groupId" | "icon" | "sortOrder" | "archived">>) {
     const activity = this.activities.get(id);
     if (!activity) throw new Error("Activity not found.");
-    const next = { ...activity, ...patch, icon: patch.icon ? iconForActivity(activity.name, patch.icon) : activity.icon, name: patch.name?.trim() || activity.name };
+    const name = patch.name?.trim() || activity.name;
+    const icon = iconForActivity(name, patch.icon ?? activity.icon);
+    const next = { ...activity, ...patch, icon, name };
     this.activities.set(id, next);
     return next;
   }
@@ -717,7 +719,7 @@ export class DaylioMemoryStore {
       targetPerWeek: patch.targetPerWeek === undefined ? goal.targetPerWeek : patch.targetPerWeek,
       weekdaysMask: patch.weekdaysMask === undefined ? goalWeekdayMask(goal) : patch.weekdaysMask,
     });
-    const next = { ...goal, ...patch, ...config, materialIcon: isGoalIcon(patch.materialIcon) ? patch.materialIcon : patch.materialIcon === undefined ? goal.materialIcon : "task_alt" };
+    const next = { ...goal, ...patch, ...config, name: patch.name?.trim() || goal.name, materialIcon: isGoalIcon(patch.materialIcon) ? patch.materialIcon : patch.materialIcon === undefined ? goal.materialIcon : "task_alt" };
     this.goals.set(id, next);
     return next;
   }

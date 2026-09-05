@@ -79,8 +79,8 @@ export function writeStoredDraft(logicalDate: string, draft: Draft) {
   const currentStorage = storage();
   if (!currentStorage) return;
   try {
-    rememberDraftDate(logicalDate);
     currentStorage.setItem(storageKey(logicalDate), JSON.stringify({ logicalDate, draft, savedAt: new Date().toISOString() } satisfies StoredDraft));
+    rememberDraftDate(logicalDate);
   } catch {
     // Draft recovery is best effort when storage is unavailable or full.
   }
