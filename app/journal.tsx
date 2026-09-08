@@ -34,6 +34,7 @@ import {
 import { createLatestRequestGate } from "../lib/latest-request-gate";
 import { Icon } from "./components/icon";
 import { IconPicker, SetupView } from "./components/setup-view";
+import { ThemeControl, useJournalTheme } from "./components/theme-control";
 
 type View = "log" | "calendar" | "settings" | "goal" | "add-activity";
 type ActivityCreationSource = "log" | "settings";
@@ -250,6 +251,7 @@ function restoreGoalCompletionStates({
 }
 
 export default function Journal() {
+  const { preference: themePreference, updatePreference: updateThemePreference } = useJournalTheme();
   const [data, setData] = useState<Bootstrap | null>(null);
   const [view, setView] = useState<View>("log");
   const [selectedDate, setSelectedDate] = useState("");
@@ -314,6 +316,10 @@ export default function Journal() {
   activityReturnViewRef.current = activityReturnView;
   activityGroupIdRef.current = activityGroupId;
   activityCreateBusyRef.current = isActivityCreateBusy;
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [view, selectedGoalId]);
 
   function markLocalDraft(value: boolean) {
     hasLocalDraftRef.current = value;
@@ -1418,6 +1424,7 @@ export default function Journal() {
 
   return (
     <div className="app-shell">
+      <a className="skip-link" href="#journal-content">Skip to content</a>
       <header className="topbar">
         <button
           className="brand"
@@ -1439,7 +1446,7 @@ export default function Journal() {
                   ? "Add activity"
                   : "Your setup"}
         </div>
-        <div className={`connection-pill ${connectionState}`} role="status">
+        <div className={`connection-pill ${connectionState}`} role="status" aria-label={`Connection: ${connectionState}`}>
           <Icon
             name={
               connectionState === "offline"
@@ -1457,9 +1464,10 @@ export default function Journal() {
                 ? " offline"
                 : " sync issue"}
         </div>
+        <ThemeControl preference={themePreference} onChange={updateThemePreference} />
       </header>
 
-      <main className="content-shell">
+      <main className="content-shell" id="journal-content" tabIndex={-1}>
         {!data && (
           <JournalLoading
             view={view}
@@ -1550,6 +1558,8 @@ export default function Journal() {
         {data && view === "settings" && (
           <SetupView
             data={data}
+            themePreference={themePreference}
+            onThemeChange={updateThemePreference}
             onRefresh={loadBootstrap}
             onMessage={setMessage}
             onBusyChange={setIsSetupBusy}
@@ -1564,8 +1574,10 @@ export default function Journal() {
         aria-label="Primary navigation"
         aria-busy={isSavingGoalConfig || isActivityCreateBusy || (isSetupBusy && view === "settings")}
       >
+        <span className="nav-heading" aria-hidden="true">Your journal</span>
         <button
           className={view === "log" ? "active" : ""}
+          aria-current={view === "log" ? "page" : undefined}
           onClick={() => changeView("log")}
           disabled={isSavingGoalConfig || isActivityCreateBusy || (isSetupBusy && view === "settings")}
         >
@@ -1576,6 +1588,7 @@ export default function Journal() {
         </button>
         <button
           className={view === "calendar" ? "active" : ""}
+          aria-current={view === "calendar" ? "page" : undefined}
           onClick={() => changeView("calendar")}
           disabled={isSavingGoalConfig || isActivityCreateBusy || (isSetupBusy && view === "settings")}
         >
@@ -1586,6 +1599,7 @@ export default function Journal() {
         </button>
         <button
           className={view === "settings" ? "active" : ""}
+          aria-current={view === "settings" ? "page" : undefined}
           onClick={() => changeView("settings")}
           disabled={isSavingGoalConfig || isActivityCreateBusy || (isSetupBusy && view === "settings")}
         >
@@ -1594,6 +1608,7 @@ export default function Journal() {
           </span>
           <span>Setup</span>
         </button>
+        <span className="nav-footer"><Icon name="spa" /><span>A little space<br />for every day.</span></span>
       </nav>
     </div>
   );
@@ -1615,7 +1630,7 @@ function JournalLoading({ view, error, onRetry }: { view: View; error?: string; 
           <div className="loading-placeholder loading-line" aria-hidden="true" />
         </div>
       </section>
-      <div aria-hidden="true">
+      <div className="loading-panels" aria-hidden="true">
         <section className="panel">
           <div className="loading-placeholder loading-heading" />
           <div className="loading-placeholder loading-row" />
@@ -1703,10 +1718,10 @@ function LogView({
         )}
         <section className="hero-card">
           <div>
-            <p className="eyebrow">One small check-in</p>
+            <p className="eyebrow">Your daily check-in</p>
             <h1>How did your day feel?</h1>
             <p className="muted">
-              Capture the shape of the day while it is still close.
+              Take a breath. Make a little room for your day.
             </p>
           </div>
           <div className="date-switcher" aria-label="Choose the logical day">
@@ -1751,8 +1766,11 @@ function LogView({
           <div className="section-heading">
             <div>
               <p className="eyebrow">Goals</p>
-              <h2>Keep the promises that matter</h2>
+              <h2>Small steps, every day</h2>
             </div>
+            <span className="section-count" aria-label="Completed goals">
+              {data.goals.filter((goal) => !goal.archived && draft.completedGoalIds.includes(goal.id)).length}/{data.goals.filter((goal) => !goal.archived).length}
+            </span>
           </div>
           <div className="goal-list">
             {data.goals
@@ -1778,7 +1796,7 @@ function LogView({
           <div className="section-heading">
             <div>
               <p className="eyebrow">Overall mood</p>
-              <h2>Pick one</h2>
+              <h2>How are you feeling?</h2>
             </div>
             <span className="required-label">required</span>
           </div>

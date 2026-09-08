@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type Bootstrap } from "../../lib/daylio";
 import { filterActivityGroups } from "../../lib/activity-groups";
 import { ACTIVITY_ICON_CHOICES, UI_ICONS } from "../../lib/icons";
-import { applyTheme, THEME_MEDIA_QUERY, THEME_STORAGE_KEY, readStoredThemePreference, type ThemePreference } from "../../lib/theme";
+import { type ThemePreference } from "../../lib/theme";
 import { acquirePendingAction, applyCatalogOverride, catalogKey, commitCatalogOverride, getReorderPlan, mergeCatalogOverride, releasePendingAction, rollbackCatalogOverride, sortCatalogItems, type CatalogKind, type CatalogOverride, type CatalogOverrides } from "../../lib/catalog-mutations";
 import { Icon } from "./icon";
 
@@ -13,6 +13,8 @@ type PatchResult = { status: "duplicate" | "patch-failed" | "saved" | "refresh-f
 
 export type SetupViewProps = {
   data: Bootstrap;
+  themePreference: ThemePreference;
+  onThemeChange: (preference: ThemePreference) => void;
   onRefresh: () => Promise<Bootstrap>;
   onMessage: (message: SetupMessage) => void;
   onBusyChange: (busy: boolean) => void;
@@ -92,6 +94,9 @@ export function IconPicker({
 }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
+  const dialogRef = useRef<HTMLElement>(null);
+  const closeRef = useRef(onClose);
+  useEffect(() => { closeRef.current = onClose; }, [onClose]);
   const categories = ["All", ...Array.from(new Set(ACTIVITY_ICON_CHOICES.map((choice) => choice.category)))];
   const normalizedQuery = query.trim().toLowerCase();
   const choices = ACTIVITY_ICON_CHOICES.filter(
@@ -101,13 +106,33 @@ export function IconPicker({
   );
 
   useEffect(() => {
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    dialogRef.current?.querySelector("input")?.focus();
     function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") closeRef.current();
+      if (event.key !== "Tab") return;
+      const controls = dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), [href], [tabindex="0"]');
+      if (!controls?.length) return;
+      const first = controls[0];
+      const last = controls[controls.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     }
 
     window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [onClose]);
+    return () => {
+      window.removeEventListener("keydown", closeOnEscape);
+      document.body.style.overflow = previousOverflow;
+      previousFocus?.focus({ preventScroll: true });
+    };
+  }, []);
 
   return (
     <div
@@ -118,6 +143,7 @@ export function IconPicker({
     >
       <section
         className="icon-picker"
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="icon-picker-title"
@@ -136,7 +162,6 @@ export function IconPicker({
         <label className="search-field icon-picker-search">
           <Icon name={UI_ICONS.search} />
           <input
-            autoFocus
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search icons by name or category"
@@ -175,12 +200,11 @@ export function IconPicker({
   );
 }
 
-export function SetupView({ data, onRefresh, onMessage, onBusyChange, onOpenGoal, onOpenAddActivity }: SetupViewProps) {
+export function SetupView({ data, themePreference, onThemeChange, onRefresh, onMessage, onBusyChange, onOpenGoal, onOpenAddActivity }: SetupViewProps) {
   const [groupName, setGroupName] = useState("");
   const [goalName, setGoalName] = useState("");
   const [activityQuery, setActivityQuery] = useState("");
   const [iconPickerActivity, setIconPickerActivity] = useState<{ id: string; name: string; icon: string } | null>(null);
-  const [themePreference, setThemePreference] = useState<ThemePreference>("system");
   const { isPending, runPending } = usePendingActions({ onBusyChange });
   const [catalogOverrides, setCatalogOverrides] = useState<CatalogOverrides>({});
 
@@ -198,41 +222,6 @@ export function SetupView({ data, onRefresh, onMessage, onBusyChange, onOpenGoal
 
   function isCatalogPending({ kind, id }: { kind: CatalogKind; id: string }) {
     return isPending(catalogActionKey({ kind, id })) || isKindReordering(kind);
-  }
-
-  useEffect(() => {
-    const media = typeof window.matchMedia === "function" ? window.matchMedia(THEME_MEDIA_QUERY) : null;
-    const syncTheme = () => {
-      let storage: Storage | undefined;
-      try {
-        storage = window.localStorage;
-      } catch {
-        storage = undefined;
-      }
-      const preference = readStoredThemePreference(storage);
-      setThemePreference(preference);
-      applyTheme({ root: document.documentElement, preference, systemTheme: media?.matches ? "dark" : "light" });
-    };
-
-    syncTheme();
-    if (media?.addEventListener) media.addEventListener("change", syncTheme);
-    else if (media?.addListener) media.addListener(syncTheme);
-
-    return () => {
-      if (media?.removeEventListener) media.removeEventListener("change", syncTheme);
-      else if (media?.removeListener) media.removeListener(syncTheme);
-    };
-  }, []);
-
-  function updateThemePreference(preference: ThemePreference) {
-    try {
-      window.localStorage.setItem(THEME_STORAGE_KEY, preference);
-    } catch {
-      // Keep the current session usable when storage is blocked.
-    }
-    const systemTheme = typeof window.matchMedia === "function" && window.matchMedia(THEME_MEDIA_QUERY).matches ? "dark" : "light";
-    applyTheme({ root: document.documentElement, preference, systemTheme });
-    setThemePreference(preference);
   }
 
   async function create({ payload, reset }: { payload: Record<string, unknown>; reset: () => void }) {
@@ -466,7 +455,7 @@ export function SetupView({ data, onRefresh, onMessage, onBusyChange, onOpenGoal
         <div className="page-intro">
           <p className="eyebrow">Your setup</p>
           <h1>Make it yours</h1>
-          <p className="muted">Create, rename, regroup, reorder, archive, and restore your catalog.</p>
+          <p className="muted">Your space, your routines. Set up a journal that feels like you.</p>
         </div>
 
         <section className="settings-card appearance-card">
@@ -485,8 +474,9 @@ export function SetupView({ data, onRefresh, onMessage, onBusyChange, onOpenGoal
                   name="theme-preference"
                   value={option.value}
                   checked={themePreference === option.value}
-                  onChange={() => updateThemePreference(option.value)}
+                  onChange={() => onThemeChange(option.value)}
                 />
+                <span className={`theme-preview theme-preview-${option.value}`} aria-hidden="true"><i /><i /><i /></span>
                 <span className="theme-option-content">
                   <span className="theme-option-icon"><Icon name={option.icon} /></span>
                   <span className="theme-option-copy"><strong>{option.label}</strong><small>{option.description}</small></span>
