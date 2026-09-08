@@ -249,7 +249,7 @@ function restoreGoalCompletionStates({
   return [...next];
 }
 
-export default function Home() {
+export default function Journal() {
   const [data, setData] = useState<Bootstrap | null>(null);
   const [view, setView] = useState<View>("log");
   const [selectedDate, setSelectedDate] = useState("");
@@ -569,6 +569,8 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
+    // Fetch once for this layout. Later refreshes are explicit user actions.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -1414,14 +1416,6 @@ export default function Home() {
     }
   }
 
-  if (!data)
-    return (
-      <main className="app-loading">
-        <span className="brand-mark" aria-hidden="true" />
-        <p>Opening your journal…</p>
-      </main>
-    );
-
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -1436,7 +1430,7 @@ export default function Home() {
         </button>
         <div className="topbar-date">
           {view === "log"
-            ? friendlyDate(selectedDate)
+            ? selectedDate ? friendlyDate(selectedDate) : "Your journal"
             : view === "calendar"
               ? "Your calendar"
               : view === "goal"
@@ -1466,7 +1460,17 @@ export default function Home() {
       </header>
 
       <main className="content-shell">
-        {message && view !== "log" && (
+        {!data && (
+          <JournalLoading
+            view={view}
+            error={connectionState === "error" || connectionState === "offline" ? message?.text ?? "Could not connect to your journal." : undefined}
+            onRetry={() => {
+              setMessage(null);
+              void loadBootstrap().catch((error: Error) => setMessage({ kind: "error", text: error.message }));
+            }}
+          />
+        )}
+        {data && message && view !== "log" && (
           <div className={`notice ${message.kind}`} role="status">
             {message.kind === "success"
               ? "✓"
@@ -1476,7 +1480,7 @@ export default function Home() {
             {message.text}
           </div>
         )}
-        {view === "log" && (
+        {data && view === "log" && (
           <LogView
             data={data}
             selectedDate={selectedDate}
@@ -1500,7 +1504,7 @@ export default function Home() {
             message={message}
           />
         )}
-        {view === "calendar" && (
+        {data && view === "calendar" && (
           <CalendarView
             month={calendarMonth}
             days={calendarDays}
@@ -1514,7 +1518,7 @@ export default function Home() {
             }}
           />
         )}
-        {view === "goal" && selectedGoalId && goalConfigDraft && (
+        {data && view === "goal" && selectedGoalId && goalConfigDraft && (
           <GoalDetailView
             goal={data.goals.find((candidate) => candidate.id === selectedGoalId) ?? null}
             activities={data.activities}
@@ -1532,7 +1536,7 @@ export default function Home() {
             onCloseIconPicker={() => setGoalIconPickerOpen(false)}
           />
         )}
-        {view === "add-activity" && (
+        {data && view === "add-activity" && (
           <AddActivityView
             data={data}
             initialGroupId={activityGroupId}
@@ -1543,7 +1547,7 @@ export default function Home() {
             onBusyChange={setActivityCreateBusy}
           />
         )}
-        {view === "settings" && (
+        {data && view === "settings" && (
           <SetupView
             data={data}
             onRefresh={loadBootstrap}
@@ -1591,6 +1595,39 @@ export default function Home() {
           <span>Setup</span>
         </button>
       </nav>
+    </div>
+  );
+}
+
+function JournalLoading({ view, error, onRetry }: { view: View; error?: string; onRetry: () => void }) {
+  return (
+    <div className="journal-loading" aria-busy={!error}>
+      {error ? (
+        <div className="notice error" role="alert">
+          <p>{error}</p>
+          <button type="button" className="loading-retry" onClick={onRetry}>Retry</button>
+        </div>
+      ) : <p className="sr-only" role="status">Loading journal data…</p>}
+      <section className="hero-card">
+        <div>
+          <p className="eyebrow">{view === "log" ? "Daily journal" : "Your journal"}</p>
+          <h1>{view === "log" ? "How did your day feel?" : view === "calendar" ? "Your calendar" : view === "settings" ? "Your setup" : view === "goal" ? "Goal history" : "Add activity"}</h1>
+          <div className="loading-placeholder loading-line" aria-hidden="true" />
+        </div>
+      </section>
+      <div aria-hidden="true">
+        <section className="panel">
+          <div className="loading-placeholder loading-heading" />
+          <div className="loading-placeholder loading-row" />
+          <div className="loading-placeholder loading-row" />
+        </section>
+        <section className="panel">
+          <div className="loading-placeholder loading-heading" />
+          <div className="mood-grid">
+            {Array.from({ length: 5 }, (_, index) => <div key={index} className="loading-placeholder loading-mood" />)}
+          </div>
+        </section>
+      </div>
     </div>
   );
 }
