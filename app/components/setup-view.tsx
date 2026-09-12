@@ -199,7 +199,7 @@ export function IconPicker({
           <div className="empty-inline">No icons match that search.</div>
         )}
         {choices.length > visibleLimit && (
-          <button className="ghost-button" onClick={() => setVisibleLimit((limit) => limit + ICON_PAGE_SIZE)} disabled={isSaving}>
+          <button className="ghost-button icon-picker-more" onClick={() => setVisibleLimit((limit) => limit + ICON_PAGE_SIZE)} disabled={isSaving}>
             Show more icons
           </button>
         )}

@@ -31,6 +31,12 @@ try {
   const dialog = page.getByRole("dialog", { name: "Choose an icon" });
   await dialog.waitFor();
   assert.equal(await dialog.locator(".icon-choice").count(), 120);
+  await dialog.getByRole("button", { name: "Show more icons", exact: true }).focus();
+  const bounds = await dialog.boundingBox();
+  const closeBounds = await dialog.getByRole("button", { name: "Close icon picker" }).boundingBox();
+  const moreBounds = await dialog.getByRole("button", { name: "Show more icons", exact: true }).boundingBox();
+  assert.ok(closeBounds.y >= bounds.y);
+  assert.ok(moreBounds.y + moreBounds.height < bounds.y + bounds.height - 10);
   await dialog.getByRole("button", { name: "Show more icons", exact: true }).click();
   assert.equal(await dialog.locator(".icon-choice").count(), 240);
   const search = dialog.getByRole("textbox", { name: "Search icons" });
