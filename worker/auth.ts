@@ -1,6 +1,6 @@
 type AccessClaims = { iss?: string; aud?: string | string[]; exp?: number; nbf?: number; email?: string; kid?: string };
 
-interface AccessEnvironment {
+export interface AccessEnvironment {
   ACCESS_TEAM_DOMAIN?: string;
   ACCESS_AUD?: string;
   ALLOWED_EMAIL?: string;

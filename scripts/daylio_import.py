@@ -14,7 +14,6 @@ import hashlib
 import json
 import sys
 import zipfile
-from collections import Counter
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -92,8 +91,6 @@ def normalize_backup(root: dict[str, Any], csv_rows: list[dict[str, str]] | None
     goal_entries = root.get("goalEntries", [])
 
     mood_by_id = {source_id(item["id"]): mood_name(item) for item in moods}
-    group_by_id = {source_id(item["id"]): item for item in groups}
-    tag_by_id = {source_id(item["id"]): item for item in tags}
     normalized_moods = [
         {"sourceId": source_id(item["id"]), "name": mood_name(item), "score": max(1, min(5, 6 - int(item.get("predefined_name_id", 3))))}
         for item in moods
