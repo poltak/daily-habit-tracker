@@ -25,6 +25,7 @@ import {
 import { validateEntryInput, validateEntryReferences as assertEntryReferences, validateExpectedVersion, versionConflict, type EntryInputCandidate } from "./entry-validation.ts";
 import { iconForActivity } from "./icons.ts";
 import { validateCatalogPatch } from "./catalog-validation.ts";
+import { validateImportPayload } from "./import-validation.ts";
 
 type Database = D1Database;
 
@@ -481,6 +482,10 @@ export class D1DaylioStore {
   }
 
   async importData(payload: ImportPayload) {
+    validateImportPayload(payload);
+    const sourceIdsByDate = new Map(payload.entries.map((entry) => [entry.logicalDate, `daylio-entry-${entry.sourceId}`]));
+    const conflicts = await rows<{ id: string; logical_date: string }>(this.database, this.database.prepare("SELECT id, logical_date FROM entries WHERE logical_date IN (SELECT value FROM json_each(?))").bind(JSON.stringify([...sourceIdsByDate.keys()])));
+    if (conflicts.some((entry) => entry.id !== sourceIdsByDate.get(entry.logical_date))) throw new Error("Import would replace an entry from a different source.");
     const sourceSha256 = payload.sourceSha256 ?? `manual-${crypto.randomUUID()}`;
     const runId = `import-${sourceSha256.slice(0, 32)}`;
     const reportJson = JSON.stringify({ entries: payload.entries.length, activities: payload.activities.length, goals: payload.goals.length, completions: payload.completions.length });

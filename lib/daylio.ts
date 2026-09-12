@@ -1,6 +1,7 @@
 import { ACTIVITY_ICON_CHOICES, iconForActivity } from "./icons.ts";
 import { isValidTime, validateEntryInput, validateEntryReferences, validateExpectedVersion, versionConflict } from "./entry-validation.ts";
 import { validateCatalogPatch } from "./catalog-validation.ts";
+import { validateImportPayload } from "./import-validation.ts";
 
 export type Mood = {
   id: string;
@@ -757,6 +758,11 @@ export class DaylioMemoryStore {
   }
 
   importData(payload: ImportPayload) {
+    validateImportPayload(payload);
+    for (const entry of payload.entries) {
+      const current = this.entries.get(entry.logicalDate);
+      if (current && current.id !== `daylio-entry-${entry.sourceId}`) throw new Error("Import would replace an entry from a different source.");
+    }
     const moodIds = new Map<string, string>();
     for (const mood of payload.moods) {
       const existing = [...this.moods.values()].find((candidate) => candidate.name.toLowerCase() === mood.name.toLowerCase());
