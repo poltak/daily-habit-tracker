@@ -8,10 +8,8 @@ export async function GET(_request: Request, context: { params: Promise<{ logica
   const { logicalDate } = await context.params;
   if (!isLogicalDate(logicalDate)) return Response.json({ error: "Invalid date." }, { status: 400 });
   const store = await getServerStore();
-  const entry = await store.getEntry(logicalDate);
-  const completedGoalIds = await store.getGoalCompletionIds(logicalDate);
-  const daySelections = await store.getDaySelections(logicalDate);
-  return entry ? Response.json({ entry, completedGoalIds, daySelections }) : Response.json({ entry: null, completedGoalIds, daySelections }, { status: 404 });
+  const state = await store.getEntryState(logicalDate);
+  return Response.json(state, { status: state.entry ? 200 : 404 });
 }
 
 export async function PUT(request: Request, context: { params: Promise<{ logicalDate: string }> }) {

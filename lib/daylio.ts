@@ -509,6 +509,14 @@ export class DaylioMemoryStore {
     };
   }
 
+  getEntryState(logicalDate: string) {
+    return {
+      entry: this.getEntry(logicalDate),
+      completedGoalIds: this.getGoalCompletionIds(logicalDate),
+      daySelections: this.getDaySelections(logicalDate),
+    };
+  }
+
   setMoodSelection(logicalDate: string, moodId: string): DayMoodSelection {
     if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
     if (typeof moodId !== "string" || !this.moods.has(moodId)) throw new Error("Choose one of the five moods.");

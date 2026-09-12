@@ -177,13 +177,39 @@ export class D1DaylioStore {
   }
 
   async getEntry(logicalDate: string) {
-    const result = await rows<EntryRow>(this.database, this.database.prepare("SELECT * FROM entries WHERE logical_date = ? AND deleted_at IS NULL LIMIT 1").bind(logicalDate));
-    if (!result[0]) return null;
-    const activities = await rows<{ activity_id: string }>(this.database, this.database.prepare("SELECT activity_id FROM entry_activities WHERE entry_id = ?").bind(result[0].id));
-    const goals = await this.getGoalCompletionIds(logicalDate);
-    const selections = await this.getDaySelections(logicalDate);
-    const activityIds = selections.activityOverrideIds.length > 0 ? selections.activityIds : activities.map((item) => item.activity_id);
-    return toEntry(result[0], activityIds, goals, selections.moodId ?? result[0].mood_id);
+    return (await this.getEntryState(logicalDate)).entry;
+  }
+
+  async getEntryState(logicalDate: string) {
+    if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
+    const [entryResult, moodResult, activityResult, linkResult, goalResult] = await this.database.batch([
+      "SELECT * FROM entries WHERE logical_date = ? AND deleted_at IS NULL LIMIT 1",
+      "SELECT mood_id FROM day_mood_selections WHERE logical_date = ?",
+      "SELECT activity_id, selected FROM day_activity_selections WHERE logical_date = ? ORDER BY activity_id",
+      "SELECT link.activity_id FROM entries JOIN entry_activities AS link ON link.entry_id = entries.id WHERE entries.logical_date = ? AND entries.deleted_at IS NULL ORDER BY link.activity_id",
+      "SELECT goal_id FROM goal_completions WHERE logical_date = ? ORDER BY goal_id",
+    ].map((query) => this.database.prepare(query).bind(logicalDate)));
+    const entry = (entryResult.results as EntryRow[])[0];
+    const mood = (moodResult.results as { mood_id: string }[])[0];
+    const activities = activityResult.results as { activity_id: string; selected: number }[];
+    const activityIds = new Set((linkResult.results as { activity_id: string }[]).map((row) => row.activity_id));
+    for (const selection of activities) {
+      if (selection.selected) activityIds.add(selection.activity_id);
+      else activityIds.delete(selection.activity_id);
+    }
+    const completedGoalIds = (goalResult.results as { goal_id: string }[]).map((row) => row.goal_id);
+    const daySelections: DaySelections = {
+      logicalDate,
+      moodId: mood?.mood_id ?? entry?.mood_id ?? null,
+      activityIds: [...activityIds],
+      moodOverride: Boolean(mood),
+      activityOverrideIds: activities.map((row) => row.activity_id),
+    };
+    return {
+      entry: entry ? toEntry(entry, daySelections.activityIds, completedGoalIds, daySelections.moodId ?? entry.mood_id) : null,
+      completedGoalIds,
+      daySelections,
+    };
   }
 
   async getDaySelections(logicalDate: string): Promise<DaySelections> {
@@ -287,12 +313,16 @@ export class D1DaylioStore {
   }
 
   private async knownReferenceIds({ table, ids }: { table: "activities" | "goals"; ids: string[] }) {
-    const known = new Set<string>();
-    for (const id of new Set(ids)) {
-      const row = await this.database.prepare(`SELECT id FROM ${table} WHERE id = ? LIMIT 1`).bind(id).first<{ id: string }>();
-      if (row) known.add(row.id);
+    const uniqueIds = [...new Set(ids)];
+    const statements: D1PreparedStatement[] = [];
+    // Leave room below D1's 100 bound parameters per statement.
+    for (let index = 0; index < uniqueIds.length; index += 90) {
+      const chunk = uniqueIds.slice(index, index + 90);
+      statements.push(this.database.prepare(`SELECT id FROM ${table} WHERE id IN (${chunk.map(() => "?").join(",")})`).bind(...chunk));
     }
-    return known;
+    if (statements.length === 0) return new Set<string>();
+    const results = await this.database.batch<{ id: string }>(statements);
+    return new Set(results.flatMap((result) => result.results.map((row) => row.id)));
   }
 
   private async validateEntryReferences(input: EntryInputCandidate) {

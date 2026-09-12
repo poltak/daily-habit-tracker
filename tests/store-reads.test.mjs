@@ -49,3 +49,32 @@ test("entry page reads stay bounded as history grows and do not load the catalog
   assert.ok(plan.some(({ detail }) => detail.includes("goal_completions_date_goal_idx")));
   assert.ok(plan.every(({ detail }) => !detail.includes("SCAN completion")));
 });
+
+test("a date response reads its state once, including dates without entries", async (t) => {
+  const database = createTestDatabase();
+  t.after(() => database.sqlite.close());
+  const store = new D1DaylioStore(database);
+  await store.setGoalCompletion("2026-01-01", "goal-move", true);
+  database.queries.length = 0;
+  const state = await store.getEntryState("2026-01-01");
+  assert.equal(state.entry, null);
+  assert.deepEqual(state.completedGoalIds, ["goal-move"]);
+  assert.deepEqual(state.daySelections.activityIds, ["activity-gym"]);
+  assert.equal(database.queries.length, 5);
+});
+
+test("entry reference validation batches large selections within D1 binding limits", async (t) => {
+  const database = createTestDatabase();
+  t.after(() => database.sqlite.close());
+  const store = new D1DaylioStore(database);
+  const ids = Array.from({ length: 205 }, (_, i) => `activity-test-${i}`);
+  for (const id of ids) database.sqlite.prepare("INSERT INTO activities (id, group_id, name, sort_order) VALUES (?, 'group-health', ?, 0)").run(id, id);
+  const input = { moodId: "mood-good", activityIds: [...ids, ...ids], completedGoalIds: [] };
+  const entry = await store.saveEntry("2026-01-01", input);
+  assert.equal(entry.activityIds.length, 205);
+  const lookups = database.queries.filter(({ query }) => query.startsWith("SELECT id FROM activities"));
+  assert.equal(lookups.length, 3);
+  assert.ok(database.queries.every(({ values }) => values.length <= 100));
+  await assert.rejects(store.saveEntry("2026-01-02", { ...input, activityIds: [...ids, "missing"] }), /One activity is no longer available/);
+  assert.equal(await store.getEntry("2026-01-02"), null);
+});
