@@ -754,6 +754,9 @@ export class DaylioMemoryStore {
       activities: [...this.activities.values()],
       goals: [...this.goals.values()],
       entries: [...this.entries.values()].map((entry) => this.withGoalCompletions(entry)),
+      goalCompletions: [...this.goalCompletions.values()],
+      dayMoodSelections: [...this.dayMoodSelections].map(([logicalDate, selection]) => ({ logicalDate, ...selection })),
+      dayActivitySelections: [...this.dayActivitySelections.values()],
     };
   }
 

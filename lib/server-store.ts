@@ -488,8 +488,9 @@ export class D1DaylioStore {
   }
 
   async exportData() {
-    const tables = {} as Record<string, unknown[]>;
-    for (const table of ["mood_levels", "activity_groups", "activities", "entries", "entry_activities", "goals", "goal_completions", "day_mood_selections", "day_activity_selections", "import_runs"]) tables[table] = await rows(this.database, this.database.prepare(`SELECT * FROM ${table}`));
+    const names = ["mood_levels", "activity_groups", "activities", "entries", "entry_activities", "goals", "goal_completions", "day_mood_selections", "day_activity_selections", "import_runs"];
+    const results = await this.database.batch(names.map((table) => this.database.prepare(`SELECT * FROM ${table}`)));
+    const tables = Object.fromEntries(names.map((name, index) => [name, results[index].results ?? []]));
     return { formatVersion: 1, exportedAt: new Date().toISOString(), tables };
   }
 
