@@ -1,5 +1,6 @@
 import { ACTIVITY_ICON_CHOICES, iconForActivity } from "./icons.ts";
 import { isValidTime, validateEntryInput, validateEntryReferences, validateExpectedVersion, versionConflict } from "./entry-validation.ts";
+import { validateCatalogPatch } from "./catalog-validation.ts";
 
 export type Mood = {
   id: string;
@@ -659,6 +660,7 @@ export class DaylioMemoryStore {
   }
 
   createGroup(name: string) {
+    validateCatalogPatch({ kind: "group", patch: { name } });
     const clean = name.trim();
     if (!clean) throw new Error("Group name is required.");
     const group: ActivityGroup = { id: newId("group"), name: clean, sortOrder: this.groups.size, archived: false };
@@ -666,7 +668,8 @@ export class DaylioMemoryStore {
     return group;
   }
 
-  updateGroup(id: string, patch: Partial<Pick<ActivityGroup, "name" | "sortOrder" | "archived">>) {
+  updateGroup(id: string, input: unknown) {
+    const patch = validateCatalogPatch({ kind: "group", patch: input });
     const group = this.groups.get(id);
     if (!group) throw new Error("Group not found.");
     const next = { ...group, ...patch, name: patch.name?.trim() || group.name };
@@ -675,6 +678,7 @@ export class DaylioMemoryStore {
   }
 
   createActivity(name: string, groupId: string, icon = "category") {
+    validateCatalogPatch({ kind: "activity", patch: { name, groupId, icon } });
     const clean = name.trim();
     if (!clean) throw new Error("Activity name is required.");
     if (!this.groups.has(groupId)) throw new Error("Choose an activity group.");
@@ -683,7 +687,9 @@ export class DaylioMemoryStore {
     return activity;
   }
 
-  updateActivity(id: string, patch: Partial<Pick<Activity, "name" | "groupId" | "icon" | "sortOrder" | "archived">>) {
+  updateActivity(id: string, input: unknown) {
+    const patch = validateCatalogPatch({ kind: "activity", patch: input });
+    if (patch.groupId !== undefined && !this.groups.has(patch.groupId)) throw new Error("Choose an activity group.");
     const activity = this.activities.get(id);
     if (!activity) throw new Error("Activity not found.");
     const name = patch.name?.trim() || activity.name;
@@ -694,6 +700,7 @@ export class DaylioMemoryStore {
   }
 
   createGoal(input: { name: string; activityId?: string | null; repeatType?: GoalRepeatType; scheduleType?: Goal["scheduleType"]; targetPerWeek?: number | null; weekdaysMask?: number | null; materialIcon?: string; reminderEnabled?: boolean; reminderTime?: string }) {
+    validateCatalogPatch({ kind: "goal", patch: input });
     if (input.activityId !== null && input.activityId !== undefined && !this.activities.has(input.activityId)) throw new Error("Choose an activity for the goal.");
     const config = normalizeGoalConfig(input);
     const goal: Goal = {
@@ -711,7 +718,8 @@ export class DaylioMemoryStore {
     return goal;
   }
 
-  updateGoal(id: string, patch: Partial<Goal>) {
+  updateGoal(id: string, input: unknown) {
+    const patch = validateCatalogPatch({ kind: "goal", patch: input });
     const goal = this.goals.get(id);
     if (!goal) throw new Error("Goal not found.");
     if (patch.activityId !== undefined && patch.activityId !== null && !this.activities.has(patch.activityId)) throw new Error("Choose an activity for the goal.");

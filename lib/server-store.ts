@@ -24,6 +24,7 @@ import {
 } from "./daylio.ts";
 import { validateEntryInput, validateEntryReferences as assertEntryReferences, validateExpectedVersion, versionConflict, type EntryInputCandidate } from "./entry-validation.ts";
 import { iconForActivity } from "./icons.ts";
+import { validateCatalogPatch } from "./catalog-validation.ts";
 
 type Database = D1Database;
 
@@ -392,13 +393,15 @@ export class D1DaylioStore {
   }
 
   async createGroup(name: string) {
+    validateCatalogPatch({ kind: "group", patch: { name } });
     const clean = name.trim(); if (!clean) throw new Error("Group name is required.");
     const result = await this.database.prepare("INSERT INTO activity_groups (id, name, sort_order) VALUES (?, ?, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM activity_groups)) RETURNING id, name, sort_order, archived_at").bind(`group-${crypto.randomUUID()}`, clean).first<{ id: string; name: string; sort_order: number; archived_at: string | null }>();
     if (!result) throw new Error("Could not create the group.");
     return toGroup(result);
   }
 
-  async updateGroup(id: string, patch: Partial<Pick<ActivityGroup, "name" | "sortOrder" | "archived">>) {
+  async updateGroup(id: string, input: unknown) {
+    const patch = validateCatalogPatch({ kind: "group", patch: input });
     const current = await this.database.prepare("SELECT id, name, sort_order, archived_at FROM activity_groups WHERE id = ?").bind(id).first<{ id: string; name: string; sort_order: number; archived_at: string | null }>();
     if (!current) throw new Error("Group not found.");
     const result = await this.database.prepare("UPDATE activity_groups SET name = ?, sort_order = ?, archived_at = ? WHERE id = ? RETURNING id, name, sort_order, archived_at").bind(patch.name?.trim() || current.name, patch.sortOrder ?? current.sort_order, patch.archived === undefined ? current.archived_at : patch.archived ? new Date().toISOString() : null, id).first<{ id: string; name: string; sort_order: number; archived_at: string | null }>();
@@ -407,6 +410,9 @@ export class D1DaylioStore {
   }
 
   async createActivity(name: string, groupId: string, icon = "category") {
+    validateCatalogPatch({ kind: "activity", patch: { name, groupId, icon } });
+    const group = await this.database.prepare("SELECT id FROM activity_groups WHERE id = ?").bind(groupId).first();
+    if (!group) throw new Error("Choose an activity group.");
     const clean = name.trim(); if (!clean) throw new Error("Activity name is required.");
     const id = `activity-${crypto.randomUUID()}`;
     const result = await this.database.prepare("INSERT INTO activities (id, group_id, name, material_icon, sort_order) VALUES (?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM activities)) RETURNING id, group_id, name, material_icon, source_icon_id, sort_order, archived_at").bind(id, groupId, clean, iconForActivity(clean, icon)).first<{ id: string; group_id: string; name: string; material_icon: string; source_icon_id: string | null; sort_order: number; archived_at: string | null }>();
@@ -414,7 +420,12 @@ export class D1DaylioStore {
     return toActivity(result);
   }
 
-  async updateActivity(id: string, patch: Partial<Pick<Activity, "name" | "groupId" | "icon" | "sortOrder" | "archived">>) {
+  async updateActivity(id: string, input: unknown) {
+    const patch = validateCatalogPatch({ kind: "activity", patch: input });
+    if (patch.groupId !== undefined) {
+      const group = await this.database.prepare("SELECT id FROM activity_groups WHERE id = ?").bind(patch.groupId).first();
+      if (!group) throw new Error("Choose an activity group.");
+    }
     const current = await this.database.prepare("SELECT id, group_id, name, material_icon, source_icon_id, sort_order, archived_at FROM activities WHERE id = ?").bind(id).first<{ id: string; group_id: string; name: string; material_icon: string; source_icon_id: string | null; sort_order: number; archived_at: string | null }>();
     if (!current) throw new Error("Activity not found.");
     const result = await this.database.prepare("UPDATE activities SET name = ?, group_id = ?, material_icon = ?, sort_order = ?, archived_at = ? WHERE id = ? RETURNING id, group_id, name, material_icon, source_icon_id, sort_order, archived_at").bind(patch.name?.trim() || current.name, patch.groupId ?? current.group_id, iconForActivity(patch.name?.trim() || current.name, patch.icon ?? current.material_icon), patch.sortOrder ?? current.sort_order, patch.archived ? new Date().toISOString() : patch.archived === false ? null : current.archived_at, id).first<{ id: string; group_id: string; name: string; material_icon: string; source_icon_id: string | null; sort_order: number; archived_at: string | null }>();
@@ -423,6 +434,7 @@ export class D1DaylioStore {
   }
 
   async createGoal(input: { name: string; activityId?: string | null; repeatType?: GoalRepeatType; scheduleType?: Goal["scheduleType"]; targetPerWeek?: number | null; weekdaysMask?: number | null; materialIcon?: string; reminderEnabled?: boolean; reminderTime?: string }) {
+    validateCatalogPatch({ kind: "goal", patch: input });
     if (input.activityId !== undefined && input.activityId !== null) {
       const activity = await this.database.prepare("SELECT id FROM activities WHERE id = ? LIMIT 1").bind(input.activityId).first<{ id: string }>();
       if (!activity) throw new Error("Choose an activity for the goal.");
@@ -434,7 +446,8 @@ export class D1DaylioStore {
     return toGoal(result);
   }
 
-  async updateGoal(id: string, patch: Partial<Goal>) {
+  async updateGoal(id: string, input: unknown) {
+    const patch = validateCatalogPatch({ kind: "goal", patch: input });
     const current = await this.database.prepare("SELECT id, activity_id, name, material_icon, repeat_type, schedule_type, target_per_week, weekdays_mask, start_date, end_date, sort_order, archived_at, reminder_enabled, reminder_time, source_state FROM goals WHERE id = ?").bind(id).first<GoalRow>();
     if (!current) throw new Error("Goal not found.");
     if (patch.activityId !== undefined && patch.activityId !== null) {
