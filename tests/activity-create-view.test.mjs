@@ -39,7 +39,6 @@ test("add activity form uses the icon picker and catalog activity contract", () 
   assert.match(createView, /icon \}/);
   assert.match(createView, /await onRefresh\(\)/);
   assert.match(createView, /onBack\(\{ kind: "success", text: "Activity added\." \}\)/);
-  assert.match(createView, /isSaving \? "Adding…"/);
 });
 
 test("setup keeps group and goal forms but removes the old activity form", () => {

@@ -1972,18 +1972,20 @@ function AddActivityView({
   const [groupId, setGroupId] = useState(() => resolveActiveActivityGroupId({ groups: data.groups, requestedId: initialGroupId }));
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [createdActivity, setCreatedActivity] = useState<Activity | null>(null);
+  const savingRef = useRef(false);
   const selectedGroupId = resolveActiveActivityGroupId({ groups: data.groups, requestedId: groupId || initialGroupId });
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isSaving) return;
+    if (savingRef.current) return;
     const activityName = name.trim();
     const activeGroupId = selectedGroupId;
-    if (!activityName) {
+    if (!createdActivity && !activityName) {
       onMessage({ kind: "error", text: "Activity name is required." });
       return;
     }
-    if (!activeGroupId) {
+    if (!createdActivity && !activeGroupId) {
       onMessage({ kind: "error", text: "Create an active activity group before adding an activity." });
       return;
     }
@@ -1991,27 +1993,32 @@ function AddActivityView({
       onMessage({ kind: "error", text: "You’re offline. Reconnect before adding an activity." });
       return;
     }
+    savingRef.current = true;
     setIsSaving(true);
     onBusyChange(true);
-    onMessage({ kind: "info", text: "Adding activity…" });
+    onMessage({ kind: "info", text: createdActivity ? "Refreshing activities…" : "Adding activity…" });
     try {
-      const response = await fetch("/api/catalog", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ kind: "activity", name: activityName, groupId: activeGroupId, icon }),
-      });
-      const result = (await response.json()) as { activity?: Activity; error?: string };
-      if (!response.ok || !result.activity) throw new Error(result.error ?? "Could not add activity.");
+      if (!createdActivity) {
+        const response = await fetch("/api/catalog", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ kind: "activity", name: activityName, groupId: activeGroupId, icon }),
+        });
+        const result = (await response.json()) as { activity?: Activity; error?: string };
+        if (!response.ok || !result.activity) throw new Error(result.error ?? "Could not add activity.");
+        setCreatedActivity(result.activity);
+      }
       try {
         await onRefresh();
       } catch (error) {
-        onMessage({ kind: "error", text: `Created, but refresh failed; refresh the page before retrying. ${(error as Error).message}` });
+        onMessage({ kind: "error", text: `Activity created. Use Retry refresh to load it. ${(error as Error).message}` });
         return;
       }
       onBack({ kind: "success", text: "Activity added." });
     } catch (error) {
       onMessage({ kind: "error", text: (error as Error).message });
     } finally {
+      savingRef.current = false;
       onBusyChange(false);
       setIsSaving(false);
     }
@@ -2042,25 +2049,25 @@ function AddActivityView({
         </div>
         <label className="goal-config-field">
           <span>Name</span>
-          <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Activity name" autoFocus disabled={isSaving} required />
+          <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Activity name" autoFocus disabled={isSaving || Boolean(createdActivity)} required />
         </label>
         <label className="goal-config-field">
           <span>Activity group</span>
-          <select aria-label="Activity group" value={selectedGroupId} onChange={(event) => setGroupId(event.target.value)} disabled={isSaving || activeGroups.length === 0}>
+          <select aria-label="Activity group" value={selectedGroupId} onChange={(event) => setGroupId(event.target.value)} disabled={isSaving || Boolean(createdActivity) || activeGroups.length === 0}>
             {activeGroups.length === 0 && <option value="">No active groups available</option>}
             {activeGroups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
           </select>
         </label>
         <div className="goal-icon-setting">
           <span>Icon</span>
-          <button type="button" className="goal-icon-button" onClick={() => setIconPickerOpen(true)} disabled={isSaving} aria-label="Choose activity icon">
+          <button type="button" className="goal-icon-button" onClick={() => setIconPickerOpen(true)} disabled={isSaving || Boolean(createdActivity)} aria-label="Choose activity icon">
             <Icon name={icon} />
             <span>Change icon</span>
           </button>
         </div>
         <div className="goal-config-actions activity-create-actions">
-          <button type="submit" className="primary-button" disabled={isSaving || activeGroups.length === 0} aria-busy={isSaving}>
-            {isSaving ? "Adding…" : "Add activity"}
+          <button type="submit" className="primary-button" disabled={isSaving || (!createdActivity && activeGroups.length === 0)} aria-busy={isSaving}>
+            {isSaving ? (createdActivity ? "Refreshing…" : "Adding…") : (createdActivity ? "Retry refresh" : "Add activity")}
           </button>
           <button type="button" className="secondary-button" onClick={() => onBack()} disabled={isSaving}>Cancel</button>
         </div>
