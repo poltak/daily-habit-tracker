@@ -29,8 +29,8 @@ function requireStringArray(value: unknown, label: string) {
   return value as string[];
 }
 
-export function versionConflict() {
-  return Object.assign(new Error("This entry changed on another device."), { code: "VERSION_CONFLICT" });
+export function versionConflict(message = "This entry changed on another device.") {
+  return Object.assign(new Error(message), { code: "VERSION_CONFLICT" });
 }
 
 export function validateExpectedVersion(value: unknown) {

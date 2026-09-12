@@ -1,6 +1,6 @@
 import { isActivityIcon, iconForActivity } from "./icons.ts";
 import { isValidTime, validateEntryInput, validateEntryReferences, validateExpectedVersion, versionConflict } from "./entry-validation.ts";
-import { validateCatalogPatch } from "./catalog-validation.ts";
+import { validateCatalogPatch, validateCatalogReorder } from "./catalog-validation.ts";
 import { validateImportPayload } from "./import-validation.ts";
 
 export type Mood = {
@@ -755,6 +755,22 @@ export class DaylioMemoryStore {
       goals: [...this.goals.values()],
       entries: [...this.entries.values()].map((entry) => this.withGoalCompletions(entry)),
     };
+  }
+
+  reorderCatalog(payload: unknown) {
+    const { kind, updates } = validateCatalogReorder(payload);
+    function apply<T extends { sortOrder: number }>(records: Map<string, T>) {
+      const changes = updates.map((update) => {
+        const record = records.get(update.id);
+        if (!record) throw new Error("Catalog item not found.");
+        if (record.sortOrder !== update.expectedSortOrder) throw versionConflict("Setup changed on another device. Refresh before reordering.");
+        return { id: update.id, record: { ...record, sortOrder: update.sortOrder } };
+      });
+      for (const change of changes) records.set(change.id, change.record);
+    }
+    if (kind === "group") apply(this.groups);
+    else if (kind === "activity") apply(this.activities);
+    else apply(this.goals);
   }
 
   importData(payload: ImportPayload) {

@@ -34,7 +34,7 @@ test("catalog optimistic overrides apply, roll back, and commit only after serve
   assert.deepEqual(commitCatalogOverride({ overrides: applied, key, record: { id: "one", archived: true }, patch: { archived: true } }), {});
 });
 
-test("reorder plan supplies inverse updates for partial-write compensation", () => {
+test("reorder plan includes expected values for an atomic move", () => {
   const plan = getReorderPlan({
     items: [
       { id: "first", sortOrder: 1 },
@@ -45,14 +45,9 @@ test("reorder plan supplies inverse updates for partial-write compensation", () 
     direction: -1,
   });
   assert.deepEqual(plan?.updates, [
-    { id: "second", sortOrder: 1 },
-    { id: "first", sortOrder: 2 },
+    { id: "second", sortOrder: 1, expectedSortOrder: 2 },
+    { id: "first", sortOrder: 2, expectedSortOrder: 1 },
   ]);
-  assert.deepEqual(plan?.compensation, [
-    { id: "second", sortOrder: 2 },
-    { id: "first", sortOrder: 1 },
-  ]);
-  assert.deepEqual(plan?.compensation.filter((update) => update.id === "second"), [{ id: "second", sortOrder: 2 }]);
   assert.equal(getReorderPlan({ items: [{ id: "only", sortOrder: 1 }], itemId: "only", direction: 1 }), null);
 });
 

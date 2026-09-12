@@ -201,6 +201,17 @@ test("Wrangler-backed API covers persistence, catalog, calendar, pagination, imp
 
   const group = await json("/api/catalog", { method: "POST", body: JSON.stringify({ kind: "group", name: "Testing" }) });
   assert.equal(group.response.status, 201);
+  const reorder = { kind: "group", updates: [
+    { id: group.body.group.id, sortOrder: 42, expectedSortOrder: group.body.group.sortOrder },
+    { id: "group-health", sortOrder: 43, expectedSortOrder: 0 },
+  ] };
+  assert.equal((await json("/api/catalog/reorder", { method: "POST", body: JSON.stringify(reorder) })).response.status, 200);
+  const staleReorder = { kind: "group", updates: [
+    { id: group.body.group.id, sortOrder: 44, expectedSortOrder: 42 },
+    { id: "group-health", sortOrder: 45, expectedSortOrder: 0 },
+  ] };
+  assert.equal((await json("/api/catalog/reorder", { method: "POST", body: JSON.stringify(staleReorder) })).response.status, 409);
+  assert.equal((await json("/api/bootstrap")).body.groups.find((item) => item.id === group.body.group.id).sortOrder, 42);
   const activity = await json("/api/catalog", { method: "POST", body: JSON.stringify({ kind: "activity", name: "Test reading", groupId: group.body.group.id }) });
   assert.equal(activity.response.status, 201);
   assert.equal(activity.body.activity.icon, "menu_book");

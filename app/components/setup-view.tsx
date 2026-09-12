@@ -339,69 +339,44 @@ export function SetupView({ data, themePreference, onThemeChange, onRefresh, onM
   }) {
     const plan = getReorderPlan({ items, itemId: item.id, direction });
     if (!plan) return;
-    const itemKey = catalogKey({ kind, id: plan.item.id });
-    const swapKey = catalogKey({ kind, id: plan.swap.id });
-    if (isPending(`reorder:${kind}`) || isPending(catalogActionKey({ kind, id: plan.item.id })) || isPending(catalogActionKey({ kind, id: plan.swap.id }))) return;
-    const previousItemOverride = catalogOverrides[itemKey];
-    const previousSwapOverride = catalogOverrides[swapKey];
+    if (isPending(`reorder:${kind}`) || plan.updates.some(({ id }) => isPending(catalogActionKey({ kind, id })))) return;
+    const previousOverrides = catalogOverrides;
 
     await runPending({
       key: reorderActionKey(kind),
       action: async () => {
         setCatalogOverrides((current) => {
-          let next = applyCatalogOverride({ overrides: current, key: itemKey, patch: { sortOrder: plan.swap.sortOrder } });
-          next = applyCatalogOverride({ overrides: next, key: swapKey, patch: { sortOrder: plan.item.sortOrder } });
+          let next = current;
+          for (const update of plan.updates) next = applyCatalogOverride({ overrides: next, key: catalogKey({ kind, id: update.id }), patch: { sortOrder: update.sortOrder } });
           return next;
         });
-
-        const settled = await Promise.allSettled(
-          plan.updates.map((update) => fetch(`/api/catalog/${kind}/${update.id}`, {
-            method: "PATCH",
+        try {
+          const response = await fetch("/api/catalog/reorder", {
+            method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ sortOrder: update.sortOrder }),
-          })),
-        );
-        const successfulUpdates = plan.updates.filter((_, index) => {
-          const result = settled[index];
-          return result?.status === "fulfilled" && result.value.ok;
-        });
-
-        if (successfulUpdates.length === plan.updates.length) {
-          try {
-            const refreshed = await onRefresh();
-            setCatalogOverrides((current) => reconcileCatalogOverrides({ overrides: current, data: refreshed }));
-            onMessage({ kind: "success", text: "Setup updated." });
-          } catch (error) {
-            onMessage({ kind: "error", text: `Reorder saved, but setup refresh failed. The change is still shown; try refreshing again. ${(error as Error).message}` });
-          }
+            body: JSON.stringify({ kind, updates: plan.updates }),
+          });
+          const result = await response.json() as { error?: string };
+          if (!response.ok) throw new Error(result.error ?? "Could not reorder setup.");
+        } catch (error) {
+          setCatalogOverrides((current) => {
+            let next = current;
+            for (const update of plan.updates) {
+              const key = catalogKey({ kind, id: update.id });
+              next = rollbackCatalogOverride({ overrides: next, key, previous: previousOverrides[key] });
+            }
+            return next;
+          });
+          onMessage({ kind: "error", text: (error as Error).message });
           return;
         }
-
-        const compensationUpdates = plan.compensation.filter((compensation) => successfulUpdates.some((update) => update.id === compensation.id));
-        const compensationResults = await Promise.allSettled(
-          compensationUpdates.map((update) => fetch(`/api/catalog/${kind}/${update.id}`, {
-            method: "PATCH",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ sortOrder: update.sortOrder }),
-          })),
-        );
-        const compensationFailed = compensationResults.some((result) => result.status === "rejected" || !result.value.ok);
-        setCatalogOverrides((current) => {
-          let next = rollbackCatalogOverride({ overrides: current, key: itemKey, previous: previousItemOverride });
-          next = rollbackCatalogOverride({ overrides: next, key: swapKey, previous: previousSwapOverride });
-          return next;
-        });
-
-        let refreshError: Error | null = null;
         try {
           const refreshed = await onRefresh();
           setCatalogOverrides((current) => reconcileCatalogOverrides({ overrides: current, data: refreshed }));
+          onMessage({ kind: "success", text: "Setup updated." });
         } catch (error) {
-          refreshError = error as Error;
+          onMessage({ kind: "error", text: `Reorder saved, but setup refresh failed. The change is still shown; try refreshing again. ${(error as Error).message}` });
         }
-        const details = compensationFailed ? " Some changes could not be compensated." : "";
-        const refreshDetails = refreshError ? ` Refresh also failed: ${refreshError.message}` : "";
-        onMessage({ kind: "error", text: `Could not reorder setup.${details}${refreshDetails}` });
       },
     });
   }

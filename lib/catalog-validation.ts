@@ -1,5 +1,6 @@
 import type { Activity, ActivityGroup, Goal } from "./daylio.ts";
 import { isValidTime } from "./entry-validation.ts";
+import type { CatalogKind, SortOrderUpdate } from "./catalog-mutations.ts";
 
 type CatalogPatches = {
   group: Partial<Pick<ActivityGroup, "name" | "sortOrder" | "archived">>;
@@ -31,4 +32,19 @@ export function validateCatalogPatch<K extends keyof CatalogPatches>({ kind, pat
     }
   }
   return patch as CatalogPatches[K];
+}
+
+export function validateCatalogReorder(value: unknown): { kind: CatalogKind; updates: SortOrderUpdate[] } {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Reorder must be an object.");
+  const { kind, updates } = value as Record<string, unknown>;
+  if (kind !== "group" && kind !== "activity" && kind !== "goal") throw new Error("Unsupported catalog item.");
+  if (!Array.isArray(updates) || !updates.length) throw new Error("Choose items to reorder.");
+  const ids = new Set<string>();
+  for (const update of updates) {
+    if (!update || typeof update !== "object" || Array.isArray(update)) throw new Error("Invalid reorder item.");
+    if (typeof update.id !== "string" || !update.id.trim() || ids.has(update.id)) throw new Error("Reorder item IDs must be unique non-empty strings.");
+    if (!Number.isSafeInteger(update.sortOrder) || !Number.isSafeInteger(update.expectedSortOrder)) throw new Error("Sort values must be integers.");
+    ids.add(update.id);
+  }
+  return { kind, updates };
 }

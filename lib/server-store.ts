@@ -24,7 +24,7 @@ import {
 } from "./daylio.ts";
 import { validateEntryInput, validateEntryReferences as assertEntryReferences, validateExpectedVersion, versionConflict, type EntryInputCandidate } from "./entry-validation.ts";
 import { iconForActivity } from "./icons.ts";
-import { validateCatalogPatch } from "./catalog-validation.ts";
+import { validateCatalogPatch, validateCatalogReorder } from "./catalog-validation.ts";
 import { validateImportPayload } from "./import-validation.ts";
 
 type Database = D1Database;
@@ -466,6 +466,25 @@ export class D1DaylioStore {
     const goal = toGoal(goalRow);
     const completionRows = await rows<{ logical_date: string }>(this.database, this.database.prepare("SELECT logical_date FROM goal_completions WHERE goal_id = ? AND logical_date BETWEEN ? AND ? ORDER BY logical_date").bind(goalId, addDays(startDate, -7), addDays(endDate, 7)));
     return buildGoalHistory({ goal, startDate, endDate, completedDates: completionRows.map((row) => row.logical_date), asOf });
+  }
+
+  async reorderCatalog(payload: unknown) {
+    const { kind, updates } = validateCatalogReorder(payload);
+    const table = { group: "activity_groups", activity: "activities", goal: "goals" }[kind];
+    const json = JSON.stringify(updates);
+    const existing = await rows<{ id: string }>(this.database, this.database.prepare(`SELECT id FROM ${table} WHERE id IN (SELECT json_extract(value, '$.id') FROM json_each(?))`).bind(json));
+    if (existing.length !== updates.length) throw new Error("Catalog item not found.");
+    try {
+      // A stale sort value violates NOT NULL and rolls back the entire move.
+      await this.database.batch([this.database.prepare(`UPDATE ${table} SET sort_order = (
+        SELECT CASE WHEN ${table}.sort_order = json_extract(value, '$.expectedSortOrder')
+          THEN json_extract(value, '$.sortOrder') ELSE NULL END
+        FROM json_each(?) WHERE json_extract(value, '$.id') = ${table}.id
+      ) WHERE id IN (SELECT json_extract(value, '$.id') FROM json_each(?))`).bind(json, json)]);
+    } catch (error) {
+      if (error instanceof Error && error.message.includes(`NOT NULL constraint failed: ${table}.sort_order`)) throw versionConflict("Setup changed on another device. Refresh before reordering.");
+      throw error;
+    }
   }
 
   async exportData() {

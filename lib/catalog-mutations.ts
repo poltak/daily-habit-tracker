@@ -2,7 +2,7 @@ export type CatalogKind = "group" | "activity" | "goal";
 export type CatalogOverride = Record<string, unknown>;
 export type CatalogOverrides = Record<string, CatalogOverride>;
 export type SortableCatalogItem = { id: string; sortOrder: number };
-export type SortOrderUpdate = { id: string; sortOrder: number };
+export type SortOrderUpdate = { id: string; sortOrder: number; expectedSortOrder: number };
 
 export function catalogKey({ kind, id }: { kind: CatalogKind; id: string }) {
   return `${kind}:${id}`;
@@ -46,10 +46,7 @@ export function commitCatalogOverride<T extends object>({ overrides, key, record
 }
 
 export function sortCatalogItems<T extends SortableCatalogItem>({ items }: { items: readonly T[] }) {
-  return items
-    .map((item, index) => ({ item, index }))
-    .sort((left, right) => left.item.sortOrder - right.item.sortOrder || left.index - right.index)
-    .map(({ item }) => item);
+  return [...items].sort((left, right) => left.sortOrder - right.sortOrder);
 }
 
 export function getReorderPlan({ items, itemId, direction }: { items: readonly SortableCatalogItem[]; itemId: string; direction: -1 | 1 }) {
@@ -59,16 +56,13 @@ export function getReorderPlan({ items, itemId, direction }: { items: readonly S
   const swap = ordered[itemIndex + direction];
   if (!item || !swap) return null;
 
-  return {
-    item,
-    swap,
-    updates: [
-      { id: item.id, sortOrder: swap.sortOrder },
-      { id: swap.id, sortOrder: item.sortOrder },
-    ] satisfies SortOrderUpdate[],
-    compensation: [
-      { id: item.id, sortOrder: item.sortOrder },
-      { id: swap.id, sortOrder: swap.sortOrder },
-    ] satisfies SortOrderUpdate[],
-  };
+  const hasTies = new Set(ordered.map((record) => record.sortOrder)).size !== ordered.length;
+  if (hasTies) {
+    [ordered[itemIndex], ordered[itemIndex + direction]] = [swap, item];
+    return { updates: ordered.map((record, sortOrder) => ({ id: record.id, sortOrder, expectedSortOrder: record.sortOrder })) };
+  }
+  return { updates: [
+    { id: item.id, sortOrder: swap.sortOrder, expectedSortOrder: item.sortOrder },
+    { id: swap.id, sortOrder: item.sortOrder, expectedSortOrder: swap.sortOrder },
+  ] satisfies SortOrderUpdate[] };
 }
