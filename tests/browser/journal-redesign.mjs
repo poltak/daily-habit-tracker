@@ -139,11 +139,11 @@ try {
     await page.getByRole("button", { name: "Choose goal icon", exact: true }).click();
     await page.locator(".icon-picker").waitFor();
     assert.equal(await page.getByRole("textbox", { name: "Search icons", exact: true }).evaluate((element) => element === document.activeElement), true);
-    await page.locator(".icon-choice").last().focus();
+    await page.getByRole("button", { name: "Show more icons", exact: true }).focus();
     await page.keyboard.press("Tab");
     assert.equal(await page.getByRole("button", { name: "Close icon picker" }).evaluate((element) => element === document.activeElement), true);
     await page.keyboard.press("Shift+Tab");
-    assert.equal(await page.locator(".icon-choice").last().evaluate((element) => element === document.activeElement), true);
+    assert.equal(await page.getByRole("button", { name: "Show more icons", exact: true }).evaluate((element) => element === document.activeElement), true);
     await assertFits(page);
     await capture({ page, path: `/tmp/daymark-redesign-${device}-icons.png` });
     await page.keyboard.press("Escape");

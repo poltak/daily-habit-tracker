@@ -77,6 +77,9 @@ function iconLabel(name: string) {
   return name.replaceAll("_", " ");
 }
 
+const ICON_PAGE_SIZE = 120;
+const ICON_CATEGORIES = ["All", ...new Set(ACTIVITY_ICON_CHOICES.map((choice) => choice.category))];
+
 export function IconPicker({
   activityName,
   itemType = "Activity",
@@ -94,15 +97,15 @@ export function IconPicker({
 }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
+  const [visibleLimit, setVisibleLimit] = useState(ICON_PAGE_SIZE);
   const dialogRef = useRef<HTMLElement>(null);
   const closeRef = useRef(onClose);
   useEffect(() => { closeRef.current = onClose; }, [onClose]);
-  const categories = ["All", ...Array.from(new Set(ACTIVITY_ICON_CHOICES.map((choice) => choice.category)))];
   const normalizedQuery = query.trim().toLowerCase();
   const choices = ACTIVITY_ICON_CHOICES.filter(
     (choice) =>
       (category === "All" || choice.category === category) &&
-      (!normalizedQuery || `${choice.name} ${choice.category}`.includes(normalizedQuery)),
+      (!normalizedQuery || `${choice.name} ${iconLabel(choice.name)} ${choice.category}`.toLowerCase().includes(normalizedQuery)),
   );
 
   useEffect(() => {
@@ -163,22 +166,22 @@ export function IconPicker({
           <Icon name={UI_ICONS.search} />
           <input
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => { setQuery(event.target.value); setVisibleLimit(ICON_PAGE_SIZE); }}
             placeholder="Search icons by name or category"
             aria-label="Search icons"
           />
         </label>
         <div className="icon-picker-categories" role="toolbar" aria-label="Icon categories">
-          {categories.map((item) => (
-            <button key={item} className={category === item ? "selected" : ""} aria-pressed={category === item} onClick={() => setCategory(item)} disabled={isSaving}>
+          {ICON_CATEGORIES.map((item) => (
+            <button key={item} className={category === item ? "selected" : ""} aria-pressed={category === item} onClick={() => { setCategory(item); setVisibleLimit(ICON_PAGE_SIZE); }} disabled={isSaving}>
               {item}
             </button>
           ))}
         </div>
-        <p className="icon-picker-count" role={isSaving ? "status" : undefined}>{isSaving ? "Saving icon…" : `${choices.length} icons`}</p>
+        <p className="icon-picker-count" role={isSaving ? "status" : undefined}>{isSaving ? "Saving icon…" : `Showing ${Math.min(visibleLimit, choices.length)} of ${choices.length} icons`}</p>
         {choices.length ? (
           <div className="icon-picker-grid" aria-label="Available icons">
-            {choices.map((choice) => (
+            {choices.slice(0, visibleLimit).map((choice) => (
               <button
                 key={choice.name}
                 className={`icon-choice ${currentIcon === choice.name ? "selected" : ""}`}
@@ -194,6 +197,11 @@ export function IconPicker({
           </div>
         ) : (
           <div className="empty-inline">No icons match that search.</div>
+        )}
+        {choices.length > visibleLimit && (
+          <button className="ghost-button" onClick={() => setVisibleLimit((limit) => limit + ICON_PAGE_SIZE)} disabled={isSaving}>
+            Show more icons
+          </button>
         )}
       </section>
     </div>

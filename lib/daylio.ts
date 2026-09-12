@@ -1,4 +1,4 @@
-import { ACTIVITY_ICON_CHOICES, iconForActivity } from "./icons.ts";
+import { isActivityIcon, iconForActivity } from "./icons.ts";
 import { isValidTime, validateEntryInput, validateEntryReferences, validateExpectedVersion, versionConflict } from "./entry-validation.ts";
 import { validateCatalogPatch } from "./catalog-validation.ts";
 import { validateImportPayload } from "./import-validation.ts";
@@ -295,7 +295,7 @@ export function isLogicalDate(value: string) {
 }
 
 export function isGoalIcon(value: unknown): value is string {
-  return typeof value === "string" && ACTIVITY_ICON_CHOICES.some((choice) => choice.name === value);
+  return isActivityIcon(value);
 }
 
 export function goalRepeatType(goal: Pick<Goal, "repeatType" | "scheduleType"> | { repeatType?: GoalRepeatType; scheduleType?: Goal["scheduleType"] }): GoalRepeatType {
