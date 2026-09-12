@@ -765,9 +765,11 @@ export class DaylioMemoryStore {
     }
     const moodIds = new Map<string, string>();
     for (const mood of payload.moods) {
-      const existing = [...this.moods.values()].find((candidate) => candidate.name.toLowerCase() === mood.name.toLowerCase());
-      moodIds.set(mood.sourceId, existing?.id ?? `daylio-mood-${mood.sourceId}`);
-      if (!existing) this.moods.set(`daylio-mood-${mood.sourceId}`, { id: `daylio-mood-${mood.sourceId}`, name: mood.name, score: mood.score, emoji: mood.emoji ?? "🙂", color: "#9aa4ae" });
+      const canonical = MOODS.find((candidate) => candidate.score === mood.score)!;
+      const existing = [...this.moods.values()].find((candidate) => candidate.score === mood.score);
+      const id = existing?.id ?? canonical.id;
+      moodIds.set(mood.sourceId, id);
+      this.moods.set(id, { ...canonical, id });
     }
     const groupIds = new Map<string, string>();
     for (const group of payload.groups) {
@@ -779,7 +781,7 @@ export class DaylioMemoryStore {
     for (const activity of payload.activities) {
       const id = `daylio-activity-${activity.sourceId}`;
       activityIds.set(activity.sourceId, id);
-      this.activities.set(id, { id, groupId: groupIds.get(activity.groupSourceId ?? "") ?? [...this.groups.keys()][0], name: activity.name, icon: iconForActivity(activity.name, activity.sourceIconId), sourceIconId: activity.sourceIconId, sortOrder: activity.sortOrder, archived: Boolean(activity.archived) });
+      this.activities.set(id, { id, groupId: groupIds.get(activity.groupSourceId!)!, name: activity.name, icon: iconForActivity(activity.name, activity.sourceIconId), sourceIconId: activity.sourceIconId ?? undefined, sortOrder: activity.sortOrder, archived: Boolean(activity.archived) });
     }
     const goalIds = new Map<string, string>();
     for (const goal of payload.goals) {
@@ -789,7 +791,8 @@ export class DaylioMemoryStore {
       this.goals.set(id, { id, activityId: activityIds.get(goal.activitySourceId ?? "") ?? null, name: goal.name || "Activity goal", materialIcon: isGoalIcon(goal.materialIcon) ? goal.materialIcon : "task_alt", ...config, sortOrder: goal.sortOrder, archived: Boolean(goal.archived), reminderEnabled: Boolean(goal.reminderEnabled), reminderTime: goal.reminderTime, sourceState: goal.sourceState });
     }
     for (const item of payload.entries) {
-      this.entries.set(item.logicalDate, { id: `daylio-entry-${item.sourceId}`, logicalDate: item.logicalDate, localTime: item.localTime, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, timezoneOffsetMinutes: item.timezoneOffsetMinutes, moodId: moodIds.get(item.moodSourceId) ?? "mood-meh", activityIds: item.activitySourceIds.map((id) => activityIds.get(id)).filter(Boolean) as string[], completedGoalIds: [], legacyNoteTitle: item.legacyNoteTitle, legacyNote: item.legacyNote, version: 1, createdAt: nowIso(), updatedAt: nowIso() });
+      const existing = this.entries.get(item.logicalDate);
+      this.entries.set(item.logicalDate, { id: `daylio-entry-${item.sourceId}`, logicalDate: item.logicalDate, localTime: item.localTime, timezone: existing?.timezone ?? "", timezoneOffsetMinutes: item.timezoneOffsetMinutes ?? undefined, moodId: moodIds.get(item.moodSourceId)!, activityIds: [...new Set(item.activitySourceIds.map((id) => activityIds.get(id)!))], completedGoalIds: [], legacyNoteTitle: item.legacyNoteTitle ?? undefined, legacyNote: item.legacyNote ?? undefined, version: (existing?.version ?? 0) + 1, createdAt: existing?.createdAt ?? nowIso(), updatedAt: nowIso(), deletedAt: existing?.deletedAt });
     }
     for (const completion of payload.completions) {
       const entry = this.entries.get(completion.logicalDate);
