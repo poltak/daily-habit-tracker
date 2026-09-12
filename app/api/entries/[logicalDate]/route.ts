@@ -28,7 +28,8 @@ export async function DELETE(request: Request, context: { params: Promise<{ logi
     const { logicalDate } = await context.params;
     const expectedVersion = new URL(request.url).searchParams.get("expectedVersion");
     const store = await getServerStore();
-    const entry = await store.deleteEntry(logicalDate, expectedVersion ? Number(expectedVersion) : undefined);
+    if (expectedVersion !== null && !/^\d+$/.test(expectedVersion)) throw new Error("Expected version must be a non-negative integer.");
+    const entry = await store.deleteEntry(logicalDate, expectedVersion === null ? undefined : Number(expectedVersion));
     return Response.json({ entry });
   } catch (error) {
     return jsonError(error);

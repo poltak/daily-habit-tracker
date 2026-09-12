@@ -14,6 +14,10 @@ export type StoredDraft = {
   savedAt: string;
 };
 
+export function entryInputFromDraft({ version, ...draft }: Draft) {
+  return { ...draft, expectedVersion: version ?? 0 };
+}
+
 const STORAGE_PREFIX = "daymark:draft:v1:";
 const ACTIVE_DRAFT_DATE_KEY = "daymark:active-draft-date:v1";
 

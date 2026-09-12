@@ -20,6 +20,7 @@ import {
 } from "../lib/daylio";
 import {
   clearStoredDraft,
+  entryInputFromDraft,
   readActiveStoredDraft,
   recoverStoredDraft,
   rememberDraftDate,
@@ -1327,7 +1328,7 @@ export default function Journal() {
       const response = await fetch(`/api/entries/${selectedDate}`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(draft),
+        body: JSON.stringify(entryInputFromDraft(draft)),
       });
       const result = (await response.json()) as {
         entry?: Entry;

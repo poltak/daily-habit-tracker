@@ -22,7 +22,7 @@ import {
   normalizeGoalConfig,
   store as memoryStore,
 } from "./daylio.ts";
-import { validateEntryInput, validateEntryReferences as assertEntryReferences, type EntryInputCandidate } from "./entry-validation.ts";
+import { validateEntryInput, validateEntryReferences as assertEntryReferences, validateExpectedVersion, versionConflict, type EntryInputCandidate } from "./entry-validation.ts";
 import { iconForActivity } from "./icons.ts";
 
 type Database = D1Database;
@@ -338,37 +338,57 @@ export class D1DaylioStore {
     if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
     const validated = validateEntryInput(input);
     await this.validateEntryReferences(validated);
-    const existing = await this.getEntry(logicalDate);
-    const deletedRow = existing ? null : await this.getPersistedEntry(logicalDate);
-    if (existing && validated.expectedVersion !== undefined && existing.version !== validated.expectedVersion) {
-      const error = new Error("This entry changed on another device."); (error as Error & { code?: string }).code = "VERSION_CONFLICT"; throw error;
-    }
-    const selections = await this.getDaySelections(logicalDate);
-    const activityIds = new Set(validated.activityIds);
-    for (const activityId of selections.activityOverrideIds) {
-      if (selections.activityIds.includes(activityId)) activityIds.add(activityId);
-      else activityIds.delete(activityId);
-    }
-    const moodId = selections.moodId ?? validated.moodId;
-    const id = existing?.id ?? deletedRow?.id ?? `entry-${crypto.randomUUID()}`;
+    const persisted = await this.getPersistedEntry(logicalDate);
+    const existing = persisted && !persisted.deleted_at ? persisted : null;
+    if (validated.expectedVersion !== undefined && (existing?.version ?? 0) !== validated.expectedVersion) throw versionConflict();
+    const id = persisted?.id ?? `entry-${crypto.randomUUID()}`;
     const timestamp = new Date().toISOString();
-    const restoringDeletedEntry = Boolean(deletedRow?.deleted_at);
-    const version = existing ? existing.version + 1 : 1;
-    const entryStatement = restoringDeletedEntry
-      ? this.database.prepare("UPDATE entries SET logical_date = ?, local_time = ?, timezone = ?, timezone_offset_minutes = ?, mood_id = ?, legacy_note_title = ?, legacy_note = ?, version = ?, created_at = ?, updated_at = ?, deleted_at = NULL WHERE id = ?").bind(logicalDate, validated.localTime ?? "23:00", validated.timezone ?? "", validated.timezoneOffsetMinutes ?? null, moodId, validated.legacyNoteTitle ?? null, validated.legacyNote ?? null, version, timestamp, timestamp, id)
-      : this.database.prepare(`INSERT INTO entries (id, logical_date, local_time, timezone, timezone_offset_minutes, mood_id, legacy_note_title, legacy_note, version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(logical_date) DO UPDATE SET local_time=excluded.local_time, timezone=excluded.timezone, timezone_offset_minutes=excluded.timezone_offset_minutes, mood_id=excluded.mood_id, legacy_note_title=excluded.legacy_note_title, legacy_note=excluded.legacy_note, version=excluded.version, updated_at=excluded.updated_at, deleted_at=NULL`).bind(id, logicalDate, validated.localTime ?? existing?.localTime ?? "23:00", validated.timezone ?? existing?.timezone ?? "", validated.timezoneOffsetMinutes ?? null, moodId, validated.legacyNoteTitle ?? existing?.legacyNoteTitle ?? null, validated.legacyNote ?? existing?.legacyNote ?? null, version, existing?.createdAt ?? timestamp, timestamp);
-    const statements = [entryStatement, this.database.prepare("DELETE FROM entry_activities WHERE entry_id = ?").bind(id), this.database.prepare("UPDATE goal_completions SET entry_id = ?, updated_at = ? WHERE logical_date = ? AND (entry_id IS NULL OR entry_id = ?)").bind(id, timestamp, logicalDate, id), this.database.prepare("DELETE FROM day_mood_selections WHERE logical_date = ?").bind(logicalDate), this.database.prepare("DELETE FROM day_activity_selections WHERE logical_date = ?").bind(logicalDate)];
-    statements.push(...[...activityIds].map((activityId) => this.database.prepare("INSERT INTO entry_activities (entry_id, activity_id) VALUES (?, ?)").bind(id, activityId)));
-    await this.database.batch(statements);
+    // The NOT NULL version constraint aborts the entire batch if another write
+    // changed this row after the read. A zero-row UPDATE would not roll back links.
+    const entryStatement = this.database.prepare(`
+      INSERT INTO entries (id, logical_date, local_time, timezone, timezone_offset_minutes, mood_id, legacy_note_title, legacy_note, version, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, COALESCE((SELECT mood_id FROM day_mood_selections WHERE logical_date = ?), ?), ?, ?, 1, ?, ?)
+      ON CONFLICT(logical_date) DO UPDATE SET
+        local_time = excluded.local_time, timezone = excluded.timezone,
+        timezone_offset_minutes = excluded.timezone_offset_minutes, mood_id = excluded.mood_id,
+        legacy_note_title = excluded.legacy_note_title, legacy_note = excluded.legacy_note,
+        version = CASE WHEN entries.version = ? AND entries.deleted_at IS ? THEN entries.version + 1 ELSE NULL END,
+        created_at = excluded.created_at, updated_at = excluded.updated_at, deleted_at = NULL
+    `).bind(id, logicalDate, validated.localTime ?? existing?.local_time ?? "23:00", validated.timezone ?? existing?.timezone ?? "", validated.timezoneOffsetMinutes ?? existing?.timezone_offset_minutes ?? null, logicalDate, validated.moodId, validated.legacyNoteTitle ?? existing?.legacy_note_title ?? null, validated.legacyNote ?? existing?.legacy_note ?? null, existing?.created_at ?? timestamp, timestamp, persisted?.version ?? 0, persisted?.deleted_at ?? null);
+    try {
+      await this.database.batch([
+        entryStatement,
+        this.database.prepare("DELETE FROM entry_activities WHERE entry_id = ?").bind(id),
+        // Read overrides inside the transaction so a just-completed toggle is
+        // applied before its selection row is consumed.
+        this.database.prepare(`
+          INSERT INTO entry_activities (entry_id, activity_id)
+          SELECT ?, value FROM json_each(?) WHERE NOT EXISTS (
+            SELECT 1 FROM day_activity_selections WHERE logical_date = ? AND activity_id = value AND selected = 0
+          )
+          UNION SELECT ?, activity_id FROM day_activity_selections WHERE logical_date = ? AND selected = 1
+        `).bind(id, JSON.stringify(validated.activityIds), logicalDate, id, logicalDate),
+        this.database.prepare("UPDATE goal_completions SET entry_id = ?, updated_at = ? WHERE logical_date = ?").bind(id, timestamp, logicalDate),
+        this.database.prepare("DELETE FROM day_mood_selections WHERE logical_date = ?").bind(logicalDate),
+        this.database.prepare("DELETE FROM day_activity_selections WHERE logical_date = ?").bind(logicalDate),
+      ]);
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("NOT NULL constraint failed: entries.version")) throw versionConflict();
+      throw error;
+    }
     return this.getEntry(logicalDate);
   }
 
   async deleteEntry(logicalDate: string, expectedVersion?: number) {
-    const existing = await this.getEntry(logicalDate);
-    if (!existing) return null;
-    if (expectedVersion !== undefined && existing.version !== expectedVersion) { const error = new Error("This entry changed on another device."); (error as Error & { code?: string }).code = "VERSION_CONFLICT"; throw error; }
-    await this.database.prepare("UPDATE entries SET deleted_at = ?, updated_at = ?, version = ? WHERE logical_date = ?").bind(new Date().toISOString(), new Date().toISOString(), existing.version + 1, logicalDate).run();
-    return this.getEntry(logicalDate);
+    if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
+    validateExpectedVersion(expectedVersion);
+    const existing = await this.getPersistedEntry(logicalDate);
+    if (!existing || existing.deleted_at) return null;
+    if (expectedVersion !== undefined && existing.version !== expectedVersion) throw versionConflict();
+    const timestamp = new Date().toISOString();
+    const result = await this.database.prepare("UPDATE entries SET deleted_at = ?, updated_at = ?, version = version + 1 WHERE logical_date = ? AND version = ? AND deleted_at IS NULL RETURNING id").bind(timestamp, timestamp, logicalDate, existing.version).first();
+    if (!result) throw versionConflict();
+    return null;
   }
 
   async createGroup(name: string) {

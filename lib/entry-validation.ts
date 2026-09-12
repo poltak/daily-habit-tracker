@@ -29,6 +29,16 @@ function requireStringArray(value: unknown, label: string) {
   return value as string[];
 }
 
+export function versionConflict() {
+  return Object.assign(new Error("This entry changed on another device."), { code: "VERSION_CONFLICT" });
+}
+
+export function validateExpectedVersion(value: unknown) {
+  if (value !== undefined && (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0)) {
+    throw new Error("Expected version must be a non-negative integer.");
+  }
+}
+
 export function validateEntryInput(input: unknown): EntryInputCandidate {
   if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("Entry payload must be an object.");
   const candidate = input as Record<string, unknown>;
@@ -45,7 +55,7 @@ export function validateEntryInput(input: unknown): EntryInputCandidate {
   if (localTime !== undefined && (typeof localTime !== "string" || !isValidTime(localTime))) throw new Error("Choose a valid entry time.");
   if (timezone !== undefined && typeof timezone !== "string") throw new Error("Timezone must be a string.");
   if (timezoneOffsetMinutes !== undefined && (typeof timezoneOffsetMinutes !== "number" || !Number.isInteger(timezoneOffsetMinutes) || !Number.isFinite(timezoneOffsetMinutes))) throw new Error("Timezone offset must be an integer.");
-  if (expectedVersion !== undefined && (typeof expectedVersion !== "number" || !Number.isInteger(expectedVersion) || expectedVersion < 1)) throw new Error("Expected version must be a positive integer.");
+  validateExpectedVersion(expectedVersion);
   if (legacyNoteTitle !== undefined && typeof legacyNoteTitle !== "string") throw new Error("Legacy note title must be a string.");
   if (legacyNote !== undefined && typeof legacyNote !== "string") throw new Error("Legacy note must be a string.");
   return {
@@ -55,7 +65,7 @@ export function validateEntryInput(input: unknown): EntryInputCandidate {
     ...(localTime === undefined ? {} : { localTime }),
     ...(timezone === undefined ? {} : { timezone }),
     ...(timezoneOffsetMinutes === undefined ? {} : { timezoneOffsetMinutes }),
-    ...(expectedVersion === undefined ? {} : { expectedVersion }),
+    ...(expectedVersion === undefined ? {} : { expectedVersion: expectedVersion as number }),
     ...(legacyNoteTitle === undefined ? {} : { legacyNoteTitle }),
     ...(legacyNote === undefined ? {} : { legacyNote }),
   };

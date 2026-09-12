@@ -147,6 +147,16 @@ test("Wrangler-backed API covers persistence, catalog, calendar, pagination, imp
   assert.equal(finalizedOverrideState.body.daySelections.moodOverride, false);
   assert.deepEqual(finalizedOverrideState.body.daySelections.activityOverrideIds, []);
 
+  const concurrentSaves = await Promise.all(["mood-good", "mood-meh"].map((moodId) => json(`/api/entries/${overrideDate}`, {
+    method: "PUT",
+    body: JSON.stringify({ moodId, activityIds: [], completedGoalIds: [], expectedVersion: finalizedOverride.body.entry.version }),
+  })));
+  assert.deepEqual(concurrentSaves.map(({ response }) => response.status).sort(), [200, 409]);
+  assert.equal(concurrentSaves.find(({ response }) => response.status === 409).body.code, "VERSION_CONFLICT");
+  const afterConcurrentSaves = await json(`/api/entries/${overrideDate}`);
+  assert.equal(afterConcurrentSaves.body.entry.version, finalizedOverride.body.entry.version + 1);
+  assert.equal(afterConcurrentSaves.body.entry.moodId, concurrentSaves.find(({ response }) => response.status === 200).body.entry.moodId);
+
   const standaloneDate = "2026-01-10";
   const standaloneComplete = await json(`/api/goal-completions/${standaloneDate}/goal-read`, { method: "PUT", body: JSON.stringify({ completed: true }) });
   assert.equal(standaloneComplete.response.status, 200);
@@ -339,7 +349,7 @@ test("Wrangler-backed API covers persistence, catalog, calendar, pagination, imp
   const recreated = await json("/api/entries/2026-02-03", { method: "PUT", body: JSON.stringify({ moodId: "mood-rad", activityIds: [activity.body.activity.id], completedGoalIds: [goal.body.goal.id], localTime: "22:00" }) });
   assert.equal(recreated.response.status, 200);
   assert.equal(recreated.body.entry.id, saved.body.entry.id);
-  assert.equal(recreated.body.entry.version, 1);
+  assert.equal(recreated.body.entry.version, 3);
   assert.deepEqual(recreated.body.entry.activityIds, [activity.body.activity.id]);
   assert.deepEqual(recreated.body.entry.completedGoalIds.sort(), [goal.body.goal.id, relinkableGoal.body.goal.id].sort());
   const reloaded = await json("/api/entries/2026-02-03");

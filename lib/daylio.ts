@@ -1,5 +1,5 @@
 import { ACTIVITY_ICON_CHOICES, iconForActivity } from "./icons.ts";
-import { isValidTime, validateEntryInput, validateEntryReferences } from "./entry-validation.ts";
+import { isValidTime, validateEntryInput, validateEntryReferences, validateExpectedVersion, versionConflict } from "./entry-validation.ts";
 
 export type Mood = {
   id: string;
@@ -610,11 +610,7 @@ export class DaylioMemoryStore {
 
     const persisted = this.entries.get(logicalDate);
     const existing = persisted && !persisted.deletedAt ? persisted : undefined;
-    if (existing && validated.expectedVersion !== undefined && existing.version !== validated.expectedVersion) {
-      const error = new Error("This entry changed on another device.");
-      (error as Error & { code?: string }).code = "VERSION_CONFLICT";
-      throw error;
-    }
+    if (validated.expectedVersion !== undefined && (existing?.version ?? 0) !== validated.expectedVersion) throw versionConflict();
     const selections = this.getDaySelections(logicalDate);
     const activityIds = new Set(validated.activityIds);
     for (const activityId of selections.activityOverrideIds) {
@@ -628,12 +624,12 @@ export class DaylioMemoryStore {
       localTime: validated.localTime ?? existing?.localTime ?? "23:00",
       timezone: validated.timezone ?? existing?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
       timezoneOffsetMinutes: validated.timezoneOffsetMinutes ?? existing?.timezoneOffsetMinutes,
-      moodId: selections.moodId ?? validated.moodId,
+      moodId: selections.moodOverride ? selections.moodId! : validated.moodId,
       activityIds: [...activityIds],
       completedGoalIds: this.completedGoalIdsForDate(logicalDate),
       legacyNoteTitle: validated.legacyNoteTitle ?? existing?.legacyNoteTitle,
       legacyNote: validated.legacyNote ?? existing?.legacyNote,
-      version: (existing?.version ?? 0) + 1,
+      version: (persisted?.version ?? 0) + 1,
       createdAt: existing?.createdAt ?? timestamp,
       updatedAt: timestamp,
     };
@@ -652,13 +648,11 @@ export class DaylioMemoryStore {
   }
 
   deleteEntry(logicalDate: string, expectedVersion?: number) {
+    if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
+    validateExpectedVersion(expectedVersion);
     const existing = this.entries.get(logicalDate);
     if (!existing || existing.deletedAt) return null;
-    if (expectedVersion !== undefined && existing.version !== expectedVersion) {
-      const error = new Error("This entry changed on another device.");
-      (error as Error & { code?: string }).code = "VERSION_CONFLICT";
-      throw error;
-    }
+    if (expectedVersion !== undefined && existing.version !== expectedVersion) throw versionConflict();
     const deleted = { ...existing, deletedAt: nowIso(), updatedAt: nowIso(), version: existing.version + 1 };
     this.entries.set(logicalDate, deleted);
     return this.withGoalCompletions(deleted);
