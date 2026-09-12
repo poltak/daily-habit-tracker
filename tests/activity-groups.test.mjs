@@ -58,4 +58,19 @@ test("activity groups can include archived records and omit empty groups", () =>
     ["group-archived", ["archived-read"]],
   ]);
   assert.equal(result.some(({ group }) => group.id === "group-empty"), false);
+  assert.deepEqual(result.map(({ activeCount, archivedCount }) => [activeCount, archivedCount]), [[2, 1], [1, 0], [0, 1]]);
+});
+
+test("large catalogs read each activity group once and retain input order", () => {
+  const manyGroups = Array.from({ length: 100 }, (_, index) => ({ id: String(index), name: String(index), sortOrder: index, archived: false }));
+  let groupReads = 0;
+  const manyActivities = Array.from({ length: 1000 }, (_, index) => ({
+    id: String(index), name: `Activity ${index}`, sortOrder: index, archived: false,
+    get groupId() { groupReads += 1; return String(index % 100); },
+  }));
+  const result = filterActivityGroups({ groups: manyGroups, activities: manyActivities });
+  assert.equal(result.length, 100);
+  assert.equal(result.flatMap(({ activities }) => activities).length, 1000);
+  assert.equal(groupReads, 1000);
+  assert.equal(manyActivities[0].id, "0");
 });
