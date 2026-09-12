@@ -65,31 +65,24 @@ async function databaseOrNull() {
   const database = await currentDatabase();
   if (!database) return null;
   try {
-    await database.prepare("SELECT 1 FROM mood_levels LIMIT 1").first();
+    await seedDatabase(database);
   } catch (error) {
     throw new Error(`D1 is configured but its schema is unavailable. Apply the migration before using the app. ${error instanceof Error ? error.message : ""}`.trim());
   }
-  await seedDatabase(database);
   return database;
 }
 
-async function seedDatabase(database: Database) {
-  const result = await database.prepare("SELECT COUNT(*) AS count FROM mood_levels").first<{ count: number }>();
-  if (Number(result?.count ?? 0) > 0) return;
-  const statements = MOODS.map((mood) => database.prepare("INSERT INTO mood_levels (id, score, name, emoji, color, sort_order) VALUES (?, ?, ?, ?, ?, ?)").bind(mood.id, mood.score, mood.name, mood.emoji, mood.color, mood.score * -1));
-  const groups = [
-    ["group-health", "Health", 0], ["group-work", "Work", 1], ["group-home", "Home", 2], ["group-people", "People", 3], ["group-leisure", "Leisure", 4],
-  ];
-  statements.push(...groups.map(([id, name, order]) => database.prepare("INSERT INTO activity_groups (id, name, sort_order) VALUES (?, ?, ?)").bind(id, name, order)));
-  const activities = [
-    ["activity-gym", "group-health", "Gym", "🏋️", 0], ["activity-walk", "group-health", "Walk", "🚶", 1], ["activity-sleep", "group-health", "Sleep", "🌙", 2],
-    ["activity-deep-work", "group-work", "Deep work", "💻", 3], ["activity-meetings", "group-work", "Meetings", "👥", 4], ["activity-cook", "group-home", "Cook", "🍳", 5], ["activity-chores", "group-home", "Chores", "🧹", 6],
-    ["activity-family", "group-people", "Family", "💛", 7], ["activity-friends", "group-people", "Friends", "🎉", 8], ["activity-reading", "group-leisure", "Reading", "📚", 9], ["activity-gaming", "group-leisure", "Gaming", "🎮", 10], ["activity-music", "group-leisure", "Music", "🎵", 11],
-  ];
-  statements.push(...activities.map(([id, groupId, name, icon, order]) => database.prepare("INSERT INTO activities (id, group_id, name, material_icon, sort_order) VALUES (?, ?, ?, ?, ?)").bind(id, groupId, name, icon, order)));
-  statements.push(database.prepare("INSERT INTO goals (id, activity_id, name, material_icon, repeat_type, schedule_type, target_per_week, weekdays_mask, sort_order, reminder_enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").bind("goal-move", "activity-gym", "Move your body", "fitness_center", "weekly", "times_per_week", 3, null, 0, 0));
-  statements.push(database.prepare("INSERT INTO goals (id, activity_id, name, material_icon, repeat_type, schedule_type, weekdays_mask, sort_order, reminder_enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").bind("goal-read", "activity-reading", "Read", "menu_book", "daily", "daily", 127, 1, 0));
-  await database.batch(statements);
+export async function seedDatabase(database: Database) {
+  if (await database.prepare("SELECT id FROM mood_levels LIMIT 1").first()) return;
+  const seed = new DaylioMemoryStore().bootstrap();
+  // Concurrent first requests can both observe an empty catalog. All seed rows
+  // are inserted in one transaction; the second transaction keeps existing rows.
+  await database.batch([
+    ...seed.moods.map((mood) => database.prepare("INSERT OR IGNORE INTO mood_levels (id, score, name, emoji, color, sort_order) VALUES (?, ?, ?, ?, ?, ?)").bind(mood.id, mood.score, mood.name, mood.emoji, mood.color, -mood.score)),
+    ...seed.groups.map((group) => database.prepare("INSERT OR IGNORE INTO activity_groups (id, name, sort_order) VALUES (?, ?, ?)").bind(group.id, group.name, group.sortOrder)),
+    ...seed.activities.map((activity) => database.prepare("INSERT OR IGNORE INTO activities (id, group_id, name, material_icon, source_icon_id, sort_order) VALUES (?, ?, ?, ?, ?, ?)").bind(activity.id, activity.groupId, activity.name, activity.icon, activity.sourceIconId ?? null, activity.sortOrder)),
+    ...seed.goals.map((goal) => database.prepare("INSERT OR IGNORE INTO goals (id, activity_id, name, material_icon, repeat_type, schedule_type, target_per_week, weekdays_mask, sort_order, reminder_enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").bind(goal.id, goal.activityId, goal.name, goal.materialIcon, goal.repeatType, goal.scheduleType, goal.targetPerWeek ?? null, goal.weekdaysMask ?? null, goal.sortOrder, 0)),
+  ]);
 }
 
 async function rows<T>(database: Database, statement: D1PreparedStatement) {
