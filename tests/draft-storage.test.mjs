@@ -54,6 +54,13 @@ test("malformed drafts are ignored", () => {
   globalThis.window = { localStorage };
   localStorage.setItem("daymark:draft:v1:2026-07-31", JSON.stringify({ logicalDate: "2026-07-31", draft: { moodId: 42 } }));
   assert.equal(readStoredDraft("2026-07-31"), null);
+  for (const invalid of [{ ...draft, localTime: "25:00" }, { ...draft, version: -1 }, { ...draft, version: 1.5 }]) {
+    localStorage.setItem("daymark:draft:v1:2026-07-31", JSON.stringify({ logicalDate: "2026-07-31", savedAt: "2026-07-31", draft: invalid }));
+    assert.equal(readStoredDraft("2026-07-31"), null);
+  }
+  localStorage.setItem("daymark:draft:v1:invalid", JSON.stringify({ logicalDate: "invalid", savedAt: "2026-07-31", draft }));
+  localStorage.setItem("daymark:active-draft-date:v1", "invalid");
+  assert.equal(readActiveStoredDraft(), null);
 });
 
 test("a failed draft write preserves the last recoverable active draft", () => {

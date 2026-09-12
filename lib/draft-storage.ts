@@ -1,4 +1,6 @@
 import type { Entry } from "./daylio";
+import { isLogicalDate } from "./daylio.ts";
+import { isValidTime } from "./entry-validation.ts";
 
 export type Draft = {
   moodId: string;
@@ -61,11 +63,12 @@ function isDraft(value: unknown): value is Draft {
   return typeof candidate.moodId === "string"
     && Array.isArray(candidate.activityIds) && candidate.activityIds.every((id) => typeof id === "string")
     && Array.isArray(candidate.completedGoalIds) && candidate.completedGoalIds.every((id) => typeof id === "string")
-    && typeof candidate.localTime === "string"
-    && (candidate.version === undefined || typeof candidate.version === "number");
+    && typeof candidate.localTime === "string" && isValidTime(candidate.localTime)
+    && (candidate.version === undefined || (Number.isSafeInteger(candidate.version) && candidate.version > 0));
 }
 
 export function readStoredDraft(logicalDate: string): StoredDraft | null {
+  if (!isLogicalDate(logicalDate)) return null;
   const currentStorage = storage();
   if (!currentStorage) return null;
   try {

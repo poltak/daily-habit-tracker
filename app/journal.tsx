@@ -259,6 +259,7 @@ export default function Journal() {
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [activityQuery, setActivityQuery] = useState("");
   const [isLoadingDate, setIsLoadingDate] = useState(false);
+  const [loadedDate, setLoadedDate] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSetupBusy, setIsSetupBusy] = useState(false);
@@ -303,6 +304,8 @@ export default function Journal() {
   const failedSelectionRef = useRef<Set<string>>(new Set());
   const hasLocalDraftRef = useRef(false);
   const selectedDateRef = useRef("");
+  const loadedDateRef = useRef("");
+  const entryMutationRef = useRef(false);
   const selectedDateEpochRef = useRef(0);
   const dataRef = useRef<Bootstrap | null>(null);
   const viewRef = useRef<View>(view);
@@ -499,21 +502,11 @@ export default function Journal() {
   function applyBootstrap(
     next: Bootstrap,
     preferredDate: string,
-    announceRestore = false,
   ) {
     const nextDate =
       preferredDate || readActiveStoredDraft()?.logicalDate || next.today;
-    const recovered = draftForDate({
-      logicalDate: nextDate,
-      serverEntry: getEntryForDate(next.entries, nextDate) ?? null,
-    });
-    rememberDraftDate(nextDate);
-    selectedDateRef.current = nextDate;
     setData(next);
-    setSelectedDate(nextDate);
     setCalendarMonth((current) => current || nextDate.slice(0, 7));
-    setDraft(recovered.draft);
-    markLocalDraft(recovered.restored);
     if (viewRef.current === "goal" && selectedGoalIdRef.current) {
       const goal = next.goals.find((candidate) => candidate.id === selectedGoalIdRef.current && !candidate.archived);
       if (goal) {
@@ -524,11 +517,8 @@ export default function Journal() {
         writeRoute({ view: "log" }, { replace: true });
       }
     }
-    if (announceRestore && recovered.restored)
-      setMessage({
-        kind: "info",
-        text: `Restored unsaved changes for ${shortDate(nextDate)}.`,
-      });
+    // The bootstrap page is incomplete. Validate a stored draft only after the
+    // selected date has been read, or an older draft can be deleted as stale.
     void chooseDate(nextDate);
   }
 
@@ -543,7 +533,7 @@ export default function Journal() {
       if (!response.ok) throw new Error("Could not connect to your journal.");
       const next = (await response.json()) as Bootstrap;
       if (request.isCurrent()) {
-        applyBootstrap(next, selectedDate || next.today);
+        applyBootstrap(next, selectedDateRef.current);
         setConnectionState("online");
       }
       return next;
@@ -564,7 +554,7 @@ export default function Journal() {
       })
       .then((next) => {
         if (cancelled || !request.isCurrent()) return;
-        applyBootstrap(next, "", true);
+        applyBootstrap(next, "");
         setConnectionState("online");
       })
       .catch((error: Error) => {
@@ -691,6 +681,10 @@ export default function Journal() {
 
   async function chooseDate(nextDate: string) {
     if (!isLogicalDate(nextDate)) return;
+    if (entryMutationRef.current) {
+      setMessage({ kind: "info", text: "Wait for the entry update to finish before changing the day." });
+      return;
+    }
     if (selectedDateRef.current && hasPendingGoalToggle(selectedDateRef.current)) {
       setMessage({
         kind: "info",
@@ -709,6 +703,11 @@ export default function Journal() {
       return;
     }
     const request = dateRequestGate.current.begin();
+    loadedDateRef.current = "";
+    setLoadedDate("");
+    draftRef.current = EMPTY_DRAFT;
+    setDraft(EMPTY_DRAFT);
+    markLocalDraft(false);
     rememberDraftDate(nextDate);
     selectedDateRef.current = nextDate;
     selectedDateEpochRef.current += 1;
@@ -751,14 +750,16 @@ export default function Journal() {
         serverSelections,
       });
       setDraft(recovered.draft);
+      draftRef.current = recovered.draft;
+      loadedDateRef.current = nextDate;
+      setLoadedDate(nextDate);
       markLocalDraft(recovered.restored);
-      if (serverEntry)
-        setData((current) =>
+      setData((current) =>
           current
             ? {
                 ...current,
                 entries: [
-                  serverEntry!,
+                  ...(serverEntry ? [serverEntry] : []),
                   ...current.entries.filter(
                     (entry) => entry.logicalDate !== nextDate,
                   ),
@@ -814,7 +815,7 @@ export default function Journal() {
   async function toggleMood(id: string) {
     const logicalDate = selectedDateRef.current || selectedDate;
     const key = selectionPendingKey(logicalDate, "mood");
-    if (!logicalDate || isLoadingDate || pendingSelectionRef.current.has(key)) return;
+    if (!logicalDate || loadedDateRef.current !== logicalDate || entryMutationRef.current || isLoadingDate || pendingSelectionRef.current.has(key)) return;
     const previousMoodId = draftRef.current.moodId;
     if (previousMoodId === id) return;
     const nextDraft = { ...draftRef.current, moodId: id };
@@ -879,7 +880,7 @@ export default function Journal() {
   async function toggleActivity(id: string) {
     const logicalDate = selectedDateRef.current || selectedDate;
     const key = selectionPendingKey(logicalDate, "activity", id);
-    if (!logicalDate || isLoadingDate || pendingSelectionRef.current.has(key)) return;
+    if (!logicalDate || loadedDateRef.current !== logicalDate || entryMutationRef.current || isLoadingDate || pendingSelectionRef.current.has(key)) return;
     const linkedGoalIds = data?.goals
       .filter((goal) => !goal.archived && goal.activityId === id)
       .map((goal) => goal.id) ?? [];
@@ -1039,7 +1040,7 @@ export default function Journal() {
   async function toggleGoal(id: string) {
     const logicalDate = selectedDateRef.current || selectedDate;
     const key = goalPendingKey(logicalDate, id);
-    if (!logicalDate || isLoadingDate || pendingGoalRef.current.has(key))
+    if (!logicalDate || loadedDateRef.current !== logicalDate || entryMutationRef.current || isLoadingDate || pendingGoalRef.current.has(key))
       return;
     if (!navigator.onLine) {
       setMessage({
@@ -1298,7 +1299,7 @@ export default function Journal() {
   }
 
   async function saveEntry() {
-    if (isSaving || isDeleting) return;
+    if (isSaving || isDeleting || entryMutationRef.current || loadedDateRef.current !== selectedDate || !selectedDate) return;
     if (hasPendingGoalToggle(selectedDate) || hasPendingSelectionToggle(selectedDate)) {
       setMessage({
         kind: "info",
@@ -1321,6 +1322,7 @@ export default function Journal() {
       setConnectionState("offline");
       return;
     }
+    entryMutationRef.current = true;
     setIsSaving(true);
     setConnectionState("checking");
     setMessage(null);
@@ -1364,12 +1366,13 @@ export default function Journal() {
         text: `${(error as Error).message} Your draft is still stored on this device.`,
       });
     } finally {
+      entryMutationRef.current = false;
       setIsSaving(false);
     }
   }
 
   async function deleteSelectedEntry() {
-    if (isDeleting || isSaving || !draft.version)
+    if (isDeleting || isSaving || !draft.version || entryMutationRef.current || loadedDateRef.current !== selectedDate)
       return;
     if (hasPendingGoalToggle(selectedDate) || hasPendingSelectionToggle(selectedDate)) {
       setMessage({
@@ -1388,6 +1391,7 @@ export default function Journal() {
       setConnectionState("offline");
       return;
     }
+    entryMutationRef.current = true;
     setIsDeleting(true);
     setConnectionState("checking");
     setMessage(null);
@@ -1419,6 +1423,7 @@ export default function Journal() {
       setConnectionState(navigator.onLine ? "error" : "offline");
       setMessage({ kind: "error", text: (error as Error).message });
     } finally {
+      entryMutationRef.current = false;
       setIsDeleting(false);
     }
   }
@@ -1497,6 +1502,7 @@ export default function Journal() {
             hasLocalDraft={hasLocalDraft}
             activityQuery={activityQuery}
             isLoadingDate={isLoadingDate}
+            isDateReady={loadedDate === selectedDate && Boolean(selectedDate)}
             onDate={chooseDate}
             onMood={toggleMood}
             onActivityQuery={setActivityQuery}
@@ -1655,6 +1661,7 @@ function LogView({
   hasLocalDraft,
   activityQuery,
   isLoadingDate,
+  isDateReady,
   onDate,
   onMood,
   onActivityQuery,
@@ -1676,6 +1683,7 @@ function LogView({
   hasLocalDraft: boolean;
   activityQuery: string;
   isLoadingDate: boolean;
+  isDateReady: boolean;
   onDate: (date: string) => void;
   onMood: (id: string) => void;
   onActivityQuery: (value: string) => void;
@@ -1763,6 +1771,10 @@ function LogView({
           </div>
         )}
 
+        {!isLoadingDate && !isDateReady && (
+          <button className="secondary-button" onClick={() => onDate(selectedDate)}>Retry day</button>
+        )}
+
         <section className="panel goals-panel" aria-busy={isLoadingDate || goalsBusy}>
           <div className="section-heading">
             <div>
@@ -1783,7 +1795,7 @@ function LogView({
                   activity={activityFor(data.activities, goal.activityId)}
                   checked={draft.completedGoalIds.includes(goal.id)}
                   pending={pendingGoalKeys.has(`${selectedDate}:${goal.id}`)}
-                  disabled={isLoadingDate || goalsBusy}
+                  disabled={isLoadingDate || !isDateReady || goalsBusy}
                   onToggle={() => {
                     void onToggleGoal(goal.id);
                   }}
@@ -1809,7 +1821,7 @@ function LogView({
                 style={{ "--mood-color": mood.color } as React.CSSProperties}
                 aria-pressed={draft.moodId === mood.id}
                 aria-busy={pendingSelectionKeys.has(`${selectedDate}:mood:`)}
-                disabled={isLoadingDate || pendingSelectionKeys.has(`${selectedDate}:mood:`)}
+                disabled={isLoadingDate || !isDateReady || pendingSelectionKeys.has(`${selectedDate}:mood:`)}
                 onClick={() => onMood(mood.id)}
               >
                 <span className="mood-emoji">{mood.emoji}</span>
@@ -1837,7 +1849,7 @@ function LogView({
                   <button
                     key={id}
                     className="selection-chip"
-                    disabled={isLoadingDate || pendingSelectionKeys.has(`${selectedDate}:activity:${id}`)}
+                    disabled={isLoadingDate || !isDateReady || pendingSelectionKeys.has(`${selectedDate}:activity:${id}`)}
                     aria-busy={pendingSelectionKeys.has(`${selectedDate}:activity:${id}`)}
                     onClick={() => onToggleActivity(id)}
                   >
@@ -1867,7 +1879,7 @@ function LogView({
               activityQuery={activityQuery}
               selectedActivityIds={draft.activityIds}
               selectedDate={selectedDate}
-              isLoadingDate={isLoadingDate}
+              isLoadingDate={isLoadingDate || !isDateReady}
               pendingSelectionKeys={pendingSelectionKeys}
               onToggleActivity={onToggleActivity}
               onOpenAddActivity={onOpenAddActivity}
@@ -1893,7 +1905,7 @@ function LogView({
             <button
               className="ghost-button danger"
               onClick={onDelete}
-              disabled={isDeleting || isSaving || goalsBusy || selectionBusy}
+              disabled={isDeleting || isSaving || !isDateReady || goalsBusy || selectionBusy}
               aria-busy={isDeleting}
             >
               {isDeleting ? "Deleting…" : "Delete"}
@@ -1902,7 +1914,7 @@ function LogView({
           <button
             className="primary-button"
             onClick={onSave}
-            disabled={isSaving || isDeleting || goalsBusy || selectionBusy}
+            disabled={isSaving || isDeleting || !isDateReady || goalsBusy || selectionBusy}
             aria-busy={isSaving}
           >
             {isSaving

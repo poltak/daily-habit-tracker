@@ -44,7 +44,7 @@ test("entry deletion has a duplicate-request guard and loading feedback", () => 
     deleteHandler.indexOf("hasPendingGoalToggle(selectedDate)") <
       deleteHandler.indexOf("window.confirm"),
   );
-  assert.match(pageSource, /disabled=\{isDeleting \|\| isSaving \|\| goalsBusy \|\| selectionBusy\}/);
+  assert.match(pageSource, /disabled=\{isDeleting \|\| isSaving \|\| !isDateReady \|\| goalsBusy \|\| selectionBusy\}/);
   assert.match(pageSource, /setIsDeleting\(true\)/);
   assert.match(pageSource, /isDeleting \? "Deleting…"/);
   assert.match(pageSource, /className="log-form" disabled=\{formBusy\} aria-busy=\{formBusy\}/);
@@ -87,7 +87,7 @@ test("goals are above mood and persist through a dedicated optimistic toggle", (
   assert.match(pageSource, /setDraft\(\(current\) => \{[\s\S]*completedGoalIds:/);
   assert.match(pageSource, /pending=\{pendingGoalKeys\.has\(/);
   assert.match(pageSource, /aria-busy=\{pending\}/);
-  assert.match(pageSource, /disabled=\{isLoadingDate \|\| goalsBusy\}/);
+  assert.match(pageSource, /disabled=\{isLoadingDate \|\| !isDateReady \|\| goalsBusy\}/);
   assert.match(pageSource, /if \(selectedDateRef\.current && hasPendingGoalToggle\(selectedDateRef\.current\)\)/);
   assert.match(pageSource, /The goal was restored/);
   assert.match(pageSource, /serverCompletedGoalIds/);
