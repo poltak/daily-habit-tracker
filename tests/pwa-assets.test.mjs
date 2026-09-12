@@ -179,7 +179,7 @@ test("layout emits one credentialed manifest link and no metadata manifest", asy
 
 test("service-worker shell caches the versioned PWA assets", async () => {
   const serviceWorker = (await readProjectFile("public/sw.js")).toString();
-  assert.match(serviceWorker, /daymark-shell-v3/);
+  assert.match(serviceWorker, /daymark-shell-v4/);
   for (const asset of ["/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/icon-maskable-512.png"]) {
     assert.match(serviceWorker, new RegExp(`"${asset.replaceAll(".", "\\.")}"`));
   }
