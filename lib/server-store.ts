@@ -21,9 +21,9 @@ import {
   isLogicalDate,
   normalizeGoalConfig,
   store as memoryStore,
-} from "./daylio";
-import { validateEntryInput, validateEntryReferences as assertEntryReferences, type EntryInputCandidate } from "./entry-validation";
-import { iconForActivity } from "./icons";
+} from "./daylio.ts";
+import { validateEntryInput, validateEntryReferences as assertEntryReferences, type EntryInputCandidate } from "./entry-validation.ts";
+import { iconForActivity } from "./icons.ts";
 
 type Database = D1Database;
 
@@ -117,31 +117,53 @@ function toEntry(row: EntryRow, activityIds: string[], completedGoalIds: string[
 }
 
 export class D1DaylioStore {
-  constructor(private readonly database: Database) {}
+  private readonly database: Database;
+
+  constructor(database: Database) {
+    this.database = database;
+  }
 
   async bootstrap(entryLimit = 30, entryOffset = 0): Promise<Bootstrap> {
-    const [moodRows, groupRows, activityRows, goalRows, entryRows, linkRows, completionRows] = await Promise.all([
+    const [moodRows, groupRows, activityRows, goalRows, entries] = await Promise.all([
       rows<MoodRow>(this.database, this.database.prepare("SELECT id, name, score, emoji, color FROM mood_levels ORDER BY score DESC")),
       rows<GroupRow>(this.database, this.database.prepare("SELECT id, name, sort_order, archived_at FROM activity_groups ORDER BY sort_order")),
       rows<ActivityRow>(this.database, this.database.prepare("SELECT id, group_id, name, material_icon, source_icon_id, sort_order, archived_at FROM activities ORDER BY sort_order")),
       rows<GoalRow>(this.database, this.database.prepare("SELECT id, activity_id, name, material_icon, repeat_type, schedule_type, target_per_week, weekdays_mask, start_date, end_date, sort_order, archived_at, reminder_enabled, reminder_time, source_state FROM goals ORDER BY sort_order")),
-      rows<EntryRow>(this.database, this.database.prepare("SELECT * FROM entries WHERE deleted_at IS NULL ORDER BY logical_date DESC LIMIT ? OFFSET ?").bind(entryLimit, entryOffset)),
-      rows<{ entry_id: string; activity_id: string }>(this.database, this.database.prepare("SELECT entry_id, activity_id FROM entry_activities")),
-      rows<{ entry_id: string | null; goal_id: string; logical_date: string }>(this.database, this.database.prepare("SELECT entry_id, goal_id, logical_date FROM goal_completions")),
+      this.listEntries(entryLimit, entryOffset),
     ]);
-    const activityLinks = new Map<string, string[]>();
-    for (const link of linkRows) activityLinks.set(link.entry_id, [...(activityLinks.get(link.entry_id) ?? []), link.activity_id]);
-    const goalLinks = new Map<string, string[]>();
-    for (const link of completionRows) if (link.entry_id) goalLinks.set(link.entry_id, [...(goalLinks.get(link.entry_id) ?? []), link.goal_id]);
-    const entries = entryRows.map((row) => toEntry(row, activityLinks.get(row.id) ?? [], goalLinks.get(row.id) ?? []));
     const today = new Date();
     const todayValue = `${today.getFullYear()}-${`${today.getMonth() + 1}`.padStart(2, "0")}-${`${today.getDate()}`.padStart(2, "0")}`;
     return { moods: moodRows.map(toMood), groups: groupRows.map(toGroup), activities: activityRows.map(toActivity), goals: goalRows.map(toGoal), entries, today: todayValue, yesterday: addDays(todayValue, -1) };
   }
 
   async listEntries(limit = 30, offset = 0) {
-    const snapshot = await this.bootstrap(Math.min(limit, 101), Math.max(offset, 0));
-    return snapshot.entries;
+    const page = "WITH page AS (SELECT * FROM entries WHERE deleted_at IS NULL ORDER BY logical_date DESC LIMIT ? OFFSET ?)";
+    const statements = [
+      `${page} SELECT page.*, COALESCE(selection.mood_id, page.mood_id) AS effective_mood_id FROM page LEFT JOIN day_mood_selections AS selection ON selection.logical_date = page.logical_date ORDER BY page.logical_date DESC`,
+      `${page} SELECT link.entry_id, link.activity_id FROM page JOIN entry_activities AS link ON link.entry_id = page.id ORDER BY link.activity_id`,
+      `${page} SELECT selection.logical_date, selection.activity_id, selection.selected FROM page JOIN day_activity_selections AS selection ON selection.logical_date = page.logical_date ORDER BY selection.activity_id`,
+      // Keep the bounded page on the outer side of the date-index lookup.
+      `${page} SELECT completion.logical_date, completion.goal_id FROM page CROSS JOIN goal_completions AS completion ON completion.logical_date = page.logical_date ORDER BY completion.goal_id`,
+    ].map((query) => this.database.prepare(query).bind(Math.min(limit, 101), Math.max(offset, 0)));
+    // One batch gives the page and its related rows a consistent snapshot.
+    const [entryResult, linkResult, selectionResult, completionResult] = await this.database.batch(statements);
+    const activityLinks = new Map<string, Set<string>>();
+    for (const link of linkResult.results as { entry_id: string; activity_id: string }[]) {
+      if (!activityLinks.has(link.entry_id)) activityLinks.set(link.entry_id, new Set());
+      activityLinks.get(link.entry_id)!.add(link.activity_id);
+    }
+    const entries = new Map((entryResult.results as (EntryRow & { effective_mood_id: string })[]).map((row) => [row.logical_date, toEntry(row, [], [], row.effective_mood_id)]));
+    for (const selection of selectionResult.results as DayActivitySelectionRow[]) {
+      const entry = entries.get(selection.logical_date)!;
+      const activities = activityLinks.get(entry.id) ?? new Set<string>();
+      if (selection.selected) activities.add(selection.activity_id);
+      else activities.delete(selection.activity_id);
+      activityLinks.set(entry.id, activities);
+    }
+    for (const completion of completionResult.results as { logical_date: string; goal_id: string }[]) {
+      entries.get(completion.logical_date)!.completedGoalIds.push(completion.goal_id);
+    }
+    return [...entries.values()].map((entry) => ({ ...entry, activityIds: [...(activityLinks.get(entry.id) ?? [])] }));
   }
 
   async listEntryDates(startDate: string, endDate: string) {

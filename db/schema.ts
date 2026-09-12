@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 const timestamps = {
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
@@ -95,7 +95,10 @@ export const goalCompletions = sqliteTable("goal_completions", {
   sourceSystem: text("source_system"),
   sourceId: text("source_id"),
   ...timestamps,
-}, (table) => ({ goalDateIdx: uniqueIndex("goal_completions_goal_date_idx").on(table.goalId, table.logicalDate) }));
+}, (table) => ({
+  goalDateIdx: uniqueIndex("goal_completions_goal_date_idx").on(table.goalId, table.logicalDate),
+  dateGoalIdx: index("goal_completions_date_goal_idx").on(table.logicalDate, table.goalId),
+}));
 
 export const dayMoodSelections = sqliteTable("day_mood_selections", {
   logicalDate: text("logical_date").primaryKey(),

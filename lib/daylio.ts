@@ -459,7 +459,7 @@ export class DaylioMemoryStore {
       .filter((entry) => !entry.deletedAt)
       .sort((a, b) => b.logicalDate.localeCompare(a.logicalDate))
       .slice(offset, offset + limit)
-      .map((entry) => this.withGoalCompletions(entry));
+      .map((entry) => this.getEntry(entry.logicalDate)!);
   }
 
   listEntryDates(startDate: string, endDate: string) {
