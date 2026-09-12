@@ -13,6 +13,7 @@ import {
   type GoalRepeatType,
   type Mood,
   ALL_WEEKDAYS_MASK,
+  addDays,
   goalRepeatType,
   goalWeekdayMask,
   isLogicalDate,
@@ -503,9 +504,9 @@ export default function Journal() {
     next: Bootstrap,
     preferredDate: string,
   ) {
-    const nextDate =
-      preferredDate || readActiveStoredDraft()?.logicalDate || next.today;
-    setData(next);
+    const today = logicalDateFromDate();
+    const nextDate = preferredDate || readActiveStoredDraft()?.logicalDate || today;
+    setData({ ...next, today, yesterday: addDays(today, -1) });
     setCalendarMonth((current) => current || nextDate.slice(0, 7));
     if (viewRef.current === "goal" && selectedGoalIdRef.current) {
       const goal = next.goals.find((candidate) => candidate.id === selectedGoalIdRef.current && !candidate.archived);
@@ -580,6 +581,23 @@ export default function Journal() {
     return () => {
       window.removeEventListener("online", updateConnection);
       window.removeEventListener("offline", updateConnection);
+    };
+  }, []);
+
+  useEffect(() => {
+    function updateLocalDay() {
+      const today = logicalDateFromDate();
+      setData((current) => current && current.today !== today
+        ? { ...current, today, yesterday: addDays(today, -1) }
+        : current);
+    }
+    const timer = window.setInterval(updateLocalDay, 60_000);
+    window.addEventListener("focus", updateLocalDay);
+    document.addEventListener("visibilitychange", updateLocalDay);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", updateLocalDay);
+      document.removeEventListener("visibilitychange", updateLocalDay);
     };
   }, []);
 
