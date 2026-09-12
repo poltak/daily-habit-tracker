@@ -529,11 +529,15 @@ export class D1DaylioStore {
       }),
     ];
     for (let index = 0; index < allStatements.length; index += 50) await this.database.batch(allStatements.slice(index, index + 50));
-    for (const item of payload.entries) {
-      const id = `daylio-entry-${item.sourceId}`;
-      const timestamp = new Date().toISOString();
-      const statements = [this.database.prepare("INSERT INTO entries (id, logical_date, local_time, timezone, timezone_offset_minutes, mood_id, legacy_note_title, legacy_note, version, source_system, source_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET logical_date=excluded.logical_date, mood_id=excluded.mood_id, local_time=excluded.local_time, timezone_offset_minutes=excluded.timezone_offset_minutes, legacy_note_title=excluded.legacy_note_title, legacy_note=excluded.legacy_note, version=entries.version+1, updated_at=excluded.updated_at").bind(id, item.logicalDate, item.localTime, "", item.timezoneOffsetMinutes ?? null, moodIds.get(item.moodSourceId), item.legacyNoteTitle ?? null, item.legacyNote ?? null, "daylio", item.sourceId, timestamp, timestamp), this.database.prepare("DELETE FROM entry_activities WHERE entry_id = ?").bind(id)];
-      statements.push(...item.activitySourceIds.map((activityId) => this.database.prepare("INSERT OR IGNORE INTO entry_activities (entry_id, activity_id) VALUES (?, ?)").bind(id, activityIds.get(activityId) ?? "")));
+    for (let index = 0; index < payload.entries.length; index += 16) {
+      const statements = payload.entries.slice(index, index + 16).flatMap((item) => {
+        const id = `daylio-entry-${item.sourceId}`;
+        return [
+        this.database.prepare("INSERT INTO entries (id, logical_date, local_time, timezone, timezone_offset_minutes, mood_id, legacy_note_title, legacy_note, version, source_system, source_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET logical_date=excluded.logical_date, mood_id=excluded.mood_id, local_time=excluded.local_time, timezone_offset_minutes=excluded.timezone_offset_minutes, legacy_note_title=excluded.legacy_note_title, legacy_note=excluded.legacy_note, version=entries.version+1, updated_at=excluded.updated_at").bind(id, item.logicalDate, item.localTime, "", item.timezoneOffsetMinutes ?? null, moodIds.get(item.moodSourceId), item.legacyNoteTitle ?? null, item.legacyNote ?? null, "daylio", item.sourceId, importedAt, importedAt),
+        this.database.prepare("DELETE FROM entry_activities WHERE entry_id = ?").bind(id),
+        this.database.prepare("INSERT OR IGNORE INTO entry_activities (entry_id, activity_id) SELECT ?, value FROM json_each(?)").bind(id, JSON.stringify(item.activitySourceIds.map((activityId) => activityIds.get(activityId)))),
+        ];
+      });
       await this.database.batch(statements);
     }
     const entryIdsByDate = new Map(payload.entries.map((item) => [item.logicalDate, `daylio-entry-${item.sourceId}`]));

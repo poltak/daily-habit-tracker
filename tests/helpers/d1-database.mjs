@@ -17,6 +17,7 @@ export function createTestDatabase() {
   for (const activity of seed.activities) sqlite.prepare("INSERT INTO activities (id, group_id, name, material_icon, sort_order) VALUES (?, ?, ?, ?, ?)").run(activity.id, activity.groupId, activity.name, activity.icon, activity.sortOrder);
   for (const goal of seed.goals) sqlite.prepare("INSERT INTO goals (id, activity_id, name, material_icon, repeat_type, schedule_type, target_per_week, weekdays_mask, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").run(goal.id, goal.activityId, goal.name, goal.materialIcon, goal.repeatType, goal.scheduleType, goal.targetPerWeek ?? null, goal.weekdaysMask ?? null, goal.sortOrder);
   const queries = [];
+  const batches = [];
   let beforeBatch;
   function prepare(query, values = []) {
     const execute = () => {
@@ -37,9 +38,11 @@ export function createTestDatabase() {
   return {
     sqlite,
     queries,
+    batches,
     prepare,
     setBeforeBatch(callback) { beforeBatch = callback; },
     async batch(statements) {
+      batches.push(statements.length);
       const callback = beforeBatch;
       beforeBatch = undefined;
       if (callback) await callback();
