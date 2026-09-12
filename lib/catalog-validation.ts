@@ -25,8 +25,9 @@ export function validateCatalogPatch<K extends keyof CatalogPatches>({ kind, pat
       if (typeof value !== "number" || !Number.isSafeInteger(value)) throw new Error(`${key} must be an integer.`);
     } else {
       if (key === "activityId" && value === null) continue;
-      if (typeof value !== "string" || !value.trim()) throw new Error(`${key} must be a non-empty string.`);
-      if (key === "reminderTime" && !isValidTime(value)) throw new Error("Choose a valid reminder time.");
+      if (typeof value !== "string") throw new Error(`${key} must be a string.`);
+      if ((key === "groupId" || key === "activityId") && !value.trim()) throw new Error(`${key} must be a non-empty string.`);
+      if (key === "reminderTime" && value !== "" && !isValidTime(value)) throw new Error("Choose a valid reminder time.");
     }
   }
   return patch as CatalogPatches[K];
