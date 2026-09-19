@@ -7,6 +7,7 @@ import {
   ACTIVITY_PAIR_GROUPS,
   compareActivityCalendarDays,
   compareActivityMood,
+  compareActivityPair,
   rankActivityMoodAssociations,
   rankActivityPairs,
   type ActivityMoodAssociation,
@@ -175,7 +176,8 @@ export function RelationshipInsights({ days, moods, activities, groups }: Relati
   const visibleActivities = useMemo(() => activitySort({ groups, activities, days }), [activities, days, groups]);
   const activityById = useMemo(() => new Map(visibleActivities.map((activity) => [activity.id, activity])), [visibleActivities]);
   const [activitySelection, setActivitySelection] = useState(() => visibleActivities[0]?.id ?? "");
-  const [selectedPairKey, setSelectedPairKey] = useState("");
+  const [pairActivityASelection, setPairActivityASelection] = useState("");
+  const [pairActivityBSelection, setPairActivityBSelection] = useState("");
   const [year, setYear] = useState("all");
   const [weekday, setWeekday] = useState("all");
 
@@ -190,8 +192,19 @@ export function RelationshipInsights({ days, moods, activities, groups }: Relati
   const associations = useMemo(() => rankActivityMoodAssociations({ days, moods, activities: visibleActivities, filter: relationshipFilter }), [days, moods, relationshipFilter, visibleActivities]);
   const selectedAssociation: ActivityMoodAssociation | undefined = associations.find((association) => association.activityId === selectedActivityId) ?? (selectedActivityId ? compareActivityMood({ days: [], moods, activityId: selectedActivityId }) : undefined);
   const calendarComparison = useMemo(() => selectedActivityId ? compareActivityCalendarDays({ days, moods, activityId: selectedActivityId }) : null, [days, moods, selectedActivityId]);
-  const pairResults = useMemo(() => rankActivityPairs({ days, moods, activities: visibleActivities, minObservations: 10 }), [days, moods, visibleActivities]);
-  const selectedPair = pairResults.comparisons.find((pair) => pair.pairKey === selectedPairKey) ?? pairResults.suggestions[0] ?? pairResults.comparisons[0];
+  const pairResults = useMemo(() => rankActivityPairs({ days, moods, activities: visibleActivities, minObservations: 10, limit: 5 }), [days, moods, visibleActivities]);
+  const fallbackPair = pairResults.suggestions[0] ?? pairResults.comparisons[0];
+  const pairActivityAId = visibleActivities.some((activity) => activity.id === pairActivityASelection)
+    ? pairActivityASelection
+    : fallbackPair?.activityAId ?? visibleActivities[0]?.id ?? "";
+  const pairActivityBId = visibleActivities.some((activity) => activity.id === pairActivityBSelection && activity.id !== pairActivityAId)
+    ? pairActivityBSelection
+    : fallbackPair && fallbackPair.activityAId === pairActivityAId
+      ? fallbackPair.activityBId
+      : visibleActivities.find((activity) => activity.id !== pairActivityAId)?.id ?? "";
+  const selectedPair = useMemo(() => pairActivityAId && pairActivityBId
+    ? compareActivityPair({ days, moods, activityAId: pairActivityAId, activityBId: pairActivityBId, minObservations: 10 })
+    : null, [days, moods, pairActivityAId, pairActivityBId]);
 
   const hasDays = days.length > 0;
   const hasMoods = moods.length > 0;
@@ -215,11 +228,11 @@ export function RelationshipInsights({ days, moods, activities, groups }: Relati
         <div className="insight-rel-association-layout">
           <div className="insight-rel-ranking-panel">
             <div className="insight-rel-subheading"><h3>Ranked associations</h3><span>{associations.length ? `${associations.length} with mood data` : "No data"}</span></div>
-            {associations.length ? <div className="insight-rel-ranking-list" role="listbox" aria-label="Activity mood associations">
+            {associations.length ? <div className="insight-rel-ranking-list" role="group" aria-label="Activity mood associations">
               {associations.map((association, index) => {
                 const activity = activityById.get(association.activityId);
                 const selected = association.activityId === selectedActivityId;
-                return <button type="button" role="option" aria-selected={selected} className={`insight-rel-ranking-row ${selected ? "selected" : ""}`} key={association.activityId} onClick={() => setActivitySelection(association.activityId)}>
+                return <button type="button" aria-pressed={selected} className={`insight-rel-ranking-row ${selected ? "selected" : ""}`} key={association.activityId} onClick={() => setActivitySelection(association.activityId)}>
                   <span className="insight-rel-rank">{index + 1}</span>
                   <span className="insight-rel-activity-icon material-symbols-rounded" aria-hidden="true">{activityIcon(activity)}</span>
                   <span className="insight-rel-ranking-copy"><strong>{activity ? displayActivityName(activity) : association.activityId}</strong><small>{association.recorded.sampleSize} recorded · {association.notRecorded.sampleSize} not recorded{association.sparse ? " · sparse" : ""}</small></span>
@@ -259,10 +272,13 @@ export function RelationshipInsights({ days, moods, activities, groups }: Relati
           <div><p className="insights-kicker">Activity combinations</p><h2>Which pairs have a useful mood split?</h2></div>
         </div>
         <p className="insights-help">Suggestions appear only when each of four groups has at least 10 known mood observations: neither activity, A only, B only, and both. Pair differences describe logged-day associations and do not establish causation.</p>
-        {pairResults.suggestions.length ? <div className="insight-rel-pair-suggestions" role="listbox" aria-label="Suggested activity pairs">
-          {pairResults.suggestions.map((pair) => <button type="button" role="option" aria-selected={selectedPair?.pairKey === pair.pairKey} className={`insight-rel-pair-suggestion ${selectedPair?.pairKey === pair.pairKey ? "selected" : ""}`} key={pair.pairKey} onClick={() => setSelectedPairKey(pair.pairKey)}><span className="insight-rel-pair-suggestion-icon material-symbols-rounded" aria-hidden="true">compare_arrows</span><span><strong>{pairLabel(pair, activityById)}</strong><small>{pair.meanRange === null ? "No mean range" : `${pair.meanRange.toFixed(2)} point spread across groups`}</small></span></button>)}
+        {pairResults.suggestions.length ? <div className="insight-rel-pair-suggestions" role="group" aria-label="Suggested activity pairs">
+          {pairResults.suggestions.map((pair) => <button type="button" aria-pressed={selectedPair?.pairKey === pair.pairKey} className={`insight-rel-pair-suggestion ${selectedPair?.pairKey === pair.pairKey ? "selected" : ""}`} key={pair.pairKey} onClick={() => { setPairActivityASelection(pair.activityAId); setPairActivityBSelection(pair.activityBId); }}><span className="insight-rel-pair-suggestion-icon material-symbols-rounded" aria-hidden="true">compare_arrows</span><span><strong>{pairLabel(pair, activityById)}</strong><small>{pair.meanRange === null ? "No mean range" : `${pair.meanRange.toFixed(2)} point spread across groups`}</small></span></button>)}
         </div> : <p className="insights-empty">No pair meets the 10-observation threshold in all four groups yet. You can still explore a sparse pair below.</p>}
-        <div className="insight-rel-pair-picker-wrap"><label className="insights-field"><span>Explore a pair</span><select className="insights-select" value={selectedPair?.pairKey ?? ""} onChange={(event) => setSelectedPairKey(event.target.value)} disabled={!pairResults.comparisons.length}><option value="">Choose two activities</option>{pairResults.comparisons.map((pair) => <option key={pair.pairKey} value={pair.pairKey}>{pairLabel(pair, activityById)}{pair.adequate ? " · suggested" : " · sparse"}</option>)}</select></label></div>
+        <div className="insight-rel-pair-picker-wrap">
+          <label className="insights-field"><span>First activity</span><select className="insights-select" value={pairActivityAId} onChange={(event) => setPairActivityASelection(event.target.value)} disabled={visibleActivities.length < 2}>{visibleActivities.filter((activity) => activity.id !== pairActivityBId).map((activity) => <option key={activity.id} value={activity.id}>{displayActivityName(activity)}</option>)}</select></label>
+          <label className="insights-field"><span>Second activity</span><select className="insights-select" value={pairActivityBId} onChange={(event) => setPairActivityBSelection(event.target.value)} disabled={visibleActivities.length < 2}>{visibleActivities.filter((activity) => activity.id !== pairActivityAId).map((activity) => <option key={activity.id} value={activity.id}>{displayActivityName(activity)}</option>)}</select></label>
+        </div>
         {selectedPair ? <div className="insight-rel-pair-detail">
           <div className="insight-rel-subheading"><div><h3>{pairLabel(selectedPair, activityById)}</h3><p>Compare the four logged-day groups</p></div><span className={`insight-rel-adequacy ${selectedPair.adequate ? "adequate" : "sparse"}`}>{selectedPair.adequate ? "Adequate sample" : `Sparse: ${selectedPair.sparseGroups.length} group${selectedPair.sparseGroups.length === 1 ? "" : "s"}`}</span></div>
           <div className="insight-rel-pair-grid">{ACTIVITY_PAIR_GROUPS.map((group) => <SummaryCard key={group} title={group === "aOnly" ? `${activityById.get(selectedPair.activityAId)?.name ?? "A"} only` : group === "bOnly" ? `${activityById.get(selectedPair.activityBId)?.name ?? "B"} only` : PAIR_GROUP_LABELS[group]} summary={selectedPair.groups[group]} moods={moods} compact />)}</div>

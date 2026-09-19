@@ -450,6 +450,9 @@
 }
 
 .insight-rel-pair-picker-wrap {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
   max-width: 420px;
 }
 
@@ -521,6 +524,10 @@
 
   .insight-rel-summary-grid,
   .insight-rel-pair-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .insight-rel-pair-picker-wrap {
     grid-template-columns: 1fr;
   }
 

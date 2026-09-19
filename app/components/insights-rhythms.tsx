@@ -144,11 +144,13 @@ function RhythmChart({ title, buckets, moods, selectedActivityName }: { title: s
         {selectedActivityName ? <span><i className="insight-rhythm-legend-line" aria-hidden="true" /> {selectedActivityName}: recorded fraction</span> : null}
         <span><i className="insight-rhythm-legend-sample" aria-hidden="true" /> n = mood observations · d = logged days</span>
       </div>
-      <table className="sr-only">
-        <caption>{title}</caption>
-        <thead><tr><th scope="col">Bucket</th><th scope="col">Mood observations</th><th scope="col">Logged days</th><th scope="col">Mean mood</th>{selectedActivityName ? <th scope="col">Activity recorded fraction</th> : null}</tr></thead>
-        <tbody>{buckets.map((bucket) => <tr key={`${title}-${bucket.key}`}><th scope="row">{bucket.label}</th><td>{bucket.count}</td><td>{bucket.loggedCount}</td><td>{formatMean(bucket.mean)}</td>{selectedActivityName ? <td>{formatPercent(bucket.activityFrequency?.fraction ?? null)}</td> : null}</tr>)}</tbody>
-      </table>
+      <div className="sr-only">
+        <table>
+          <caption>{title}</caption>
+          <thead><tr><th scope="col">Bucket</th><th scope="col">Mood observations</th><th scope="col">Logged days</th><th scope="col">Mean mood</th>{selectedActivityName ? <th scope="col">Activity recorded fraction</th> : null}</tr></thead>
+          <tbody>{buckets.map((bucket) => <tr key={`${title}-${bucket.key}`}><th scope="row">{bucket.label}</th><td>{bucket.count}</td><td>{bucket.loggedCount}</td><td>{formatMean(bucket.mean)}</td>{selectedActivityName ? <td>{formatPercent(bucket.activityFrequency?.fraction ?? null)}</td> : null}</tr>)}</tbody>
+        </table>
+      </div>
     </figure>
   );
 }
