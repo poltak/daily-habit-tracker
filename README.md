@@ -70,6 +70,20 @@ unsaved drafts per logical date in device-local storage and clearly reports
 online, offline, and failed-save states; a successful save clears that local
 draft.
 
+## Insights
+
+Open `/insights` from the journal navigation to explore the full saved-entry
+history. A shared date range filters activity/mood comparisons, exact calendar-day
+offsets, activity combinations, weekday/month rhythms, and higher-mood week
+comparisons. Charts include sample sizes, keep missing days out of mood averages,
+and distinguish activities not recorded from days without an entry. Archived
+activities remain available for historical comparisons.
+
+`/api/insights` returns only the catalogs and effective date/mood/activity data
+needed by these views, with private, no-store caching. It includes saved mood and
+activity overrides, excludes deleted entries, and uses the same API access
+protection as the rest of the journal. Patterns are descriptive associations.
+
 ## Cloudflare deployment
 
 `wrangler.jsonc` declares the D1 binding and migrations. The GitHub workflow

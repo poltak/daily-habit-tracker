@@ -12,6 +12,7 @@ test("allows unconfigured API requests on local development hosts", async () => 
 
 test("rejects unconfigured API requests on public hosts", async () => {
   assert.equal(await validAccessRequest(new Request("https://daymark.example.workers.dev/api/health"), unconfigured), false);
+  assert.equal(await validAccessRequest(new Request("https://daymark.example.workers.dev/api/insights"), unconfigured), false);
 });
 
 test("rejects partially configured Access settings", async () => {

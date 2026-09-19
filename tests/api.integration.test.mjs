@@ -331,6 +331,27 @@ test("Wrangler-backed API covers persistence, catalog, calendar, pagination, imp
   assert.equal(savedOlder.response.status, 200);
   const loaded = await json("/api/entries/2026-02-03");
   assert.equal(loaded.body.entry.localTime, "21:30");
+  const insights = await json("/api/insights");
+  assert.equal(insights.response.status, 200);
+  assert.match(insights.response.headers.get("content-type") ?? "", /^application\/json\b/i);
+  assert.equal(insights.response.headers.get("cache-control"), "private, no-store");
+  assert.equal(insights.body.moods.length, 5);
+  assert.ok(insights.body.groups.length >= 5);
+  assert.ok(insights.body.activities.length >= 12);
+  assert.ok(Array.isArray(insights.body.days));
+  assert.deepEqual(insights.body.days.find((day) => day.logicalDate === "2026-02-02"), {
+    logicalDate: "2026-02-02",
+    moodId: "mood-meh",
+    activityIds: [],
+  });
+  assert.deepEqual(insights.body.days.find((day) => day.logicalDate === "2026-02-03"), {
+    logicalDate: "2026-02-03",
+    moodId: "mood-good",
+    activityIds: [activity.body.activity.id],
+  });
+  assert.equal(insights.body.days.some((day) => day.logicalDate === selectionDate), false, "selection-only dates are omitted from insights history");
+  assert.equal("goals" in insights.body, false);
+  assert.ok(insights.body.days.every((day) => !Object.hasOwn(day, "legacyNote")));
   const calendar = await json("/api/calendar?month=2026-02");
   assert.deepEqual(calendar.body.dates, ["2026-02-02", "2026-02-03"]);
   assert.deepEqual(calendar.body.days, [

@@ -26,6 +26,7 @@ import { validateEntryInput, validateEntryReferences as assertEntryReferences, v
 import { iconForActivity } from "./icons.ts";
 import { validateCatalogPatch, validateCatalogReorder } from "./catalog-validation.ts";
 import { validateImportPayload } from "./import-validation.ts";
+import type { InsightsData } from "./insights.ts";
 
 type Database = D1Database;
 
@@ -159,6 +160,66 @@ export class D1DaylioStore {
       entries.get(completion.logical_date)!.completedGoalIds.push(completion.goal_id);
     }
     return [...entries.values()].map((entry) => ({ ...entry, activityIds: [...(activityLinks.get(entry.id) ?? [])] }));
+  }
+
+  async getInsightsData(): Promise<InsightsData> {
+    const [moodResult, groupResult, activityResult, entryResult, linkResult, activitySelectionResult] = await this.database.batch([
+      this.database.prepare("SELECT id, name, score, emoji, color FROM mood_levels ORDER BY score DESC"),
+      this.database.prepare("SELECT id, name, sort_order, archived_at FROM activity_groups ORDER BY sort_order"),
+      this.database.prepare("SELECT id, group_id, name, material_icon, source_icon_id, sort_order, archived_at FROM activities ORDER BY sort_order"),
+      this.database.prepare(`
+        SELECT entries.id, entries.logical_date, COALESCE(day_mood_selections.mood_id, entries.mood_id) AS effective_mood_id
+        FROM entries
+        LEFT JOIN day_mood_selections ON day_mood_selections.logical_date = entries.logical_date
+        WHERE entries.deleted_at IS NULL
+        ORDER BY entries.logical_date
+      `),
+      this.database.prepare(`
+        SELECT link.entry_id, link.activity_id
+        FROM entry_activities AS link
+        JOIN entries ON entries.id = link.entry_id
+        WHERE entries.deleted_at IS NULL
+        ORDER BY link.entry_id, link.activity_id
+      `),
+      this.database.prepare(`
+        SELECT selection.logical_date, selection.activity_id, selection.selected
+        FROM day_activity_selections AS selection
+        JOIN entries ON entries.logical_date = selection.logical_date
+        WHERE entries.deleted_at IS NULL
+        ORDER BY selection.logical_date, selection.activity_id
+      `),
+    ]);
+
+    const activityLinks = new Map<string, Set<string>>();
+    for (const link of linkResult.results as { entry_id: string; activity_id: string }[]) {
+      if (!activityLinks.has(link.entry_id)) activityLinks.set(link.entry_id, new Set());
+      activityLinks.get(link.entry_id)!.add(link.activity_id);
+    }
+    // Keep the override pass separate from the base link pass so selected and
+    // unselected rows have the same effective semantics as listEntries.
+    const entries = (entryResult.results as { id: string; logical_date: string; effective_mood_id: string }[]).map((row) => ({
+      id: row.id,
+      logicalDate: row.logical_date,
+      moodId: row.effective_mood_id,
+      activityIds: activityLinks.get(row.id) ?? new Set<string>(),
+    }));
+    const entriesByDate = new Map(entries.map((entry) => [entry.logicalDate, entry]));
+    for (const selection of activitySelectionResult.results as { logical_date: string; activity_id: string; selected: number }[]) {
+      const entry = entriesByDate.get(selection.logical_date);
+      if (!entry) continue;
+      if (selection.selected) entry.activityIds.add(selection.activity_id);
+      else entry.activityIds.delete(selection.activity_id);
+    }
+    return {
+      moods: (moodResult.results as MoodRow[]).map(toMood),
+      groups: (groupResult.results as GroupRow[]).map(toGroup),
+      activities: (activityResult.results as ActivityRow[]).map(toActivity),
+      days: entries.map((entry) => ({
+        logicalDate: entry.logicalDate,
+        moodId: entry.moodId,
+        activityIds: [...entry.activityIds],
+      })),
+    };
   }
 
   async listEntryDates(startDate: string, endDate: string) {

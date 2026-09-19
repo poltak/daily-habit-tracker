@@ -37,8 +37,9 @@ import { createLatestRequestGate } from "../lib/latest-request-gate";
 import { Icon } from "./components/icon";
 import { IconPicker, SetupView } from "./components/setup-view";
 import { ThemeControl, useJournalTheme } from "./components/theme-control";
+import { InsightsView } from "./components/insights-view";
 
-type View = "log" | "calendar" | "settings" | "goal" | "add-activity";
+type View = "log" | "calendar" | "settings" | "goal" | "add-activity" | "insights";
 type ActivityCreationSource = "log" | "settings";
 type ConnectionState = "checking" | "online" | "offline" | "error";
 type Notice = { kind: "success" | "error" | "info"; text: string };
@@ -47,6 +48,7 @@ type Route = { view: View; goalId?: string; groupId?: string; returnView?: Activ
 const HISTORY_STATE_KEY = "daymarkRoute";
 
 function routeFromLocation(location: Location): Route {
+  if (location.pathname.replace(/\/$/, "") === "/insights") return { view: "insights" };
   const params = new URLSearchParams(location.search);
   const requestedView = params.get("view");
   if (requestedView === "goal" && params.get("goal")) return { view: "goal", goalId: params.get("goal")! };
@@ -58,7 +60,7 @@ function routeFromLocation(location: Location): Route {
     };
   }
   if (requestedView === "entries") return { view: "calendar" };
-  if (requestedView === "calendar" || requestedView === "settings") {
+  if (requestedView === "calendar" || requestedView === "settings" || requestedView === "insights") {
     return { view: requestedView };
   }
   return { view: "log" };
@@ -66,8 +68,10 @@ function routeFromLocation(location: Location): Route {
 
 function routeUrl(route: Route) {
   const url = new URL(window.location.href);
-  if (route.view === "log") url.searchParams.delete("view");
+  url.pathname = route.view === "insights" ? "/insights" : "/";
+  if (route.view === "log" || route.view === "insights") url.searchParams.delete("view");
   else url.searchParams.set("view", route.view);
+  url.hash = "";
   if (route.view === "goal" && route.goalId) url.searchParams.set("goal", route.goalId);
   else url.searchParams.delete("goal");
   if (route.view === "add-activity") {
@@ -1464,6 +1468,8 @@ export default function Journal() {
             ? selectedDate ? friendlyDate(selectedDate) : "Your journal"
             : view === "calendar"
               ? "Your calendar"
+              : view === "insights"
+                ? "Your insights"
               : view === "goal"
                 ? "Goal history"
                 : view === "add-activity"
@@ -1551,6 +1557,7 @@ export default function Journal() {
             }}
           />
         )}
+        {data && view === "insights" && <InsightsView />}
         {data && view === "goal" && selectedGoalId && goalConfigDraft && (
           <GoalDetailView
             goal={data.goals.find((candidate) => candidate.id === selectedGoalId) ?? null}
@@ -1623,6 +1630,15 @@ export default function Journal() {
           <span>Calendar</span>
         </button>
         <button
+          className={view === "insights" ? "active" : ""}
+          aria-current={view === "insights" ? "page" : undefined}
+          onClick={() => changeView("insights")}
+          disabled={isSavingGoalConfig || isActivityCreateBusy || (isSetupBusy && view === "settings")}
+        >
+          <span className="nav-icon"><Icon name="insights" /></span>
+          <span>Insights</span>
+        </button>
+        <button
           className={view === "settings" ? "active" : ""}
           aria-current={view === "settings" ? "page" : undefined}
           onClick={() => changeView("settings")}
@@ -1651,7 +1667,7 @@ function JournalLoading({ view, error, onRetry }: { view: View; error?: string; 
       <section className="hero-card">
         <div>
           <p className="eyebrow">{view === "log" ? "Daily journal" : "Your journal"}</p>
-          <h1>{view === "log" ? "How did your day feel?" : view === "calendar" ? "Your calendar" : view === "settings" ? "Your setup" : view === "goal" ? "Goal history" : "Add activity"}</h1>
+          <h1>{view === "log" ? "How did your day feel?" : view === "calendar" ? "Your calendar" : view === "insights" ? "Your insights" : view === "settings" ? "Your setup" : view === "goal" ? "Goal history" : "Add activity"}</h1>
           <div className="loading-placeholder loading-line" aria-hidden="true" />
         </div>
       </section>

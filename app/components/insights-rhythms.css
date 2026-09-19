@@ -1,0 +1,407 @@
+.insight-rhythm-stack {
+  display: grid;
+  gap: 22px;
+}
+
+.insight-rhythm-section {
+  min-width: 0;
+  scroll-margin-top: 98px;
+}
+
+.insight-rhythm-section-icon {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 13px;
+  background: var(--surface-success);
+  color: var(--positive);
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.insight-rhythm-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 20px 0 22px;
+}
+
+.insight-rhythm-controls .insights-field {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.insight-rhythm-controls .insights-field > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.insight-rhythm-controls .insights-select {
+  width: 100%;
+  min-height: 44px;
+}
+
+.insight-rhythm-chart-card {
+  min-width: 0;
+  margin: 20px 0 0;
+  padding: 18px 0 0;
+  border-top: 1px solid var(--line);
+}
+
+.insight-rhythm-chart-heading,
+.insight-rhythm-subheading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.insight-rhythm-chart-heading h3,
+.insight-rhythm-subheading h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.35;
+  letter-spacing: -.015em;
+}
+
+.insight-rhythm-chart-heading p,
+.insight-rhythm-subheading p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.insight-rhythm-chart-range,
+.insight-rhythm-subheading-note {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.insights-chart-scroll.insight-rhythm-chart-scroll {
+  margin-top: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 3px 1px 2px;
+  scrollbar-width: thin;
+}
+
+.insight-rhythm-chart {
+  display: block;
+  width: 100%;
+  min-width: 600px;
+  height: auto;
+  overflow: visible;
+}
+
+.insight-rhythm-axis {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+
+.insight-rhythm-axis-activity {
+  stroke: color-mix(in srgb, var(--positive) 45%, var(--line));
+  stroke-dasharray: 3 3;
+}
+
+.insight-rhythm-axis-label,
+.insight-rhythm-label,
+.insight-rhythm-logged,
+.insight-rhythm-sample {
+  fill: var(--muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.insight-rhythm-label {
+  fill: var(--ink);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.insight-rhythm-logged {
+  font-size: 9px;
+}
+
+.insight-rhythm-sample {
+  fill: var(--positive-muted);
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.insight-rhythm-axis-label-activity {
+  fill: var(--positive-muted);
+}
+
+.insight-rhythm-bar {
+  fill: color-mix(in srgb, var(--accent) 78%, var(--positive));
+}
+
+.insight-rhythm-bar-empty {
+  fill: var(--line-strong);
+}
+
+.insight-rhythm-activity-line {
+  stroke: var(--danger-soft);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.insight-rhythm-activity-dot {
+  fill: var(--danger-soft);
+  stroke: var(--card);
+  stroke-width: 2;
+}
+
+.insight-rhythm-chart-legend {
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 5px;
+  font-size: 11px;
+}
+
+.insight-rhythm-chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.insight-rhythm-legend-bar,
+.insight-rhythm-legend-line,
+.insight-rhythm-legend-sample {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
+  background: var(--accent);
+}
+
+.insight-rhythm-legend-line {
+  height: 3px;
+  border-radius: 99px;
+  background: var(--danger-soft);
+}
+
+.insight-rhythm-legend-sample {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--positive-muted);
+}
+
+.insight-rhythm-years {
+  margin-top: 26px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.insight-rhythm-year-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 9px;
+  margin-top: 12px;
+}
+
+.insight-rhythm-year-card {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--surface-subtle);
+}
+
+.insight-rhythm-year-card-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.insight-rhythm-year-card-heading strong {
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.insight-rhythm-year-card-heading span {
+  color: var(--muted);
+  font-size: 10px;
+  text-align: right;
+}
+
+.insight-rhythm-year-card dl {
+  display: grid;
+  gap: 7px;
+  margin: 12px 0 0;
+}
+
+.insight-rhythm-year-card dl > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 7px;
+}
+
+.insight-rhythm-year-card dt {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.insight-rhythm-year-card dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.insight-rhythm-cohort-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+  margin-top: 20px;
+}
+
+.insight-rhythm-metric {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--surface-subtle);
+}
+
+.insight-rhythm-metric > span,
+.insight-rhythm-metric > small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.insight-rhythm-metric > strong {
+  color: var(--ink);
+  font-size: 23px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.insight-rhythm-note {
+  margin: 13px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--surface-info);
+  color: var(--info);
+  font-size: 12px;
+}
+
+.insight-rhythm-comparison,
+.insight-rhythm-week-list {
+  min-width: 0;
+  margin-top: 25px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.insight-rhythm-table-scroll {
+  overflow-x: auto;
+  margin-top: 12px;
+  scrollbar-width: thin;
+}
+
+.insight-rhythm-table {
+  width: 100%;
+  min-width: 610px;
+  border-collapse: collapse;
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.insight-rhythm-table th,
+.insight-rhythm-table td {
+  padding: 10px 8px;
+  border-top: 1px solid var(--line);
+  text-align: right;
+  vertical-align: top;
+  font-variant-numeric: tabular-nums;
+}
+
+.insight-rhythm-table th:first-child,
+.insight-rhythm-table td:first-child {
+  text-align: left;
+}
+
+.insight-rhythm-table thead th {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+
+.insight-rhythm-table tbody th {
+  font-weight: 650;
+}
+
+.insight-rhythm-group-row th {
+  padding-top: 16px;
+  padding-bottom: 5px;
+  border-top: 0;
+  color: var(--positive-muted);
+  font-size: 10px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.insight-rhythm-positive {
+  color: var(--positive);
+  font-weight: 800;
+}
+
+.insight-rhythm-negative {
+  color: var(--danger);
+  font-weight: 800;
+}
+
+.insight-rhythm-week-table th:first-child {
+  min-width: 145px;
+}
+
+.insight-rhythm-week-table th small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+@media (max-width: 620px) {
+  .insight-rhythm-controls,
+  .insight-rhythm-cohort-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .insight-rhythm-chart-heading,
+  .insight-rhythm-subheading {
+    display: block;
+  }
+
+  .insight-rhythm-chart-range,
+  .insight-rhythm-subheading-note {
+    display: block;
+    margin-top: 5px;
+  }
+
+  .insight-rhythm-year-grid {
+    grid-template-columns: 1fr;
+  }
+}
+

@@ -38,6 +38,14 @@ test("unknown routes do not render the journal layout", async () => {
   assert.doesNotMatch(await response.text(), /class="journal-loading"/);
 });
 
+test("insights is a directly loadable route in the journal shell", async () => {
+  const response = await render("/insights");
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /aria-label="Primary navigation"/);
+  assert.match(html, /<span>Insights<\/span>/);
+});
+
 test("does not keep the temporary starter preview", async () => {
   await assert.rejects(access(new URL("public/_sites-preview", templateRoot)));
 });

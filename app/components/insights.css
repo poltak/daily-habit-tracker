@@ -1,0 +1,49 @@
+.insights-page { max-width: 1060px; margin: 0 auto; }
+.insights-intro h1 { margin-bottom: 12px; }
+.insights-intro .muted { max-width: 620px; }
+.insights-toolbar { display: flex; align-items: end; flex-wrap: wrap; gap: 16px; padding: 20px 22px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); }
+.insights-field { display: grid; gap: 7px; min-width: 0; color: var(--muted); font-size: 12px; font-weight: 600; }
+.insights-select { max-width: 100%; min-width: 0; min-height: 44px; border: 1px solid var(--line-strong); border-radius: 10px; padding: 10px 12px; background: var(--surface-subtle); color: var(--ink); font-size: 13px; }
+.insights-select:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+.insights-custom-range { display: flex; gap: 12px; min-width: 0; }
+.insights-toolbar-note { display: flex; align-items: center; gap: 10px; margin: 0 0 2px auto; font-size: 12px; line-height: 1.6; color: var(--muted); }
+.insights-toolbar-note .material-symbols-rounded { font-size: 26px; color: var(--positive); }
+.insights-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 25px 0; }
+.insights-summary > div { padding: 0 24px; border-left: 1px solid var(--line); display: grid; gap: 5px; }
+.insights-summary > div:first-child { padding-left: 0; border-left: 0; }
+.insights-summary strong { font-size: 32px; letter-spacing: -.045em; font-weight: 600; font-variant-numeric: tabular-nums; }
+.insights-summary small { font-size: 18px; margin-left: 2px; }
+.insights-summary span { font-size: 12px; color: var(--muted); }
+.insights-jump-links { display: flex; flex-wrap: wrap; gap: 8px; margin: 24px 0 16px; }
+.insights-jump-links a { display: flex; align-items: center; gap: 18px; min-height: 40px; padding: 8px 12px; background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 9px; text-decoration: none; font-size: 12px; }
+.insights-jump-links a:hover { border-color: var(--focus); background: var(--surface-selected); }
+.insights-jump-links span { color: var(--positive); }
+.insights-method-note, .insights-help { font-size: 12px; line-height: 1.65; color: var(--muted); }
+.insights-method-note { max-width: 800px; margin: 0 0 24px; }
+.insights-card { min-width: 0; padding: 26px; margin-bottom: 22px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); box-shadow: var(--shadow); scroll-margin-top: 100px; }
+.insights-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+.insights-card h2 { font-size: 21px; line-height: 1.3; letter-spacing: -.035em; margin: 0 0 8px; }
+.insights-card h3 { font-size: 15px; font-weight: 600; }
+.insights-kicker { color: var(--positive-muted); text-transform: uppercase; font-size: 10px; font-weight: 600; letter-spacing: .12em; margin: 0 0 10px; }
+.insights-empty { padding: 32px 20px; color: var(--muted); text-align: center; font-size: 13px; line-height: 1.7; background: var(--surface-subtle); border-radius: 12px; }
+.insights-empty > .material-symbols-rounded { color: var(--positive); font-size: 32px; margin-bottom: 14px; }
+.insights-empty h2 { color: var(--ink); }
+.insights-chart-scroll { overflow-x: auto; max-width: 100%; scrollbar-width: thin; }
+.insights-legend { display: flex; flex-wrap: wrap; gap: 10px 16px; font-size: 11px; color: var(--muted); }
+.insights-loading { text-align: center; padding: 60px 20px; }
+.insights-loading > .material-symbols-rounded { color: var(--positive); font-size: 36px; }
+@media (max-width: 620px) {
+  .insights-toolbar { padding: 16px; align-items: stretch; }
+  .insights-toolbar > .insights-field { flex: 1; }
+  .insights-toolbar-note { display: none; }
+  .insights-custom-range { width: 100%; }
+  .insights-custom-range .insights-field { flex: 1; width: 50%; }
+  .insights-summary > div { padding: 0 12px; }
+  .insights-summary strong { font-size: 27px; }
+  .insights-summary span { font-size: 11px; }
+  .insights-card { padding: 20px 16px; scroll-margin-top: 80px; }
+  .insights-card h2 { font-size: 19px; }
+  .insights-card-heading { gap: 12px; }
+  .insights-jump-links { gap: 6px; }
+  .insights-jump-links a { gap: 10px; }
+}

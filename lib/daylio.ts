@@ -2,6 +2,7 @@ import { isActivityIcon, iconForActivity } from "./icons.ts";
 import { isValidTime, validateEntryInput, validateEntryReferences, validateExpectedVersion, versionConflict } from "./entry-validation.ts";
 import { validateCatalogPatch, validateCatalogReorder } from "./catalog-validation.ts";
 import { validateImportPayload } from "./import-validation.ts";
+import type { InsightsData } from "./insights.ts";
 
 export type Mood = {
   id: string;
@@ -462,6 +463,25 @@ export class DaylioMemoryStore {
       .sort((a, b) => b.logicalDate.localeCompare(a.logicalDate))
       .slice(offset, offset + limit)
       .map((entry) => this.getEntry(entry.logicalDate)!);
+  }
+
+  getInsightsData(): InsightsData {
+    return {
+      moods: [...this.moods.values()].sort((a, b) => b.score - a.score),
+      groups: [...this.groups.values()].sort((a, b) => a.sortOrder - b.sortOrder),
+      activities: [...this.activities.values()].sort((a, b) => a.sortOrder - b.sortOrder),
+      days: [...this.entries.values()]
+        .filter((entry) => !entry.deletedAt)
+        .sort((a, b) => a.logicalDate.localeCompare(b.logicalDate))
+        .map((entry) => {
+          const selections = this.getDaySelections(entry.logicalDate);
+          return {
+            logicalDate: entry.logicalDate,
+            moodId: selections.moodId ?? entry.moodId,
+            activityIds: selections.activityIds,
+          };
+        }),
+    };
   }
 
   listEntryDates(startDate: string, endDate: string) {
