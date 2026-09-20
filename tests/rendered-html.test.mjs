@@ -24,7 +24,7 @@ test("server-renders the Daymark journal shell", async () => {
   const html = await response.text();
   assert.match(html, /<title>daymark — your daily journal<\/title>/i);
   assert.match(html, /<link rel="manifest" href="\/manifest\.webmanifest" crossorigin="use-credentials"\s*\/?>/i);
-  assert.match(html, /How did your day feel\?/);
+  assert.match(html, /How was your day\?/);
   assert.match(html, /aria-label="Primary navigation"/);
   assert.match(html, /class="journal-loading" aria-busy="true"/);
   assert.match(html, /Loading journal data/);
