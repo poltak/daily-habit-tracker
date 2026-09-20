@@ -1464,8 +1464,14 @@ export default function Journal() {
           <span>daymark</span>
         </button>
         <div className="topbar-date">
-          {view === "log"
-            ? selectedDate ? friendlyDate(selectedDate) : "Your journal"
+          {view === "log" && selectedDate && data ? (
+            <div className="topbar-date-switcher" aria-label="Choose the logical day">
+              <button aria-label="Previous day" onClick={() => void chooseDate(addDays(selectedDate, -1))}><Icon name="chevron_left" /></button>
+              <span>{friendlyDate(selectedDate)}</span>
+              <button aria-label="Next day" onClick={() => void chooseDate(addDays(selectedDate, 1))}><Icon name="chevron_right" /></button>
+            </div>
+          ) : view === "log"
+            ? "Your journal"
             : view === "calendar"
               ? "Your calendar"
               : view === "insights"
@@ -1494,6 +1500,15 @@ export default function Journal() {
                 ? " offline"
                 : " sync issue"}
         </div>
+        {view === "log" && data && (
+          <div className="topbar-actions">
+            <button onClick={() => void chooseDate(data.today)} disabled={isLoadingDate}>Today</button>
+            <label className="topbar-calendar" aria-label="Choose a date">
+              <Icon name="calendar_month" />
+              <input type="date" value={selectedDate} onChange={(event) => void chooseDate(event.target.value)} disabled={isLoadingDate} />
+            </label>
+          </div>
+        )}
         <ThemeControl preference={themePreference} onChange={updateThemePreference} />
       </header>
 
@@ -1649,7 +1664,7 @@ export default function Journal() {
           </span>
           <span>Setup</span>
         </button>
-        <span className="nav-footer"><Icon name="spa" /><span>A little space<br />for every day.</span></span>
+        <span className="nav-footer"><Icon name="spa" /><span>A more intentional<br />you, one day at a time.</span></span>
       </nav>
     </div>
   );
@@ -1767,31 +1782,6 @@ function LogView({
               Take a breath. Make a little room for your day.
             </p>
           </div>
-          <div className="date-switcher" aria-label="Choose the logical day">
-            <button
-              className={selectedDate === data.today ? "selected" : ""}
-              onClick={() => onDate(data.today)}
-              disabled={isLoadingDate || goalsBusy || selectionBusy}
-            >
-              Today
-            </button>
-            <button
-              className={selectedDate === data.yesterday ? "selected" : ""}
-              onClick={() => onDate(data.yesterday)}
-              disabled={isLoadingDate || goalsBusy || selectionBusy}
-            >
-              Yesterday
-            </button>
-            <label className="date-input">
-              <span>Other</span>
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(event) => onDate(event.target.value)}
-                disabled={isLoadingDate || goalsBusy || selectionBusy}
-              />
-            </label>
-          </div>
         </section>
 
         {message && (
@@ -1811,10 +1801,7 @@ function LogView({
 
         <section className="panel goals-panel" aria-busy={isLoadingDate || goalsBusy}>
           <div className="section-heading">
-            <div>
-              <p className="eyebrow">Goals</p>
-              <h2>Small steps, every day</h2>
-            </div>
+            <h2>Goals</h2>
             <span className="section-count" aria-label="Completed goals">
               {data.goals.filter((goal) => !goal.archived && draft.completedGoalIds.includes(goal.id)).length}/{data.goals.filter((goal) => !goal.archived).length}
             </span>
@@ -1841,10 +1828,7 @@ function LogView({
 
         <section className="panel mood-panel">
           <div className="section-heading">
-            <div>
-              <p className="eyebrow">Overall mood</p>
-              <h2>How are you feeling?</h2>
-            </div>
+            <h2>Overall mood</h2>
             <span className="required-label">required</span>
           </div>
           <div className="mood-grid" aria-busy={isLoadingDate || selectionBusy}>
@@ -1867,10 +1851,7 @@ function LogView({
 
         <section className="panel activities-panel">
           <div className="section-heading">
-            <div>
-              <p className="eyebrow">Activities</p>
-              <h2>What shaped the day?</h2>
-            </div>
+            <h2>Activities</h2>
             <span className="selection-count">
               {draft.activityIds.length} selected
             </span>
@@ -1924,7 +1905,7 @@ function LogView({
 
       <div className="save-bar" aria-busy={formBusy || goalsBusy || selectionBusy}>
         <div>
-          <strong>{existing ? "Edit this entry" : "Ready to save?"}</strong>
+          <strong>{existing ? "Edit this entry" : "Ready to save your day?"}</strong>
           <span>
             {friendlyDate(selectedDate)} · {draft.activityIds.length} activities
           </span>
@@ -2134,6 +2115,21 @@ function ActivityGroupList({
   return (
     <div className="activity-groups">
       {groups.map(({ group, activities }) => {
+        const groupIcon = ({
+          social: "diversity_3",
+          hobbies: "toys_and_games",
+          health: "favorite",
+          study: "menu_book",
+          productivity: "work",
+          vices: "favorite",
+          everyday: "door_open",
+          substances: "nutrition",
+          emotions: "adjust",
+          people: "group",
+          work: "business_center",
+          home: "home",
+          leisure: "sports_esports",
+        } as Record<string, string>)[group.name.toLowerCase()] ?? "category";
         const summary = summarizeActivityGroup({
           activityIds: activities.map((activity) => activity.id),
           selectedActivityIds,
@@ -2144,11 +2140,10 @@ function ActivityGroupList({
         return (
           <details key={group.id} open={hasQuery || undefined}>
             <summary>
-              <span>{group.name}</span>
+              <span className="group-title"><span className="group-icon"><Icon name={groupIcon} /></span>{group.name}</span>
               <span className="group-summary-meta">
                 <span>
-                  {summary.activityCount} {activityLabel} ·{" "}
-                  {summary.selectedCount} selected
+                  {summary.activityCount} {activityLabel}
                 </span>
                 <button
                   type="button"

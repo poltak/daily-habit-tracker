@@ -88,11 +88,15 @@ try {
     assert.equal(await page.locator(".skip-link").evaluate((element) => element === document.activeElement), true);
     await page.keyboard.press("Enter");
     assert.equal(await page.locator("main").evaluate((element) => element === document.activeElement), true);
-    const theme = page.getByRole("combobox", { name: "Color theme" });
+    const theme = page.getByRole("button", { name: "Choose color theme" });
+    async function chooseTheme(mode) {
+      await theme.click();
+      await page.getByRole("menuitemradio", { name: mode[0].toUpperCase() + mode.slice(1) }).click();
+    }
     const nav = page.getByRole("navigation", { name: "Primary navigation" });
 
     for (const mode of ["light", "dark"]) {
-      await theme.selectOption(mode);
+      await chooseTheme(mode);
       await page.waitForFunction((mode) => document.documentElement.dataset.theme === mode, mode);
       await assertFits(page);
       await capture({ page, path: `/tmp/daymark-redesign-${device}-${mode}.png` });
@@ -112,11 +116,11 @@ try {
     // Both controls share state; explicit choices survive a full reload.
     await nav.getByRole("button", { name: "Setup", exact: true }).click();
     await page.locator(".theme-option").filter({ has: page.locator('input[value="light"]') }).click();
-    assert.equal(await theme.inputValue(), "light");
+    assert.equal(await theme.getAttribute("data-preference"), "light");
     await page.reload();
     await page.getByRole("heading", { name: "Make it yours" }).waitFor();
-    assert.equal(await theme.inputValue(), "light");
-    await theme.selectOption("system");
+    assert.equal(await theme.getAttribute("data-preference"), "light");
+    await chooseTheme("system");
     await page.emulateMedia({ colorScheme: "dark" });
     await page.waitForFunction(() => document.documentElement.dataset.theme === "dark");
     await page.emulateMedia({ colorScheme: "light" });

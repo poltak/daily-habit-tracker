@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { applyTheme, parseThemePreference, readStoredThemePreference, THEME_MEDIA_QUERY, THEME_STORAGE_KEY, type ThemePreference } from "../../lib/theme";
+import { applyTheme, readStoredThemePreference, THEME_MEDIA_QUERY, THEME_STORAGE_KEY, type ThemePreference } from "../../lib/theme";
 import { Icon } from "./icon";
 
 export function useJournalTheme() {
@@ -44,15 +44,55 @@ export function useJournalTheme() {
 }
 
 export function ThemeControl({ preference, onChange }: { preference: ThemePreference; onChange: (preference: ThemePreference) => void }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const options: Array<{ value: ThemePreference; label: string; icon: string }> = [
+    { value: "system", label: "System", icon: "contrast" },
+    { value: "light", label: "Light", icon: "light_mode" },
+    { value: "dark", label: "Dark", icon: "dark_mode" },
+  ];
+
   return (
-    <label className="theme-control">
-      <Icon name={preference === "dark" ? "dark_mode" : preference === "light" ? "light_mode" : "contrast"} />
-      <select aria-label="Color theme" value={preference} onChange={(event) => onChange(parseThemePreference(event.target.value))}>
-        <option value="system">System</option>
-        <option value="light">Light</option>
-        <option value="dark">Dark</option>
-      </select>
-      <Icon name="expand_more" />
-    </label>
+    <div
+      className="theme-control"
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setMenuOpen(false);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") setMenuOpen(false);
+      }}
+    >
+      <button
+        type="button"
+        className="theme-trigger"
+        aria-label="Choose color theme"
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        data-preference={preference}
+        title="Color theme"
+        onClick={() => setMenuOpen((open) => !open)}
+      >
+        <Icon name={preference === "dark" ? "dark_mode" : preference === "light" ? "light_mode" : "contrast"} />
+        <span className="sr-only">Choose color theme</span>
+      </button>
+      {menuOpen && <div className="theme-menu" role="menu" aria-label="Color theme options">
+        {options.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            className={preference === option.value ? "selected" : ""}
+            role="menuitemradio"
+            aria-checked={preference === option.value}
+            onClick={() => {
+              onChange(option.value);
+              setMenuOpen(false);
+            }}
+          >
+            <Icon name={option.icon} />
+            <span>{option.label}</span>
+            {preference === option.value && <Icon name="check" />}
+          </button>
+        ))}
+      </div>}
+    </div>
   );
 }
