@@ -2,7 +2,7 @@
   "name": "daylio-clone",
   "version": "0.1.0",
   "private": true,
-  "packageManager": "pnpm@11.25.0",
+  "packageManager": "pnpm@12.5.1",
   "engines": {
     "node": ">=22.13.0"
   },
