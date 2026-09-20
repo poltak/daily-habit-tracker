@@ -551,11 +551,12 @@ body {
 .topbar-date-switcher { display: inline-flex; align-items: center; gap: 20px; }
 .topbar-date-switcher button { width: 32px; height: 32px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 9px; color: var(--ink); background: transparent; }
 .topbar-date-switcher button:hover { background: var(--surface-muted); }
+.topbar-date-label { white-space: nowrap; }
 .connection-pill.online { display: none; }
-.topbar-actions { display: inline-flex; min-height: 42px; border: 1px solid var(--line); border-radius: 11px; overflow: hidden; background: color-mix(in srgb, var(--card) 80%, transparent); }
+.topbar-actions { position: relative; display: inline-flex; min-height: 42px; border: 1px solid var(--line); border-radius: 11px; overflow: hidden; background: color-mix(in srgb, var(--card) 80%, transparent); }
 .topbar-actions button, .topbar-calendar { min-width: 78px; border: 0; background: transparent; color: var(--ink); display: grid; place-items: center; padding: 0 16px; font-weight: 650; }
-.topbar-calendar { position: relative; min-width: 48px; padding: 0; border-left: 1px solid var(--line); }
-.topbar-calendar input { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; }
+.topbar-actions .topbar-calendar { min-width: 48px; padding: 0; border-left: 1px solid var(--line); }
+.topbar-calendar-input { position: absolute; width: 1px; height: 1px; left: 100%; bottom: 0; opacity: 0; pointer-events: none; }
 .theme-control { position: relative; display: block; width: 42px; min-width: 42px; height: 42px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--ink); }
 .theme-trigger { width: 42px; height: 42px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--ink); }
 .theme-trigger:hover, .theme-trigger[aria-expanded="true"] { background: var(--surface-muted); }
@@ -661,8 +662,8 @@ body {
   .brand { grid-column: 1; grid-row: 1; font-size: 21px; }
   .brand-mark { width: 36px; height: 36px; }
   .topbar-date { grid-column: 1 / -1; grid-row: 2; font-size: 14px; }
-  .topbar-date-switcher { gap: 0; }
-  .topbar-date-switcher button { display: none; }
+  .topbar-date-switcher { width: 100%; justify-content: center; gap: 6px; }
+  .topbar-date-switcher button { width: 36px; height: 36px; }
   .theme-control { grid-column: 2; grid-row: 1; }
   .topbar-actions { display: none; }
   .connection-pill { display: none; }
@@ -688,6 +689,12 @@ body {
   }
   .topbar { height: 80px; min-height: 80px; grid-template-rows: 48px; align-items: center; padding: 16px 24px; background: var(--paper); border-bottom: 1px solid var(--line); backdrop-filter: none; }
   .topbar-date { display: none; }
+  .view-log .topbar { height: 112px; min-height: 112px; grid-template-rows: 44px 36px; gap: 4px 10px; padding: 10px 24px; }
+  .view-log .topbar-date.is-log { display: block; align-self: center; }
+  .view-log .topbar-date-switcher { display: flex; width: 100%; margin: 0; gap: 8px; }
+  .view-log .topbar-date-switcher button { width: 40px; height: 40px; flex: 0 0 40px; }
+  .view-log .topbar-date-label { min-width: 0; flex: 1; text-align: center; font-size: clamp(15px, 4.2vw, 17px); font-weight: 700; letter-spacing: -.025em; }
+  .view-log.app-shell::after { top: 112px; }
   .content-shell { width: calc(100% - 32px); padding-top: 18px; padding-bottom: 28px; }
   .hero-card { min-height: 186px; padding: 50px 8px 20px; }
   .hero-card h1 { max-width: none; font-size: clamp(31px, 9vw, 38px); line-height: 1.08; }

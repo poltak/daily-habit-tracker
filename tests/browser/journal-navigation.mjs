@@ -41,8 +41,13 @@ try {
   await page.screenshot({ path: "/tmp/daymark-loading-mobile.png", fullPage: true });
   releaseBootstrap();
   await page.locator(".mood-option:not(:disabled)").first().waitFor();
-  await page.getByRole("button", { name: "Yesterday", exact: true }).click();
+  const journalDate = page.locator('input[type="date"]');
+  assert.equal(await page.getByRole("button", { name: "Previous day", exact: true }).isVisible(), true);
+  assert.equal(await page.getByRole("button", { name: "Next day", exact: true }).isVisible(), true);
+  await page.getByRole("button", { name: "Previous day", exact: true }).click();
   await page.locator(".mood-option:not(:disabled)").first().waitFor();
+  assert.equal(await journalDate.inputValue(), bootstrap.yesterday);
+  assert.equal(await page.locator(".topbar-date-label").isVisible(), true);
   const search = page.getByPlaceholder("Search your activities");
   await search.fill("walk");
 
@@ -75,6 +80,18 @@ try {
   assert.equal(bootstrapRequests, 1);
   assert.equal(await page.evaluate(() => window.journalLoadingFlashes), 0);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+
+  // The desktop calendar control explicitly invokes the native picker rather
+  // than depending on clicks landing on an invisible input overlay.
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.locator(".topbar-calendar-input").evaluate((input) => {
+    Object.defineProperty(input, "showPicker", {
+      configurable: true,
+      value: () => { document.documentElement.dataset.datePickerOpened = "true"; },
+    });
+  });
+  await page.getByRole("button", { name: "Choose a date", exact: true }).click();
+  assert.equal(await page.locator("html").getAttribute("data-date-picker-opened"), "true");
 
   failBootstrap = true;
   await page.reload();

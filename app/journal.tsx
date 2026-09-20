@@ -36,7 +36,7 @@ import {
 import { createLatestRequestGate } from "../lib/latest-request-gate";
 import { Icon } from "./components/icon";
 import { IconPicker, SetupView } from "./components/setup-view";
-import { ThemeControl, useJournalTheme } from "./components/theme-control";
+import { useJournalTheme } from "./components/theme-control";
 import { InsightsView } from "./components/insights-view";
 
 type View = "log" | "calendar" | "settings" | "goal" | "add-activity" | "insights";
@@ -258,6 +258,7 @@ function restoreGoalCompletionStates({
 
 export default function Journal() {
   const { preference: themePreference, updatePreference: updateThemePreference } = useJournalTheme();
+  const dateInputRef = useRef<HTMLInputElement>(null);
   const [data, setData] = useState<Bootstrap | null>(null);
   const [view, setView] = useState<View>("log");
   const [selectedDate, setSelectedDate] = useState("");
@@ -801,6 +802,19 @@ export default function Journal() {
       setMessage({ kind: "error", text: (error as Error).message });
     } finally {
       if (request.isCurrent()) setIsLoadingDate(false);
+    }
+  }
+
+  function openDatePicker() {
+    const input = dateInputRef.current;
+    if (!input || isLoadingDate) return;
+    try {
+      input.showPicker();
+    } catch {
+      // Older browsers do not expose showPicker(), but a user-initiated click
+      // still opens their native date control.
+      input.focus();
+      input.click();
     }
   }
 
@@ -1451,7 +1465,7 @@ export default function Journal() {
   }
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell view-${view}`}>
       <a className="skip-link" href="#journal-content">Skip to content</a>
       <header className="topbar">
         <button
@@ -1463,12 +1477,12 @@ export default function Journal() {
           <span className="brand-mark" aria-hidden="true" />
           <span>daymark</span>
         </button>
-        <div className="topbar-date">
+        <div className={`topbar-date ${view === "log" ? "is-log" : ""}`}>
           {view === "log" && selectedDate && data ? (
-            <div className="topbar-date-switcher" aria-label="Choose the logical day">
-              <button aria-label="Previous day" onClick={() => void chooseDate(addDays(selectedDate, -1))}><Icon name="chevron_left" /></button>
-              <span>{friendlyDate(selectedDate)}</span>
-              <button aria-label="Next day" onClick={() => void chooseDate(addDays(selectedDate, 1))}><Icon name="chevron_right" /></button>
+            <div className="topbar-date-switcher" aria-label="Choose the journal day" aria-live="polite">
+              <button aria-label="Previous day" disabled={isLoadingDate} onClick={() => void chooseDate(addDays(selectedDate, -1))}><Icon name="chevron_left" /></button>
+              <span className="topbar-date-label">{friendlyDate(selectedDate)}</span>
+              <button aria-label="Next day" disabled={isLoadingDate} onClick={() => void chooseDate(addDays(selectedDate, 1))}><Icon name="chevron_right" /></button>
             </div>
           ) : view === "log"
             ? "Your journal"
@@ -1503,13 +1517,12 @@ export default function Journal() {
         {view === "log" && data && (
           <div className="topbar-actions">
             <button onClick={() => void chooseDate(data.today)} disabled={isLoadingDate}>Today</button>
-            <label className="topbar-calendar" aria-label="Choose a date">
+            <button className="topbar-calendar" type="button" aria-label="Choose a date" disabled={isLoadingDate} onClick={openDatePicker}>
               <Icon name="calendar_month" />
-              <input type="date" value={selectedDate} onChange={(event) => void chooseDate(event.target.value)} disabled={isLoadingDate} />
-            </label>
+            </button>
+            <input ref={dateInputRef} className="topbar-calendar-input" type="date" value={selectedDate} onChange={(event) => void chooseDate(event.target.value)} disabled={isLoadingDate} tabIndex={-1} aria-label="Journal date" />
           </div>
         )}
-        <ThemeControl preference={themePreference} onChange={updateThemePreference} />
       </header>
 
       <main className="content-shell" id="journal-content" tabIndex={-1}>
@@ -1682,7 +1695,7 @@ function JournalLoading({ view, error, onRetry }: { view: View; error?: string; 
       <section className="hero-card">
         <div>
           <p className="eyebrow">{view === "log" ? "Daily journal" : "Your journal"}</p>
-          <h1>{view === "log" ? "How did your day feel?" : view === "calendar" ? "Your calendar" : view === "insights" ? "Your insights" : view === "settings" ? "Your setup" : view === "goal" ? "Goal history" : "Add activity"}</h1>
+          <h1>{view === "log" ? "How was your day?" : view === "calendar" ? "Your calendar" : view === "insights" ? "Your insights" : view === "settings" ? "Your setup" : view === "goal" ? "Goal history" : "Add activity"}</h1>
           <div className="loading-placeholder loading-line" aria-hidden="true" />
         </div>
       </section>
@@ -1777,9 +1790,9 @@ function LogView({
         <section className="hero-card">
           <div>
             <p className="eyebrow">Your daily check-in</p>
-            <h1>How did your day feel?</h1>
+            <h1>How was your day?</h1>
             <p className="muted">
-              Take a breath. Make a little room for your day.
+              Take a breath. Unclench.
             </p>
           </div>
         </section>
