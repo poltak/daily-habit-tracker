@@ -14,12 +14,12 @@ pnpm install
 pnpm run dev
 ```
 
-`pnpm run dev` builds the vinext output, applies the checked-in D1 migrations,
-and starts the compiled Worker with `wrangler dev --local` on
-`http://localhost:3000`. It is not a memory-only or Vite-mocked backend. When
-no Cloudflare Access variables are set, local API requests are allowed and the
-configured local D1 binding is used. Use `pnpm run dev:vite` only when you want
-the separate HMR-oriented Vite preview.
+`pnpm run dev` applies the checked-in D1 migrations and starts the vinext/Vite
+development server with hot module replacement on `http://localhost:3000`.
+It is not a memory-only or mocked backend: the Cloudflare Vite plugin provides
+the configured local D1 binding. When no Cloudflare Access variables are set,
+local API requests are allowed. Use `pnpm run dev:wrangler` only when you need
+to build first and exercise the compiled Worker without hot reload.
 
 Useful checks:
 
