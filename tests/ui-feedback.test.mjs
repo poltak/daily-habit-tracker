@@ -130,7 +130,7 @@ test("mood and activity selections persist independently with optimistic pending
   assert.match(pageSource, /disabled=\{isLoadingDate \|\| pendingSelectionKeys\.has/);
   assert.match(pageSource, /hasPendingGoalToggle\(selectedDate\) \|\| hasPendingSelectionToggle\(selectedDate\)/);
   assert.match(pageSource, /Wait for the mood, activity, or goal update to finish before saving the entry/);
-  assert.match(pageSource, /disabled=\{isLoadingDate \|\| goalsBusy \|\| selectionBusy\}/);
+  assert.match(pageSource, /disabled=\{isSaving \|\| isDeleting \|\| !isDateReady \|\| goalsBusy \|\| selectionBusy\}/);
   assert.match(pageSource, /Saving your mood or activity selection/);
   assert.match(pageSource, /serverSelections/);
   assert.match(pageSource, /!hasOtherPendingSelection && !hasLocalDraftRef\.current/);
