@@ -87,7 +87,7 @@ test("goals are above mood and persist through a dedicated optimistic toggle", (
   assert.match(pageSource, /setDraft\(\(current\) => \{[\s\S]*completedGoalIds:/);
   assert.match(pageSource, /pending=\{pendingGoalKeys\.has\(/);
   assert.match(pageSource, /aria-busy=\{pending\}/);
-  assert.match(pageSource, /disabled=\{isLoadingDate \|\| !isDateReady \|\| goalsBusy\}/);
+  assert.match(pageSource, /disabled=\{isLoadingDate \|\| !isDateReady\}/);
   assert.match(pageSource, /if \(selectedDateRef\.current && hasPendingGoalToggle\(selectedDateRef\.current\)\)/);
   assert.match(pageSource, /The goal was restored/);
   assert.match(pageSource, /serverCompletedGoalIds/);

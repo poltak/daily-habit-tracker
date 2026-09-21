@@ -1829,7 +1829,7 @@ function LogView({
                   activity={activityFor(data.activities, goal.activityId)}
                   checked={draft.completedGoalIds.includes(goal.id)}
                   pending={pendingGoalKeys.has(`${selectedDate}:${goal.id}`)}
-                  disabled={isLoadingDate || !isDateReady || goalsBusy}
+                  disabled={isLoadingDate || !isDateReady}
                   onToggle={() => {
                     void onToggleGoal(goal.id);
                   }}
