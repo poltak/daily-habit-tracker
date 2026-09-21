@@ -1869,27 +1869,26 @@ function LogView({
               {draft.activityIds.length} selected
             </span>
           </div>
-          {draft.activityIds.length > 0 && (
-            <div className="selection-row">
-              {draft.activityIds.map((id) => {
-                const activity = activityFor(data.activities, id);
-                return activity ? (
-                  <button
-                    key={id}
-                    className="selection-chip"
-                    disabled={isLoadingDate || !isDateReady || pendingSelectionKeys.has(`${selectedDate}:activity:${id}`)}
-                    aria-busy={pendingSelectionKeys.has(`${selectedDate}:activity:${id}`)}
-                    onClick={() => onToggleActivity(id)}
-                  >
-                    <Icon name={activity.icon} /> {activity.name}{" "}
-                    <span>
-                      <Icon name={UI_ICONS.close} />
-                    </span>
-                  </button>
-                ) : null;
-              })}
-            </div>
-          )}
+          <div className="selection-row" role="group" aria-label="Selected activities">
+            {draft.activityIds.length === 0 && <span className="selection-empty">Selected activities appear here.</span>}
+            {draft.activityIds.map((id) => {
+              const activity = activityFor(data.activities, id);
+              return activity ? (
+                <button
+                  key={id}
+                  className="selection-chip"
+                  disabled={isLoadingDate || !isDateReady || pendingSelectionKeys.has(`${selectedDate}:activity:${id}`)}
+                  aria-busy={pendingSelectionKeys.has(`${selectedDate}:activity:${id}`)}
+                  onClick={() => onToggleActivity(id)}
+                >
+                  <Icon name={activity.icon} /> {activity.name}{" "}
+                  <span>
+                    <Icon name={UI_ICONS.close} />
+                  </span>
+                </button>
+              ) : null;
+            })}
+          </div>
           <label className="search-field">
             <Icon name={UI_ICONS.search} />
             <input

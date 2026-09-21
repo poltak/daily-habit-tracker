@@ -137,8 +137,9 @@ button:disabled { cursor: wait; opacity: .68; }
 .mood-option:hover { transform: translateY(-2px); }
 .mood-option.selected { color: var(--ink); border-color: var(--mood-color); box-shadow: 0 0 0 2px color-mix(in srgb, var(--mood-color), transparent 80%); background: color-mix(in srgb, var(--mood-color), var(--surface) 92%); }
 .mood-emoji { font-size: 29px; line-height: 1; }
-.selection-row { display: flex; gap: 7px; flex-wrap: wrap; margin: -4px 0 16px; }
-.selection-chip { border: 0; background: var(--surface-chip); color: var(--positive-muted); border-radius: 999px; padding: 8px 10px; font-size: 12px; font-weight: 700; }
+.selection-row { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 7px; height: 140px; margin: -4px 0 16px; padding: 8px; overflow-x: hidden; overflow-y: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-subtle); scrollbar-width: thin; }
+.selection-empty { color: var(--muted); font-size: 12px; }
+.selection-chip { flex: 0 0 auto; max-width: 100%; height: 36px; overflow: hidden; text-overflow: ellipsis; border: 0; background: var(--surface-chip); color: var(--positive-muted); border-radius: 999px; padding: 8px 10px; font-size: 12px; font-weight: 700; white-space: nowrap; }
 .selection-chip span { padding-left: 4px; opacity: .6; }
 .selection-chip > .material-symbols-rounded { font-size: 16px; vertical-align: -3px; }
 .search-field { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); background: var(--surface-subtle); border-radius: 13px; padding: 0 13px; margin-bottom: 13px; color: var(--muted); }
@@ -152,10 +153,10 @@ button:disabled { cursor: wait; opacity: .68; }
 .group-expand-icon { font-size: 20px; transition: transform .16s ease; }
 .activity-groups details[open] .group-expand-icon { transform: rotate(180deg); }
 .activity-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 11px; }
-.activity-button { min-height: 50px; min-width: 0; border: 1px solid var(--line); background: var(--card); border-radius: 10px; padding: 10px 12px; color: var(--ink); display: flex; align-items: center; gap: 9px; text-align: left; font-size: 13px; font-weight: 500; }
+.activity-button { position: relative; min-height: 50px; min-width: 0; border: 1px solid var(--line); background: var(--card); border-radius: 10px; padding: 10px 40px 10px 12px; color: var(--ink); display: flex; align-items: center; gap: 9px; text-align: left; font-size: 13px; font-weight: 500; }
 .activity-button.selected { background: var(--surface-selected); border-color: var(--focus); color: var(--positive-strong); }
 .activity-icon { font-size: 21px; line-height: 1; flex: 0 0 auto; }
-.check-mark { margin-left: auto; width: 20px; height: 20px; flex-shrink: 0; display: grid; place-items: center; background: var(--accent); color: var(--ink-inverse); border-radius: 50%; font-size: 12px; }
+.check-mark { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 20px; height: 20px; display: grid; place-items: center; background: var(--accent); color: var(--ink-inverse); border-radius: 50%; font-size: 12px; }
 .goal-list { display: grid; gap: 8px; }
 .goal-row { width: 100%; display: flex; align-items: center; gap: 9px; border: 1px solid var(--line); background: var(--card); padding: 8px; border-radius: 12px; text-align: left; color: var(--ink); }
 .goal-row.checked { background: var(--surface-selected); border-color: var(--focus); }
@@ -427,7 +428,7 @@ button:disabled { cursor: wait; opacity: .68; }
   .mood-option { min-height: 86px; border-radius: 10px; font-size: 11px; }
   .mood-emoji { font-size: 25px; }
   .activity-grid { grid-template-columns: 1fr 1fr; gap: 6px; }
-  .activity-button { min-height: 51px; padding: 7px 8px; font-size: 12px; }
+  .activity-button { min-height: 51px; padding: 7px 38px 7px 8px; font-size: 12px; }
   .save-bar { display: block; padding: 22px 18px; }
   .save-actions { margin-top: 18px; justify-content: flex-end; }
   .save-actions .primary-button { flex: 1; }
