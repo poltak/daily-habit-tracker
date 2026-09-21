@@ -138,3 +138,21 @@ test("mood and activity selections persist independently with optimistic pending
   assert.match(pageSource, /if \(!hasFailedSelection\) \{[\s\S]*setConnectionState\("online"\);[\s\S]*setMessage\(null\);/);
   assert.match(pageSource, /activityIds: applyActivitySelectionStates\(\{[\s\S]*activityIds: entry\.activityIds/);
 });
+
+test("visible log refreshes merge the selected day without replacing local work", () => {
+  assert.match(pageSource, /const dayRefreshRequestGate = useRef\(createLatestRequestGate\(\)\)/);
+  assert.match(pageSource, /const localMutationEpochRef = useRef\(0\)/);
+  assert.match(pageSource, /window\.setInterval\(\(\) => \{[\s\S]*?refreshSelectedDay\(\);[\s\S]*?\}, 15_000\)/);
+  assert.match(pageSource, /window\.addEventListener\("focus", refreshOnReturn\)/);
+  assert.match(pageSource, /document\.addEventListener\("visibilitychange", refreshOnReturn\)/);
+  const refreshStart = pageSource.indexOf("async function refreshSelectedDay");
+  const refreshHandler = pageSource.slice(refreshStart, pageSource.indexOf("function openDatePicker", refreshStart));
+  assert.match(refreshHandler, /fetch\(`\/api\/entries\/\$\{logicalDate\}`/);
+  assert.match(refreshHandler, /response\.status !== 404/);
+  assert.match(refreshHandler, /hasLocalDraftRef\.current/);
+  assert.match(refreshHandler, /localMutationEpochRef\.current === mutationEpoch/);
+  assert.match(refreshHandler, /if \(request\.signal\.aborted \|\| !isRelevant\(\)\) return/);
+  assert.match(refreshHandler, /hasPendingGoalToggle\(logicalDate\)/);
+  assert.match(refreshHandler, /hasPendingSelectionToggle\(logicalDate\)/);
+  assert.doesNotMatch(refreshHandler, /chooseDate\(/);
+});

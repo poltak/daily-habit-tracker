@@ -28,6 +28,7 @@ import {
   type Draft,
   writeStoredDraft,
 } from "../lib/draft-storage";
+import { draftFromDayRefreshState } from "../lib/day-refresh";
 import { UI_ICONS } from "../lib/icons";
 import {
   filterActivityGroups,
@@ -135,6 +136,33 @@ function getEntryForDate(entries: Entry[], date: string) {
   return entries.find(
     (entry) => entry.logicalDate === date && !entry.deletedAt,
   );
+}
+
+function sameStringArray(left: readonly string[], right: readonly string[]) {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function sameDraft(left: Draft, right: Draft) {
+  return left.moodId === right.moodId
+    && left.localTime === right.localTime
+    && left.version === right.version
+    && sameStringArray(left.activityIds, right.activityIds)
+    && sameStringArray(left.completedGoalIds, right.completedGoalIds);
+}
+
+function sameEntry(left: Entry | undefined, right: Entry | null) {
+  if (!left || !right) return !left && !right;
+  return left.id === right.id
+    && left.localTime === right.localTime
+    && left.timezone === right.timezone
+    && left.timezoneOffsetMinutes === right.timezoneOffsetMinutes
+    && left.moodId === right.moodId
+    && left.version === right.version
+    && left.createdAt === right.createdAt
+    && left.updatedAt === right.updatedAt
+    && left.deletedAt === right.deletedAt
+    && sameStringArray(left.activityIds, right.activityIds)
+    && sameStringArray(left.completedGoalIds, right.completedGoalIds);
 }
 
 function draftFromEntry(entry: Entry | null): Draft {
@@ -295,6 +323,7 @@ export default function Journal() {
   );
   const draftRef = useRef(EMPTY_DRAFT);
   const dateRequestGate = useRef(createLatestRequestGate());
+  const dayRefreshRequestGate = useRef(createLatestRequestGate());
   const bootstrapRequestGate = useRef(createLatestRequestGate());
   const goalHistoryRequestGate = useRef(createLatestRequestGate());
   const pendingGoalConfigRef = useRef(false);
@@ -313,6 +342,7 @@ export default function Journal() {
   const loadedDateRef = useRef("");
   const entryMutationRef = useRef(false);
   const selectedDateEpochRef = useRef(0);
+  const localMutationEpochRef = useRef(0);
   const dataRef = useRef<Bootstrap | null>(null);
   const viewRef = useRef<View>(view);
   const setupBusyRef = useRef(false);
@@ -339,6 +369,11 @@ export default function Journal() {
   function setActivityCreateBusy(busy: boolean) {
     activityCreateBusyRef.current = busy;
     setIsActivityCreateBusy(busy);
+  }
+
+  function beginLocalMutation() {
+    localMutationEpochRef.current += 1;
+    return localMutationEpochRef.current;
   }
 
   function updateGoalRoute(goalId: string | null) {
@@ -596,14 +631,24 @@ export default function Journal() {
         ? { ...current, today, yesterday: addDays(today, -1) }
         : current);
     }
-    const timer = window.setInterval(updateLocalDay, 60_000);
-    window.addEventListener("focus", updateLocalDay);
-    document.addEventListener("visibilitychange", updateLocalDay);
+    function refreshOnReturn() {
+      updateLocalDay();
+      if (document.visibilityState === "visible") void refreshSelectedDay();
+    }
+    const localDayTimer = window.setInterval(updateLocalDay, 60_000);
+    const refreshTimer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refreshSelectedDay();
+    }, 15_000);
+    window.addEventListener("focus", refreshOnReturn);
+    document.addEventListener("visibilitychange", refreshOnReturn);
     return () => {
-      window.clearInterval(timer);
-      window.removeEventListener("focus", updateLocalDay);
-      document.removeEventListener("visibilitychange", updateLocalDay);
+      window.clearInterval(localDayTimer);
+      window.clearInterval(refreshTimer);
+      window.removeEventListener("focus", refreshOnReturn);
+      document.removeEventListener("visibilitychange", refreshOnReturn);
     };
+    // The listener reads changing day and mutation data from refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -618,6 +663,7 @@ export default function Journal() {
   useEffect(
     () => () => {
       dateRequestGate.current.cancel();
+      dayRefreshRequestGate.current.cancel();
       bootstrapRequestGate.current.cancel();
       goalHistoryRequestGate.current.cancel();
     },
@@ -725,6 +771,7 @@ export default function Journal() {
       });
       return;
     }
+    dayRefreshRequestGate.current.cancel();
     const request = dateRequestGate.current.begin();
     loadedDateRef.current = "";
     setLoadedDate("");
@@ -805,6 +852,100 @@ export default function Journal() {
     }
   }
 
+  async function refreshSelectedDay() {
+    if (
+      viewRef.current !== "log" ||
+      document.visibilityState !== "visible" ||
+      !navigator.onLine
+    )
+      return;
+    const logicalDate = selectedDateRef.current;
+    const dateEpoch = selectedDateEpochRef.current;
+    const mutationEpoch = localMutationEpochRef.current;
+    if (
+      !logicalDate ||
+      loadedDateRef.current !== logicalDate ||
+      hasLocalDraftRef.current ||
+      entryMutationRef.current ||
+      hasPendingGoalToggle(logicalDate) ||
+      hasPendingSelectionToggle(logicalDate)
+    )
+      return;
+
+    const request = dayRefreshRequestGate.current.begin();
+    const isRelevant = () =>
+      request.isCurrent() &&
+      document.visibilityState === "visible" &&
+      viewRef.current === "log" &&
+      selectedDateRef.current === logicalDate &&
+      selectedDateEpochRef.current === dateEpoch &&
+      loadedDateRef.current === logicalDate &&
+      localMutationEpochRef.current === mutationEpoch &&
+      !hasLocalDraftRef.current &&
+      !entryMutationRef.current &&
+      !hasPendingGoalToggle(logicalDate) &&
+      !hasPendingSelectionToggle(logicalDate);
+    try {
+      const response = await fetch(`/api/entries/${logicalDate}`, {
+        cache: "no-store",
+        signal: request.signal,
+      });
+      let serverEntry: Entry | null = null;
+      let serverCompletedGoalIds: string[] = [];
+      let serverSelections: DaySelections | undefined;
+      if (response.status !== 404) {
+        if (!response.ok) throw new Error("Could not refresh that date.");
+        const result = (await response.json()) as {
+          entry: Entry;
+          completedGoalIds?: string[];
+          daySelections?: DaySelections;
+        };
+        serverEntry = result.entry;
+        serverCompletedGoalIds = result.completedGoalIds ?? serverEntry.completedGoalIds;
+        serverSelections = result.daySelections;
+      } else {
+        const result = (await response.json()) as {
+          completedGoalIds?: string[];
+          daySelections?: DaySelections;
+        };
+        serverCompletedGoalIds = result.completedGoalIds ?? [];
+        serverSelections = result.daySelections;
+      }
+
+      if (!isRelevant()) return;
+
+      const nextDraft = draftFromDayRefreshState({
+        entry: serverEntry,
+        completedGoalIds: serverCompletedGoalIds,
+        daySelections: serverSelections,
+      });
+      if (!sameDraft(draftRef.current, nextDraft)) {
+        draftRef.current = nextDraft;
+        setDraft(nextDraft);
+      }
+      const currentEntry = getEntryForDate(dataRef.current?.entries ?? [], logicalDate);
+      if (!sameEntry(currentEntry, serverEntry)) {
+        setData((current) =>
+          current
+            ? {
+                ...current,
+                entries: serverEntry
+                  ? [
+                      serverEntry,
+                      ...current.entries.filter((entry) => entry.logicalDate !== logicalDate),
+                    ]
+                  : current.entries.filter((entry) => entry.logicalDate !== logicalDate),
+              }
+            : current,
+        );
+      }
+      setConnectionState("online");
+    } catch {
+      if (request.signal.aborted || !isRelevant()) return;
+      setConnectionState(navigator.onLine ? "error" : "offline");
+    }
+  }
+
   function openDatePicker() {
     const input = dateInputRef.current;
     if (!input || isLoadingDate) return;
@@ -856,6 +997,7 @@ export default function Journal() {
     if (previousMoodId === id) return;
     const nextDraft = { ...draftRef.current, moodId: id };
     const dateEpoch = selectedDateEpochRef.current;
+    beginLocalMutation();
     pendingSelectionRef.current.add(key);
     setSelectionPending(key, true);
     updateDraft({ moodId: id }, { markLocal: false });
@@ -939,6 +1081,7 @@ export default function Journal() {
       completedGoalIds: nextCompletedGoalIds,
     };
     const dateEpoch = selectedDateEpochRef.current;
+    beginLocalMutation();
     pendingSelectionRef.current.add(key);
     for (const goalKey of linkedGoalKeys) pendingGoalRef.current.add(goalKey);
     setSelectionPending(key, true);
@@ -1113,6 +1256,7 @@ export default function Journal() {
         })
       : draftRef.current.activityIds;
     const dateEpoch = selectedDateEpochRef.current;
+    beginLocalMutation();
     for (const goalKey of affectedGoalKeys) {
       pendingGoalRef.current.add(goalKey);
       setGoalPending(goalKey, true);
@@ -1359,6 +1503,7 @@ export default function Journal() {
       return;
     }
     entryMutationRef.current = true;
+    beginLocalMutation();
     setIsSaving(true);
     setConnectionState("checking");
     setMessage(null);
@@ -1387,7 +1532,9 @@ export default function Journal() {
             }
           : current,
       );
-      setDraft(draftFromEntry(result.entry));
+      const nextDraft = draftFromEntry(result.entry);
+      draftRef.current = nextDraft;
+      setDraft(nextDraft);
       clearStoredDraft(selectedDate);
       markLocalDraft(false);
       setConnectionState("online");
@@ -1428,6 +1575,7 @@ export default function Journal() {
       return;
     }
     entryMutationRef.current = true;
+    beginLocalMutation();
     setIsDeleting(true);
     setConnectionState("checking");
     setMessage(null);
@@ -1447,10 +1595,12 @@ export default function Journal() {
             }
           : current,
       );
-      setDraft({
+      const nextDraft = {
         ...EMPTY_DRAFT,
-        completedGoalIds: [...draft.completedGoalIds],
-      });
+        completedGoalIds: [...draftRef.current.completedGoalIds],
+      };
+      draftRef.current = nextDraft;
+      setDraft(nextDraft);
       clearStoredDraft(selectedDate);
       markLocalDraft(false);
       setConnectionState("online");
