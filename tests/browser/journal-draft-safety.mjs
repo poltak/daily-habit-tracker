@@ -46,6 +46,8 @@ try {
   });
   await page.goto(baseURL);
   await page.locator(".inline-loading").waitFor();
+  assert.ok(await page.locator(".activity-groups details").count() > 0);
+  assert.ok(await page.locator(".goal-list .goal-row").count() > 0);
   assert.equal(await page.locator(".save-actions .primary-button").isDisabled(), true);
   assert.ok(await page.evaluate((date) => localStorage.getItem(`daymark:draft:v1:${date}`), oldDate));
   assert.equal(writes.length, 0);
@@ -57,9 +59,14 @@ try {
   assert.equal(writes.length, 1);
   assert.equal(writes[0].body.expectedVersion, 1);
   assert.equal(store.getEntry(oldDate).version, 2);
+  await page.locator(".activity-groups details").first().locator("summary").click();
+  assert.equal(await page.locator(".activity-groups details").first().evaluate((element) => element.open), true);
 
   await page.getByRole("button", { name: "Today", exact: true }).click();
   await page.getByRole("button", { name: "Retry day", exact: true }).waitFor();
+  assert.ok(await page.locator(".activity-groups details").count() > 0);
+  assert.ok(await page.locator(".goal-list .goal-row").count() > 0);
+  assert.equal(await page.locator(".activity-groups details").first().evaluate((element) => element.open), true);
   assert.equal(await page.locator(".mood-option:not(:disabled)").count(), 0);
   assert.equal(await page.locator(".save-actions .primary-button").isDisabled(), true);
   assert.equal(await page.locator('.mood-option[aria-pressed="true"]').count(), 0);
@@ -71,7 +78,7 @@ try {
   assert.equal(await page.getByRole("button", { name: "Saved", exact: true }).isDisabled(), true);
   assert.equal(writes.length, 1);
   assert.deepEqual(errors, []);
-  console.log("PASS: interrupted choices recover automatically, existing entries show Saved, and loading failures disable save.");
+  console.log("PASS: interrupted choices recover automatically, global lists stay mounted, and loading failures disable save.");
 } finally {
   await browser.close();
 }

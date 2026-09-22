@@ -2056,7 +2056,7 @@ function LogView({
           </div>
         </section>
 
-        <section className="panel activities-panel">
+        <section className="panel activities-panel" aria-busy={isLoadingDate || selectionBusy}>
           <div className="section-heading">
             <h2>Activities</h2>
             <span className="selection-count">
@@ -2092,20 +2092,17 @@ function LogView({
               aria-label="Search activities"
             />
           </label>
-          {isLoadingDate ? (
-            <div className="inline-loading">Loading that day…</div>
-          ) : (
-            <ActivityGroupList
-              groups={groups}
-              activityQuery={activityQuery}
-              selectedActivityIds={draft.activityIds}
-              selectedDate={selectedDate}
-              isLoadingDate={isLoadingDate || !isDateReady}
-              pendingSelectionKeys={pendingSelectionKeys}
-              onToggleActivity={onToggleActivity}
-              onOpenAddActivity={onOpenAddActivity}
-            />
-          )}
+          {isLoadingDate && <div className="inline-loading" role="status">Loading this day’s selections…</div>}
+          <ActivityGroupList
+            groups={groups}
+            activityQuery={activityQuery}
+            selectedActivityIds={draft.activityIds}
+            selectedDate={selectedDate}
+            isLoadingDate={isLoadingDate || !isDateReady}
+            pendingSelectionKeys={pendingSelectionKeys}
+            onToggleActivity={onToggleActivity}
+            onOpenAddActivity={onOpenAddActivity}
+          />
         </section>
       </fieldset>
 
