@@ -666,6 +666,10 @@ body {
   .topbar-date-switcher button { width: 36px; height: 36px; }
   .theme-control { grid-column: 2; grid-row: 1; }
   .topbar-actions { display: none; }
+  .view-log .topbar { grid-template-columns: minmax(0, 1fr) auto; }
+  .view-log .topbar-actions { display: inline-flex; grid-column: 2; grid-row: 1; justify-self: end; min-height: 40px; }
+  .view-log .topbar-actions button { min-width: 72px; padding: 0 12px; }
+  .view-log .topbar-actions .topbar-calendar { min-width: 44px; padding: 0; }
   .connection-pill { display: none; }
   .content-shell { padding-top: 26px; }
   .log-form { display: flex; flex-direction: column; }
@@ -722,6 +726,9 @@ body {
 }
 
 @media (max-width: 360px) {
+  .view-log .topbar { padding-inline: 14px; }
+  .view-log .brand { font-size: 19px; gap: 8px; }
+  .view-log .brand-mark { width: 32px; height: 32px; }
   .calendar-page .calendar-day { min-height: 48px; padding: 4px 1px; gap: 3px; }
   .calendar-page .calendar-mood-emoji { font-size: 18px; }
 }

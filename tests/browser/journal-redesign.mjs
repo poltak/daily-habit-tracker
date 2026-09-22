@@ -84,6 +84,8 @@ try {
     page.on("pageerror", (error) => errors.push(error.message));
     await page.goto(baseURL);
     await page.locator(".mood-option:not(:disabled)").first().waitFor();
+    assert.equal(await page.getByRole("button", { name: "Today", exact: true }).isVisible(), true);
+    assert.equal(await page.getByRole("button", { name: "Choose a date", exact: true }).isVisible(), true);
     await page.keyboard.press("Tab");
     assert.equal(await page.locator(".skip-link").evaluate((element) => element === document.activeElement), true);
     await page.keyboard.press("Enter");
