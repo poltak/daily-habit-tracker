@@ -23,9 +23,7 @@ try {
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   let releaseDate;
-  let releaseSave;
   const dateGate = new Promise((resolve) => { releaseDate = resolve; });
-  const saveGate = new Promise((resolve) => { releaseSave = resolve; });
   let failDate = true;
   const writes = [];
   await context.route("**/api/**", async (route) => {
@@ -37,7 +35,6 @@ try {
       const date = url.pathname.split("/").at(-1);
       if (request.method() === "PUT") {
         writes.push({ date, body: request.postDataJSON() });
-        await saveGate;
         return route.fulfill({ json: { entry: store.saveEntry(date, request.postDataJSON()) } });
       }
       if (date === oldDate) await dateGate;
@@ -53,10 +50,13 @@ try {
   assert.ok(await page.evaluate((date) => localStorage.getItem(`daymark:draft:v1:${date}`), oldDate));
   assert.equal(writes.length, 0);
   releaseDate();
-  await page.locator('.mood-option[aria-pressed="true"]').waitFor();
-  assert.equal((await page.locator('.mood-option[aria-pressed="true"]').innerText()).includes("Rad"), true);
+  await page.locator('.mood-option[aria-pressed="true"]').filter({ hasText: "Rad" }).waitFor();
   assert.equal(await page.locator('input[type="date"]').inputValue(), oldDate);
-  assert.equal(await page.locator(".draft-status").isVisible(), true);
+  assert.equal(await page.getByRole("button", { name: "Saved", exact: true }).isDisabled(), true);
+  assert.equal(await page.evaluate((date) => localStorage.getItem(`daymark:draft:v1:${date}`), oldDate), null);
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].body.expectedVersion, 1);
+  assert.equal(store.getEntry(oldDate).version, 2);
 
   await page.getByRole("button", { name: "Today", exact: true }).click();
   await page.getByRole("button", { name: "Retry day", exact: true }).waitFor();
@@ -68,20 +68,10 @@ try {
   await page.locator(".mood-option:not(:disabled)").first().waitFor();
   assert.equal((await page.locator('.mood-option[aria-pressed="true"]').innerText()).includes("Good"), true);
 
-  await page.locator(".save-actions .primary-button").click();
-  await page.getByRole("button", { name: "Saving…", exact: true }).waitFor();
+  assert.equal(await page.getByRole("button", { name: "Saved", exact: true }).isDisabled(), true);
   assert.equal(writes.length, 1);
-  assert.equal(writes[0].body.expectedVersion, 1);
-  const nav = page.getByRole("navigation", { name: "Primary navigation" });
-  await nav.getByRole("button", { name: "Calendar", exact: true }).click();
-  await page.locator(".calendar-day").first().click();
-  assert.equal(await page.locator('input[type="date"]').inputValue(), today);
-  releaseSave();
-  await page.getByText(`Saved `, { exact: false }).waitFor();
-  assert.equal(store.getEntry(today).version, 2);
-  assert.ok(await page.evaluate((date) => localStorage.getItem(`daymark:draft:v1:${date}`), oldDate));
   assert.deepEqual(errors, []);
-  console.log("PASS: old draft recovery, disabled saves during loading and failure, retry, expected version, and date guard during saves.");
+  console.log("PASS: interrupted choices recover automatically, existing entries show Saved, and loading failures disable save.");
 } finally {
   await browser.close();
 }

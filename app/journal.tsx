@@ -150,6 +150,12 @@ function sameDraft(left: Draft, right: Draft) {
     && sameStringArray(left.completedGoalIds, right.completedGoalIds);
 }
 
+function sameEntrySelections(draft: Draft, entry: Entry) {
+  return draft.moodId === entry.moodId
+    && draft.activityIds.length === entry.activityIds.length
+    && draft.activityIds.every((id) => entry.activityIds.includes(id));
+}
+
 function sameEntry(left: Entry | undefined, right: Entry | null) {
   if (!left || !right) return !left && !right;
   return left.id === right.id
@@ -311,7 +317,6 @@ export default function Journal() {
   const [activityGroupId, setActivityGroupId] = useState<string | undefined>();
   const [activityReturnView, setActivityReturnView] = useState<ActivityCreationSource>("log");
   const [isActivityCreateBusy, setIsActivityCreateBusy] = useState(false);
-  const [hasLocalDraft, setHasLocalDraft] = useState(false);
   const [connectionState, setConnectionState] =
     useState<ConnectionState>("checking");
   const [message, setMessage] = useState<Notice | null>(null);
@@ -361,9 +366,20 @@ export default function Journal() {
     window.scrollTo(0, 0);
   }, [view, selectedGoalId]);
 
+  const hasPendingSave = isSaving || isDeleting || isSavingGoalConfig
+    || isActivityCreateBusy || pendingGoalKeys.size > 0 || pendingSelectionKeys.size > 0;
+  useEffect(() => {
+    if (!hasPendingSave) return;
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = true;
+    };
+    window.addEventListener("beforeunload", warnBeforeUnload);
+    return () => window.removeEventListener("beforeunload", warnBeforeUnload);
+  }, [hasPendingSave]);
+
   function markLocalDraft(value: boolean) {
     hasLocalDraftRef.current = value;
-    setHasLocalDraft(value);
   }
 
   function setActivityCreateBusy(busy: boolean) {
@@ -819,17 +835,44 @@ export default function Journal() {
         serverCompletedGoalIds,
         serverSelections,
       });
-      setDraft(recovered.draft);
-      draftRef.current = recovered.draft;
+      let resolvedEntry = serverEntry;
+      let resolvedDraft = recovered.draft;
+      let recoveryError: string | null = null;
+      if (serverEntry && recovered.restored) {
+        try {
+          if (!sameEntrySelections(recovered.draft, serverEntry)) {
+            const saveResponse = await fetch(`/api/entries/${nextDate}`, {
+              method: "PUT",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify(entryInputFromDraft(recovered.draft)),
+              signal: request.signal,
+            });
+            const saveResult = (await saveResponse.json()) as { entry?: Entry; error?: string };
+            if (!saveResponse.ok || !saveResult.entry)
+              throw new Error(saveResult.error ?? "The server rejected the entry.");
+            resolvedEntry = saveResult.entry;
+          }
+          if (!request.isCurrent()) return;
+          clearStoredDraft(nextDate);
+          resolvedDraft = draftFromEntry(resolvedEntry);
+        } catch (error) {
+          if (request.signal.aborted || !request.isCurrent()) return;
+          resolvedDraft = draftFromEntry(serverEntry);
+          recoveryError = `Could not restore your last choice. ${(error as Error).message}`;
+        }
+      }
+      if (!request.isCurrent()) return;
+      setDraft(resolvedDraft);
+      draftRef.current = resolvedDraft;
       loadedDateRef.current = nextDate;
       setLoadedDate(nextDate);
-      markLocalDraft(recovered.restored);
+      markLocalDraft(recovered.restored && !serverEntry);
       setData((current) =>
           current
             ? {
                 ...current,
                 entries: [
-                  ...(serverEntry ? [serverEntry] : []),
+                  ...(resolvedEntry ? [resolvedEntry] : []),
                   ...current.entries.filter(
                     (entry) => entry.logicalDate !== nextDate,
                   ),
@@ -837,12 +880,8 @@ export default function Journal() {
               }
             : current,
         );
-      setConnectionState("online");
-      if (recovered.restored)
-        setMessage({
-          kind: "info",
-          text: `Restored unsaved changes for ${shortDate(nextDate)}.`,
-        });
+      setConnectionState(recoveryError ? navigator.onLine ? "error" : "offline" : "online");
+      if (recoveryError) setMessage({ kind: "error", text: recoveryError });
     } catch (error) {
       if (request.signal.aborted || !request.isCurrent()) return;
       setConnectionState(navigator.onLine ? "error" : "offline");
@@ -995,6 +1034,7 @@ export default function Journal() {
     if (!logicalDate || loadedDateRef.current !== logicalDate || entryMutationRef.current || isLoadingDate || pendingSelectionRef.current.has(key)) return;
     const previousMoodId = draftRef.current.moodId;
     if (previousMoodId === id) return;
+    const hadLocalDraft = hasLocalDraftRef.current;
     const nextDraft = { ...draftRef.current, moodId: id };
     const dateEpoch = selectedDateEpochRef.current;
     beginLocalMutation();
@@ -1044,8 +1084,11 @@ export default function Journal() {
       failedSelectionRef.current.add(key);
       if (selectedDateRef.current === logicalDate && selectedDateEpochRef.current === dateEpoch) {
         updateDraft({ moodId: previousMoodId }, { markLocal: false });
-        writeStoredDraft(logicalDate, draftRef.current);
-        markLocalDraft(true);
+        if (hadLocalDraft || [...pendingSelectionRef.current].some((pendingKey) => pendingKey !== key && pendingKey.startsWith(`${logicalDate}:`)))
+          writeStoredDraft(logicalDate, draftRef.current);
+        else
+          clearStoredDraft(logicalDate);
+        markLocalDraft(hadLocalDraft);
         setConnectionState(navigator.onLine ? "error" : "offline");
         setMessage({ kind: "error", text: `${(error as Error).message} The mood was restored.` });
       } else writeStoredDraft(logicalDate, nextDraft);
@@ -1064,6 +1107,7 @@ export default function Journal() {
       .map((goal) => goal.id) ?? [];
     const linkedGoalKeys = linkedGoalIds.map((goalId) => goalPendingKey(logicalDate, goalId));
     const previousSelected = draftRef.current.activityIds.includes(id);
+    const hadLocalDraft = hasLocalDraftRef.current;
     const nextSelected = !previousSelected;
     const nextActivityIds = nextSelected
       ? [...new Set([...draftRef.current.activityIds, id])]
@@ -1183,8 +1227,11 @@ export default function Journal() {
           },
           { markLocal: false },
         );
-        writeStoredDraft(logicalDate, draftRef.current);
-        markLocalDraft(true);
+        if (hadLocalDraft || [...pendingSelectionRef.current].some((pendingKey) => pendingKey !== key && pendingKey.startsWith(`${logicalDate}:`)))
+          writeStoredDraft(logicalDate, draftRef.current);
+        else
+          clearStoredDraft(logicalDate);
+        markLocalDraft(hadLocalDraft);
         setConnectionState(navigator.onLine ? "error" : "offline");
         setMessage({ kind: "error", text: `${(error as Error).message} The activity was restored.` });
       } else writeStoredDraft(logicalDate, nextDraft);
@@ -1497,7 +1544,7 @@ export default function Journal() {
     if (!navigator.onLine) {
       setMessage({
         kind: "error",
-        text: "You’re offline. Your draft is safe on this device; reconnect to save it.",
+        text: "You’re offline. Reconnect to save this entry.",
       });
       setConnectionState("offline");
       return;
@@ -1546,7 +1593,7 @@ export default function Journal() {
       setConnectionState(navigator.onLine ? "error" : "offline");
       setMessage({
         kind: "error",
-        text: `${(error as Error).message} Your draft is still stored on this device.`,
+        text: `${(error as Error).message} Try again.`,
       });
     } finally {
       entryMutationRef.current = false;
@@ -1701,7 +1748,6 @@ export default function Journal() {
             data={data}
             selectedDate={selectedDate}
             draft={draft}
-            hasLocalDraft={hasLocalDraft}
             activityQuery={activityQuery}
             isLoadingDate={isLoadingDate}
             isDateReady={loadedDate === selectedDate && Boolean(selectedDate)}
@@ -1870,7 +1916,6 @@ function LogView({
   data,
   selectedDate,
   draft,
-  hasLocalDraft,
   activityQuery,
   isLoadingDate,
   isDateReady,
@@ -1892,7 +1937,6 @@ function LogView({
   data: Bootstrap;
   selectedDate: string;
   draft: Draft;
-  hasLocalDraft: boolean;
   activityQuery: string;
   isLoadingDate: boolean;
   isDateReady: boolean;
@@ -2067,15 +2111,10 @@ function LogView({
 
       <div className="save-bar" aria-busy={formBusy || goalsBusy || selectionBusy}>
         <div>
-          <strong>{existing ? "Edit this entry" : "Ready to save your day?"}</strong>
+          <strong>{existing ? "Your entry is saved" : "Ready to save your day?"}</strong>
           <span>
             {friendlyDate(selectedDate)} · {draft.activityIds.length} activities
           </span>
-          {hasLocalDraft && (
-            <small className="draft-status">
-              <Icon name="save" /> Unsaved changes stored on this device
-            </small>
-          )}
         </div>
         <div className="save-actions">
           {existing && (
@@ -2089,18 +2128,12 @@ function LogView({
             </button>
           )}
           <button
-            className="primary-button"
+            className={`primary-button${existing ? " is-saved" : ""}`}
             onClick={onSave}
-            disabled={isSaving || isDeleting || !isDateReady || goalsBusy || selectionBusy}
+            disabled={Boolean(existing) || isSaving || isDeleting || !isDateReady || goalsBusy || selectionBusy}
             aria-busy={isSaving}
           >
-            {isSaving
-              ? "Saving…"
-              : goalsBusy || selectionBusy
-                ? "Updating selection…"
-                : existing
-                  ? "Update entry"
-                  : "Save entry"}
+            {existing ? "Saved" : "Save entry"}
           </button>
         </div>
       </div>

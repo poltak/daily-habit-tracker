@@ -76,17 +76,24 @@ try {
   await refreshStarted;
 
   await page.getByRole("button", { name: /Rad/ }).click();
+  await page.locator('.mood-option[aria-busy="true"]').waitFor();
+  const warnsBeforeUnload = () => page.evaluate(() => {
+    const event = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(event);
+    return event.defaultPrevented;
+  });
+  assert.equal(await warnsBeforeUnload(), true);
   const firstMoodResponse = page.waitForResponse((response) => response.url().includes(`/api/day-selections/${today}/mood`) && response.request().method() === "PUT");
   releaseMood();
   await firstMoodResponse;
   await page.waitForFunction(() => document.querySelectorAll('.mood-option[aria-busy="true"]').length === 0);
+  assert.equal(await warnsBeforeUnload(), false);
   const staleResponse = page.waitForResponse((response) => response.url().includes(`/api/entries/${today}`) && response.request().method() === "GET");
   releaseRefresh();
   await staleResponse;
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   assert.equal(await page.locator('.mood-option[aria-pressed="true"]').filter({ hasText: "Rad" }).count(), 1);
   assert.equal(moodRequests, 1);
-  assert.equal(await page.locator(".draft-status").count(), 0);
 
   // A failed refresh from before a successful local write must not report a
   // sync issue after the write completes.
@@ -101,21 +108,18 @@ try {
   assert.equal(await page.locator('.mood-option[aria-pressed="true"]').filter({ hasText: "Good" }).count(), 1);
   assert.match(await page.locator(".connection-pill").getAttribute("class"), /online/);
 
-  // A failed local write creates a dirty draft; subsequent remote refreshes
-  // must leave that draft untouched.
+  // A failed local write restores the confirmed value, and a later refresh
+  // can still apply a newer server value.
   failNextMood = true;
   await page.getByRole("button", { name: /Meh/ }).click();
   await page.getByText(/The mood was restored\./).waitFor();
   assert.equal(await page.locator('.mood-option[aria-pressed="true"]').filter({ hasText: "Good" }).count(), 1);
-  assert.equal(await page.locator(".draft-status").count(), 1);
   store.setMoodSelection(today, "mood-meh");
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-  await page.waitForTimeout(50);
-  assert.equal(entryGets, 4);
-  assert.equal(await page.locator('.mood-option[aria-pressed="true"]').filter({ hasText: "Good" }).count(), 1);
-  assert.equal(await page.locator(".draft-status").count(), 1);
+  await page.locator('.mood-option[aria-pressed="true"]').filter({ hasText: "Meh" }).waitFor();
+  assert.equal(entryGets, 5);
   assert.equal(moodRequests, 3);
-  console.log("PASS: server state refreshes; stale success and failure responses and dirty drafts stay safe.");
+  console.log("PASS: server state refreshes; stale responses stay safe and failed writes do not block later refreshes.");
 } finally {
   await browser.close();
 }

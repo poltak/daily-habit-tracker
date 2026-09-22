@@ -172,12 +172,11 @@ button:disabled { cursor: wait; opacity: .68; }
 .save-bar { margin-top: 24px; padding: 22px 26px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--save-bg); color: var(--save-foreground); display: flex; align-items: center; justify-content: space-between; gap: 16px; box-shadow: var(--shadow); }
 .save-bar > div:first-child { display: grid; gap: 4px; }
 .save-bar span { color: var(--save-muted); font-size: 12px; }
-.save-bar .draft-status { color: var(--danger-soft); font-size: 11px; display: inline-flex; align-items: center; gap: 4px; }
-.draft-status .material-symbols-rounded { font-size: 14px; }
 .save-actions { display: flex; align-items: center; gap: 8px; }
 .primary-button, .secondary-button, .ghost-button { min-height: 44px; border: 0; border-radius: 10px; padding: 11px 18px; font-weight: 600; font-size: 13px; }
 .primary-button { color: var(--ink-inverse); background: var(--accent); }
 .primary-button:hover { background: var(--accent-hover); }
+.primary-button.is-saved:disabled { cursor: default; }
 .secondary-button { color: var(--ink); background: var(--surface-chip); }
 .ghost-button { color: var(--save-foreground); background: color-mix(in srgb, var(--save-foreground) 10%, transparent); }
 .ghost-button.danger { color: var(--danger-soft); }

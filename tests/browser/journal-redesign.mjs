@@ -133,7 +133,7 @@ try {
     await page.getByRole("button", { name: `Mark ${initial.goals[0].name} completed`, exact: true }).click();
     await page.locator('.goal-checkbox[aria-pressed="true"]:not(:disabled)').waitFor();
     await page.getByRole("button", { name: "Save entry", exact: true }).click();
-    await page.getByRole("button", { name: "Update entry", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Saved", exact: true, disabled: true }).waitFor();
     assert.equal(store.getEntry(initial.today).moodId, initial.moods[0].id);
     assert.ok(store.getEntry(initial.today).completedGoalIds.includes(initial.goals[0].id));
     await page.getByRole("button", { name: `Open ${initial.goals[0].name} goal`, exact: true }).click();
@@ -154,7 +154,7 @@ try {
     await page.locator(".icon-picker").waitFor({ state: "hidden" });
     assert.equal(await page.getByRole("button", { name: "Choose goal icon", exact: true }).evaluate((element) => element === document.activeElement), true);
     await page.goBack();
-    await page.getByRole("button", { name: "Update entry", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Saved", exact: true, disabled: true }).waitFor();
     await page.locator(".add-activity-button").first().click();
     await page.getByPlaceholder("Activity name").fill("Test afternoon walk");
     await assertFits(page);
