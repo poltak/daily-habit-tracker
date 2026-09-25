@@ -2334,9 +2334,6 @@ function ActivityGroupList({
             <summary>
               <span className="group-title"><span className="group-icon"><Icon name={groupIcon} /></span>{group.name}</span>
               <span className="group-summary-meta">
-                <span>
-                  {summary.activityCount} {activityLabel}
-                </span>
                 <button
                   type="button"
                   className="add-activity-button"
@@ -2349,6 +2346,9 @@ function ActivityGroupList({
                 >
                   + Add new
                 </button>
+                <span>
+                  {summary.activityCount} {activityLabel}
+                </span>
                 <Icon name="expand_more" className="group-expand-icon" />
               </span>
             </summary>

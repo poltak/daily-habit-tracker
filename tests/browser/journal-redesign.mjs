@@ -157,7 +157,30 @@ try {
     assert.equal(await page.getByRole("button", { name: "Choose goal icon", exact: true }).evaluate((element) => element === document.activeElement), true);
     await page.goBack();
     await page.getByRole("button", { name: "Saved", exact: true, disabled: true }).waitFor();
-    await page.locator(".add-activity-button").first().click();
+    const firstActivityGroup = page.locator(".activity-groups details").first();
+    const addActivityButton = firstActivityGroup.getByRole("button", { name: /^Add new activity to / });
+    if (device === "desktop") {
+      await firstActivityGroup.locator("summary").hover();
+      const positions = await page.evaluate(() => {
+        const group = document.querySelector(".activity-groups details");
+        const title = group.querySelector(".group-title").getBoundingClientRect();
+        const button = group.querySelector(".add-activity-button");
+        const buttonRect = button.getBoundingClientRect();
+        const count = group.querySelector(".group-summary-meta > span").getBoundingClientRect();
+        return {
+          opacity: getComputedStyle(button).opacity,
+          titleRight: title.right,
+          buttonLeft: buttonRect.left,
+          buttonRight: buttonRect.right,
+          countLeft: count.left,
+        };
+      });
+      assert.equal(positions.opacity, "1");
+      assert.ok(positions.titleRight <= positions.buttonLeft, "The hover button must not cover the group name.");
+      assert.ok(positions.buttonRight <= positions.countLeft, "The hover button must sit before the activity count.");
+    }
+    await assertFits(page);
+    await addActivityButton.click();
     await page.getByPlaceholder("Activity name").fill("Test afternoon walk");
     await assertFits(page);
     await capture({ page, path: `/tmp/daymark-redesign-${device}-add-activity.png` });

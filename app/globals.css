@@ -607,8 +607,9 @@ body {
 .activity-groups details:nth-child(9) .group-icon { background: #fde2e4; color: #d34d65; }
 .group-icon .material-symbols-rounded { font-size: 20px; }
 .group-summary-meta { margin-left: auto; gap: 13px; font-size: 13px; font-weight: 500; }
-.add-activity-button { position: absolute; left: 48px; top: 7px; width: 110px; opacity: 0; }
-.add-activity-button:focus-visible, .activity-groups details:hover .add-activity-button { opacity: 1; background: var(--surface); box-shadow: 0 3px 12px color-mix(in srgb, var(--ink) 12%, transparent); }
+.group-summary-meta > span { white-space: nowrap; }
+.add-activity-button { flex: 0 0 auto; width: 82px; opacity: 0; pointer-events: none; }
+.add-activity-button:focus-visible, .activity-groups details:hover .add-activity-button { opacity: 1; pointer-events: auto; background: var(--surface); box-shadow: 0 3px 12px color-mix(in srgb, var(--ink) 12%, transparent); }
 .activity-groups details[open] { padding-bottom: 10px; }
 .activity-grid { padding: 0 10px; }
 .goal-list { gap: 8px; }
