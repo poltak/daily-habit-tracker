@@ -15,3 +15,14 @@ test("activity icon picker ships the complete Material Symbols catalog", () => {
   assert.match(source, /export const ACTIVITY_ICON_CHOICES/);
   assert.match(source, /category: "All icons"/);
 });
+
+test("the icon font is the fixed-axis file, and retired icon names still render", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  const fontFace = styles.match(/@font-face \{[^}]*Material Symbols Rounded[^}]*\}/)?.[0] ?? "";
+  assert.match(fontFace, /font-weight: 500;/);
+  assert.doesNotMatch(fontFace, /font-weight: 100 700/, "the variable-weight file is more than ten times larger");
+  const iconSource = await readFile(new URL("../app/components/icon.tsx", import.meta.url), "utf8");
+  assert.match(iconSource, /no_smoking: "smoke_free"/);
+  assert.match(iconSource, /RENAMED_ICONS\[name\] \?\? name/);
+});
