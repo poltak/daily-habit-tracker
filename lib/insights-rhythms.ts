@@ -35,7 +35,7 @@ export type RhythmActivityFrequency = {
 };
 
 export type RhythmBucket = {
-  /** A stable machine-readable key: `mon`…`sun` or `01`…`12`. */
+  /** A stable machine-readable key: `mon` to `sun` or `01` to `12`. */
   key: string;
   label: string;
   year?: number;

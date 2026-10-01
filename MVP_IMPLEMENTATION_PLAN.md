@@ -17,11 +17,11 @@ Build a private, installable, mobile-first web app that can replace a Daylio wor
 7. Import the supplied Daylio history with independently verified fidelity.
 8. Export all app-owned data in an open format.
 
-The MVP is for a single-user deployment. It should be deliberately small, inexpensive to operate, and usable as a daily tracker before statistics or native apps are attempted.
+The MVP is for a single-user deployment. It should be small, cheap to operate, and usable as a daily tracker before anyone attempts statistics or native apps.
 
 ## 2. Fixed product decisions
 
-These decisions are already made and should not be reopened during implementation unless the user explicitly asks:
+These decisions are made. Do not reopen them during implementation unless the user asks:
 
 - Frontend: React, TypeScript, and Vite.
 - Delivery: installable responsive PWA, optimized first for Android-sized screens.
@@ -35,7 +35,7 @@ These decisions are already made and should not be reopened during implementatio
 - Activity IDs are authoritative. Names are not unique.
 - Statistics are post-MVP.
 - Photo, audio, scale, and general note-authoring interfaces are out of scope.
-- Historical photos may be skipped. Legacy notes should be preserved losslessly even though note authoring is absent.
+- The import may skip historical photos. It must preserve legacy notes without loss, even though the MVP has no note authoring.
 - No React Native or React Native Web in the MVP.
 - No multi-user registration, password management, billing, social features, or administrator interface.
 
@@ -63,7 +63,7 @@ These decisions are already made and should not be reopened during implementatio
 - A dry-run-first Daylio import tool and a human-readable import report.
 - Automated tests for the domain rules, API, database, and importer.
 
-### Explicitly excluded
+### Excluded
 
 - Statistics, charts, correlations, streak dashboards, and calendar heatmaps.
 - Multiple entries for one logical date.
@@ -83,7 +83,7 @@ The MVP is ready for real use only when all of these statements are true:
 - The user can install the site on Android and open it in standalone display mode.
 - A new entry can be created or an existing entry corrected in under a minute on a phone.
 - Saving an entry atomically persists the mood, activities, and goal completions for its logical date.
-- A failed or offline save is never presented as successful.
+- The app never presents a failed or offline save as successful.
 - All source Daylio entries are imported.
 - The imported entries match the independent audit data on date, time, mood, and activity selections with zero mismatches.
 - Importing the same backup twice does not create duplicates or change verified totals.
@@ -102,15 +102,15 @@ Use one Cloudflare Workers project containing both the React SPA and the API Wor
 - The Worker validates the Cloudflare Access assertion for API requests and talks to D1 through an environment binding.
 - D1 is the sole production source of truth.
 - The service worker caches only the application shell and immutable static assets. It does not cache authenticated API responses as durable data.
-- A small localStorage draft protects unsaved form input. It is not treated as a committed entry.
+- A small localStorage draft protects unsaved form input. The app does not treat it as a committed entry.
 
-Do not split the frontend and API across different domains. Same-origin hosting avoids CORS complexity, makes Access behavior simpler, and keeps the app deployable as one unit.
+Do not split the frontend and API across different domains. Same-origin hosting needs no CORS configuration, simplifies Access setup, and deploys the app as one unit.
 
-Current Cloudflare documentation explicitly supports a React SPA plus API Worker through the Cloudflare Vite plugin and a single static-assets deployment. Configure SPA fallback and route /api through the Worker.
+Current Cloudflare documentation supports a React SPA plus API Worker through the Cloudflare Vite plugin and a single static-assets deployment. Configure SPA fallback and route /api through the Worker.
 
 ## 6. Recommended repository layout
 
-The implementing model may adapt exact filenames to the scaffold, but responsibilities should remain separated:
+The implementing model may adapt exact filenames to the scaffold, but keep these responsibilities separate:
 
 - src/client
   - app shell, routes, screens, components, hooks, styles, and PWA registration
@@ -147,9 +147,9 @@ Prefer the smallest dependency set:
 
 Avoid an ORM initially. D1 has SQLite semantics and the schema is small enough for explicit SQL migrations and prepared repository queries.
 
-Avoid an API framework unless native Worker routing becomes materially unclear. The API surface is small enough for a lightweight in-project router.
+Avoid an API framework unless native Worker routing becomes hard to follow. The API is small enough for a lightweight in-project router.
 
-Do not add a PWA package merely for a manifest. Begin with an explicit manifest and a minimal service worker. If update handling becomes error-prone, propose a PWA plugin before adding it.
+Do not add a PWA package only for a manifest. Begin with an explicit manifest and a minimal service worker. If update handling becomes error-prone, propose a PWA plugin before adding it.
 
 Per repository policy, the implementing model must ask for confirmation before installing any new production dependency. Dev-only test/build dependencies do not require that confirmation.
 
@@ -220,7 +220,7 @@ Do not put a unique constraint on name. The supplied backup contains six normali
 - created_at and updated_at: timestamps
 - deleted_at: nullable timestamp
 
-The unique logical_date constraint intentionally enforces the one-entry-per-day MVP.
+The unique logical_date constraint enforces the one-entry-per-day MVP.
 
 ### entry_activities
 
@@ -284,17 +284,17 @@ Do not store the raw backup payload or photos in D1. Store only the fingerprint 
 - goal_completions on logical_date and on goal_id plus logical_date.
 - source_system plus source_id on every imported entity table.
 
-Enable foreign-key enforcement and test cascade/restrict behavior explicitly. Prefer restricting deletion and using archive or soft-delete fields so historical meaning is preserved.
+Enable foreign-key enforcement and test cascade and restrict behavior. Prefer restricting deletion and using archive or soft-delete fields, so historical records keep their meaning.
 
 ## 9. Domain rules
 
 - Logical dates use ISO YYYY-MM-DD strings and are not inferred from save timestamps.
-- The date picker defaults to today. If yesterday has no entry, show a prominent Log yesterday shortcut, but never silently change the selected date.
+- The date picker defaults to today. If yesterday has no entry, show a prominent Log yesterday shortcut, but never change the selected date without the user's action.
 - An entry requires one valid mood.
 - Activities may be empty, although the imported data always contains at least one.
 - Archived groups, activities, and goals remain resolvable for historical records but are hidden from new-entry selection by default.
 - Saving an entry replaces its complete activity selection for that date.
-- Goal completion is independent data. The UI may offer a convenience link between a goal and its activity, but it must not silently rewrite historical completion state.
+- Goal completion is independent data. The UI may offer a convenience link between a goal and its activity, but it must not rewrite historical completion state without the user's action.
 - All writes return the new server representation and version.
 - Entry updates require the caller's expected version. A stale version returns HTTP 409 with the current server record.
 - Deleting an entry is a soft delete. Restoring it should be possible through the API even if restoration UI is deferred.
@@ -302,7 +302,7 @@ Enable foreign-key enforcement and test cascade/restrict behavior explicitly. Pr
 
 ## 10. API contract
 
-All successful responses use a consistent envelope with data and optional metadata. All failures use an error object containing code, message, and optional field details. Validate every path, query, and JSON body at runtime.
+All successful responses use one envelope with data and optional metadata. All failures use an error object containing code, message, and optional field details. Validate every path, query, and JSON body at runtime.
 
 ### Bootstrap and entries
 
@@ -355,11 +355,11 @@ Keep navigation to three destinations:
 - Entries
 - Settings
 
-Statistics is not shown as a disabled tab.
+Do not show Statistics as a disabled tab.
 
 ### Log screen
 
-The Log screen is the primary product:
+The Log screen is the main screen. In order, it contains:
 
 1. Date control with Today, Yesterday, and calendar actions.
 2. Existing-entry warning when the chosen date already has a record.
@@ -371,7 +371,7 @@ The Log screen is the primary product:
 8. Sticky Save entry action reachable with one thumb.
 9. Saved confirmation containing the exact logical date.
 
-If the chosen date already has an entry, the screen edits that entry rather than creating a duplicate.
+If the chosen date already has an entry, the screen edits that entry instead of creating a duplicate.
 
 Persist the current unsaved draft in localStorage keyed by logical date. Clear it only after the server confirms the save.
 
@@ -380,7 +380,7 @@ Persist the current unsaved draft in localStorage keyed by logical date. Clear i
 - Show recent entries in descending logical-date order.
 - Each row shows date, mood, a compact activity summary, and completed-goal count.
 - Selecting a row opens it in the same add/edit screen.
-- Include pagination or Load older; do not render the complete history initially.
+- Include pagination or Load older. Do not render the complete history initially.
 - Include a delete action behind a confirmation.
 
 No statistics, calendar heatmap, or full-text search is required.
@@ -411,18 +411,18 @@ No statistics, calendar heatmap, or full-text search is required.
 - Create a self-hosted Access application covering the entire hostname.
 - Create an Allow policy whose Include selector is the approved identity.
 - Use Cloudflare identity-provider sign-in or email one-time PIN.
-- Never use Login Methods: One-time PIN as the only Include rule; Cloudflare documents that this would allow any valid email user.
+- Never use Login Methods: One-time PIN as the only Include rule. Cloudflare documents that this would allow any valid email user.
 - Deny is the default. Do not create an Everyone or permanent Bypass rule.
 
 ### Worker validation
 
-Access protection at the edge is necessary but not the only API check. For every /api request:
+Access protects the hostname at the edge. The Worker also checks every /api request:
 
 - Read the Cf-Access-Jwt-Assertion header.
 - Verify its signature against the Access team's remote JWK set.
 - Verify issuer and the application's audience tag.
 - Reject missing or invalid assertions with 403.
-- Optionally require the email claim to equal an ALLOWED_EMAIL environment variable as defense in depth.
+- Optionally require the email claim to equal an ALLOWED_EMAIL environment variable as a second check.
 
 Cloudflare currently recommends validating the assertion header rather than relying on the Access cookie.
 
@@ -440,7 +440,7 @@ Local development may bypass Access only when an explicit local-development flag
 
 ## 13. Daylio import design
 
-The importer is a required product deliverable, not a disposable manual script.
+The importer is a required product deliverable. Do not treat it as a throwaway script.
 
 ### Inputs
 
@@ -455,7 +455,7 @@ The real input files stay outside the repository.
 - The .daylio file is a ZIP.
 - It contains a Base64-encoded UTF-8 JSON file named backup.daylio.
 - Its parsed root version is 15.
-- It may also contain JPEG assets, which the MVP intentionally skips.
+- It may also contain JPEG assets, which the MVP skips.
 - Normal dayEntries months are zero-based.
 - goalEntries months are one-based.
 - Default mood names are represented by numeric predefined-name IDs.
@@ -490,7 +490,7 @@ Apply in dependency order:
 
 Use deterministic IDs and upserts. Apply bounded D1 batches so a large completion history does not exceed Worker or command limits. A failed batch must leave the import marked failed and safe to retry.
 
-Prefer a local TypeScript command that parses and validates the backup, then writes through a narrowly scoped import adapter. If direct remote D1 execution is chosen, generate parameterized batches or carefully escaped temporary SQL inside a gitignored directory, verify locally first, and delete the private generated artifacts after migration approval.
+Prefer a local TypeScript command that parses and validates the backup, then writes through a narrowly scoped import adapter. If direct remote D1 execution is chosen, generate parameterized batches or escaped temporary SQL inside a gitignored directory, verify locally first, and delete the private generated artifacts after migration approval.
 
 Do not send the backup to an external model, analytics service, or third-party conversion site.
 
@@ -511,7 +511,7 @@ Run the same report after database import. A second complete import must leave a
 
 ### Private fixtures
 
-Do not derive a committed fixture by merely truncating or pseudonymizing the source backup. Create synthetic fixtures that exercise:
+Do not derive a committed fixture by truncating or pseudonymizing the source backup. Create synthetic fixtures that exercise:
 
 - Zero-based day-entry months.
 - One-based goal-entry months.
@@ -523,18 +523,18 @@ Do not derive a committed fixture by merely truncating or pseudonymizing the sou
 - An invalid date and an unknown source version.
 - A retry of an already imported source ID.
 
-The real backup can be used only for local, ignored acceptance testing.
+Use the real backup only for local, gitignored acceptance testing.
 
 ## 14. PWA and connectivity behavior
 
 - Provide a valid web app manifest, maskable and standard icons, theme color, start URL, and standalone display mode.
 - Cache the built application shell and immutable fingerprinted assets.
 - Use a network-first strategy for navigation so deployments update promptly.
-- Do not service-worker-cache authenticated API data as the source of truth.
+- Do not use the service-worker cache as the source of truth for authenticated API data.
 - Detect offline state before save and explain that the entry remains an unsaved local draft.
 - If connectivity fails during save, retain the draft and present Retry.
 - After reconnecting, refetch the selected logical date before retrying to prevent an accidental overwrite.
-- Show a small update prompt when a new app shell is ready instead of forcibly reloading during entry editing.
+- Show a small update prompt when a new app shell is ready instead of reloading while the user edits an entry.
 
 Offline creation and background synchronization remain a separate future phase.
 
@@ -556,7 +556,7 @@ Add a documented production recovery runbook:
 4. Verify health and row totals after migration.
 5. Know how to restore via D1 Time Travel.
 
-The app-owned JSON export is the long-term escape hatch; D1 Time Travel is short-term operational recovery.
+The app-owned JSON export is the long-term portable backup. D1 Time Travel is short-term operational recovery.
 
 ## 16. Test strategy
 
@@ -611,7 +611,7 @@ The app-owned JSON export is the long-term escape hatch; D1 Time Travel is short
 
 Each phase should end with passing tests and a small reviewable commit. Do not deploy or import private production data until the user explicitly authorizes those external changes.
 
-### Phase 0: scaffold and guardrails
+### Phase 0: scaffold and project setup
 
 - Create the current Cloudflare React + Vite Worker scaffold with pnpm.
 - Establish the repository layout, formatting, typecheck, tests, and build.
@@ -619,7 +619,7 @@ Each phase should end with passing tests and a small reviewable commit. Do not d
 - Add a basic Worker health route and React shell.
 - Record all commands in README.
 
-Exit condition: local frontend and Worker API run together; test, typecheck, and build pass.
+Exit condition: local frontend and Worker API run together, and test, typecheck, and build pass.
 
 ### Phase 1: schema and migration proof
 
@@ -658,7 +658,7 @@ Exit condition: the end-of-day workflow can be completed against local D1 from a
 - Add import status display.
 - Complete accessibility and long-list performance checks.
 
-Exit condition: the app can be maintained without returning to Daylio.
+Exit condition: the user can manage activities, goals, and exports without returning to Daylio.
 
 ### Phase 5: PWA, production, and Access
 
@@ -678,7 +678,7 @@ Exit condition: the protected app is installable and the empty production databa
 - Export the empty/current app database before applying.
 - Import to production only after explicit confirmation.
 - Re-run the full report against production.
-- Enter and export one new test day, then either retain or remove it intentionally.
+- Enter and export one new test day, then decide whether to keep or remove it.
 - Keep Daylio installed and untouched until at least one week of successful replacement use.
 
 Exit condition: production totals reconcile, new daily use works, and a current app-owned JSON export has been saved.
@@ -695,23 +695,23 @@ The implementing model can finish all local phases without these. Before Phase 5
 
 If no Cloudflare-managed domain is available, stop before production deployment and agree on an authentication alternative. Do not silently replace Access with a shared password.
 
-## 19. Decisions intentionally defaulted for implementation
+## 19. Default decisions for implementation
 
-To keep the handoff executable:
+These defaults let implementation proceed without further questions:
 
 - Preserve all legacy notes in the database.
 - Skip all JPEG bytes.
 - Keep all raw Daylio goal state/repeat values even if the UI mapping is incomplete.
-- Treat state 0 as the initial candidate for active goals only after a fixture or visible behavior confirms it; until then, import the raw state without destructive normalization.
+- Treat state 0 as the initial candidate for active goals only after a fixture or visible behavior confirms it. Until then, import the raw state and do not normalize it.
 - Assign a generic Material symbol when a Daylio numeric icon lacks a reviewed mapping.
 - Use one entry per date.
 - Require a network connection to save.
-- Start with manual deployment from a developer machine; automate CI deployment only after production is stable.
+- Start with manual deployment from a developer machine. Automate CI deployment only after production is stable.
 
 ## 20. Instructions to the implementing model
 
 1. Read this plan and DAYLIO_DISCOVERY.md before changing files.
-2. Inspect current Cloudflare scaffolding and documentation rather than copying stale commands from memory.
+2. Inspect current Cloudflare scaffolding and documentation instead of copying stale commands from memory.
 3. Work phase by phase and keep scope within the MVP.
 4. Ask before adding production dependencies.
 5. Add tests with every feature.

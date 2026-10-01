@@ -16,10 +16,10 @@ pnpm run dev
 
 `pnpm run dev` applies the checked-in D1 migrations and starts the vinext/Vite
 development server with hot module replacement on `http://localhost:3000`.
-It is not a memory-only or mocked backend: the Cloudflare Vite plugin provides
+The backend is not mocked or memory-only. The Cloudflare Vite plugin provides
 the configured local D1 binding. When no Cloudflare Access variables are set,
-local API requests are allowed. Use `pnpm run dev:wrangler` only when you need
-to build first and exercise the compiled Worker without hot reload.
+the Worker allows local API requests. Use `pnpm run dev:wrangler` only when you
+need to build first and run the compiled Worker without hot reload.
 
 Useful checks:
 
@@ -33,7 +33,7 @@ pnpm run build
 
 ## Import a Daylio backup
 
-The source `.daylio` and CSV files stay outside this repository. First produce
+Keep the source `.daylio` and CSV files outside this repository. First produce
 the normalized, reconciled JSON report:
 
 ```bash
@@ -45,8 +45,8 @@ python3 scripts/daylio_import.py \
 
 The script validates the Daylio v15 ZIP/Base64 format, handles the different
 month conventions used by entries and goal history, preserves source IDs and
-raw state values, skips photo bytes, and reports CSV mismatches. Apply it to a
-running local app with:
+raw state values, skips photo bytes, and reports CSV mismatches. Send the
+report to a running local app:
 
 ```bash
 curl -X POST http://localhost:3000/api/import \
@@ -54,25 +54,25 @@ curl -X POST http://localhost:3000/api/import \
   --data-binary @/tmp/daylio-normalized.json
 ```
 
-The import uses deterministic IDs, bounded D1 batches, an `import_runs` record,
-and is safe to repeat. Reconciliation results are recorded before and after
-import. Unlinked Daylio goals are retained with archived placeholder links
-because Daylio permits goals without an activity.
+The import uses deterministic IDs, bounded D1 batches, and an `import_runs`
+record. Repeating it is safe. It records reconciliation results before and
+after the import. It keeps unlinked Daylio goals with archived placeholder
+links, because Daylio permits goals without an activity.
 
 ## Catalog and history
 
 The Setup screen manages groups, activities, and goals: rename, regroup,
 reorder, archive/restore, change Material Symbols Rounded icons, and cycle goal
-schedules. The Calendar screen loads filled days directly from D1; selecting a
-day opens its entry. The Entries screen paginates older records instead of
-loading the complete history into the first response. The Log screen preserves
-unsaved drafts per logical date in device-local storage and clearly reports
-online, offline, and failed-save states; a successful save clears that local
+schedules. The Calendar screen loads filled days directly from D1, and
+selecting a day opens its entry. The Entries screen paginates older records
+instead of loading the complete history into the first response. The Log screen
+keeps unsaved drafts per logical date in device-local storage and reports
+online, offline, and failed-save states. A successful save clears that local
 draft.
 
 ## Insights
 
-Open `/insights` from the journal navigation to explore the full saved-entry
+Open `/insights` from the journal navigation to analyze the full saved-entry
 history. A shared date range filters activity/mood comparisons, exact calendar-day
 offsets, activity combinations, weekday/month rhythms, and higher-mood week
 comparisons. Charts include sample sizes, keep missing days out of mood averages,
@@ -80,9 +80,10 @@ and distinguish activities not recorded from days without an entry. Archived
 activities remain available for historical comparisons.
 
 `/api/insights` returns only the catalogs and effective date/mood/activity data
-needed by these views, with private, no-store caching. It includes saved mood and
+these views need, with private, no-store caching. It includes saved mood and
 activity overrides, excludes deleted entries, and uses the same API access
-protection as the rest of the journal. Patterns are descriptive associations.
+protection as the rest of the journal. The patterns describe associations, not
+causes.
 
 ## Cloudflare deployment
 
@@ -112,8 +113,9 @@ To retry after a failure, fix the reported issue and push a new commit to
 For the single-user lock, configure Cloudflare Access JWT verification on the
 Worker with:
 
-- `ACCESS_TEAM_DOMAIN` — the `https://<team>.cloudflareaccess.com` domain
-- `ACCESS_AUD` — the Access application audience tag
-- `ALLOWED_EMAIL` — the sole permitted email address
+- `ACCESS_TEAM_DOMAIN`: the `https://<team>.cloudflareaccess.com` domain
+- `ACCESS_AUD`: the Access application audience tag
+- `ALLOWED_EMAIL`: the only permitted email address
 
-If these variables are absent, API auth remains open for local development.
+If all three variables are absent, the Worker accepts API requests only from
+local development hosts.
