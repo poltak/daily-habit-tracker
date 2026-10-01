@@ -39,7 +39,8 @@ async function json(path, init) {
   const request = () => fetch(`${baseUrl}${path}`, { ...init, headers: { "content-type": "application/json", ...(init?.headers ?? {}) } });
   let response = await request();
   let rawBody = await response.text();
-  if (init?.method === "PUT" && response.status === 503 && rawBody.includes("Your worker restarted mid-request")) {
+  // Local Wrangler sometimes restarts the Worker mid-request. Retry writes that are safe to repeat.
+  if ((init?.method === "PUT" || path === "/api/mcp") && response.status === 503 && rawBody.includes("Your worker restarted mid-request")) {
     await new Promise((resolve) => setTimeout(resolve, 100));
     response = await request();
     rawBody = await response.text();
@@ -53,7 +54,7 @@ async function json(path, init) {
   return { response, body };
 }
 
-test("Wrangler-backed API covers persistence, catalog, calendar, pagination, import, and export", async (t) => {
+test("Wrangler-backed API covers persistence, catalog, calendar, pagination, import, export, and the MCP endpoint", async (t) => {
   const persistence = await mkdtemp(join(tmpdir(), "daymark-api-"));
   let server;
   t.after(async () => {
@@ -417,4 +418,44 @@ test("Wrangler-backed API covers persistence, catalog, calendar, pagination, imp
   assert.equal(exported.body.tables.import_runs[0].status, "completed");
   assert.equal(exported.body.tables.goals.find((item) => item.id === "daylio-goal-1").activity_id, null);
   assert.equal(exported.body.tables.activities.some((item) => item.id.includes("unlinked-goal")), false);
+
+  // The MCP endpoint, through the real Worker and D1.
+  const mcp = (body, headers) => json("/api/mcp", { method: "POST", body: JSON.stringify(body), headers });
+  const mcpTool = async (name, args) => {
+    const { response, body } = await mcp({ jsonrpc: "2.0", id: name, method: "tools/call", params: { name, arguments: args } });
+    assert.equal(response.status, 200);
+    return { isError: Boolean(body.result.isError), text: body.result.content[0].text };
+  };
+  const initialized = await mcp({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "integration", version: "0" } } });
+  assert.equal(initialized.response.status, 200);
+  assert.equal(initialized.body.result.serverInfo.name, "daymark");
+  assert.equal((await fetch(`${baseUrl}/api/mcp`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) })).status, 202);
+  assert.equal((await fetch(`${baseUrl}/api/mcp`)).status, 405);
+  assert.equal((await mcp({ jsonrpc: "2.0", id: 2, method: "ping" }, { origin: "https://elsewhere.example" })).response.status, 403);
+  const listed = await mcp({ jsonrpc: "2.0", id: 3, method: "tools/list" });
+  assert.equal(listed.body.result.tools.length, 6);
+
+  const savedDay = await mcpTool("save_day", { date: "2019-06-03", mood: "Good", activities: ["Gym", "activity-walk"] });
+  assert.equal(savedDay.isError, false, savedDay.text);
+  const { saved: savedStatus, day: savedDayBody } = JSON.parse(savedDay.text);
+  assert.equal(savedStatus, "created");
+  assert.deepEqual({ ...savedDayBody, goals_completed: undefined }, { date: "2019-06-03", weekday: "Mon", mood: "Good", score: 4, activities: ["Gym", "Walk"], goals_completed: undefined });
+  // Every goal linked to Gym is completed with it, including the shared goals created above.
+  assert.ok(savedDayBody.goals_completed.includes("Move your body"));
+  const refused = await mcpTool("save_day", { date: "2019-06-03", mood: "Rad", activities: [] });
+  assert.equal(refused.isError, true);
+  assert.match(refused.text, /already has a saved entry/);
+  const viaRest = await json("/api/entries/2019-06-03");
+  assert.equal(viaRest.body.entry.moodId, "mood-good");
+  assert.ok(viaRest.body.completedGoalIds.includes("goal-move"));
+  const june = JSON.parse((await mcpTool("get_days", { start_date: "2019-06-01", end_date: "2019-06-30" })).text);
+  assert.deepEqual(june.days.map((day) => [day.date, day.mood]), [["2019-06-03", "Good"]]);
+  const overview = JSON.parse((await mcpTool("get_overview", {})).text);
+  assert.equal(overview.history.first_day, "2019-06-03");
+  const moodSummary = JSON.parse((await mcpTool("summarize_mood", { start_date: "2019-01-01", end_date: "2019-12-31", group_by: "week" })).text);
+  assert.deepEqual(moodSummary.periods.map((period) => [period.period, period.mean_mood]), [["2019-06-03", 4]]);
+  const activitySummary = JSON.parse((await mcpTool("summarize_activities", { start_date: "2019-01-01", end_date: "2019-12-31" })).text);
+  assert.deepEqual(activitySummary.activities.map((row) => row.activity).sort(), ["Gym", "Walk"]);
+  const mcpGoalHistory = JSON.parse((await mcpTool("get_goal_history", { goal: "Move your body", start_date: "2019-06-01", end_date: "2019-06-30", today: "2019-06-30" })).text);
+  assert.deepEqual(mcpGoalHistory.completed_dates, ["2019-06-03"]);
 });
