@@ -56,6 +56,7 @@ test("Daily history excludes unscheduled weekdays from weekly failure", () => {
     startDate: "2026-01-01",
     endDate: "2026-01-31",
     completedDates: ["2026-01-01", "2026-01-02", "2026-01-05", "2026-01-06", "2026-01-07"],
+    weekEndsOn: 6,
     asOf: "2026-02-01",
   });
   assert.equal(history.days.find((day) => day.logicalDate === "2026-01-03")?.scheduled, false);
@@ -82,6 +83,7 @@ test("Weekly history becomes accomplished as soon as the current target is reach
     startDate: "2026-01-01",
     endDate: "2026-01-31",
     completedDates: ["2026-01-01", "2026-01-02", "2026-01-03"],
+    weekEndsOn: 6,
     asOf: "2026-01-03",
   });
   const firstWeek = history.weeks.find((week) => week.weekStart === "2025-12-28");
@@ -106,7 +108,7 @@ test("Weekly history evaluates only active dates, caps partial weeks, and omits 
     reminderEnabled: false,
   };
   const completedDates = ["2026-01-01", "2026-01-02", "2026-01-03", "2026-01-04", "2026-01-05"];
-  const history = buildGoalHistory({ goal, startDate: "2026-01-01", endDate: "2026-01-31", completedDates, asOf: "2026-01-06" });
+  const history = buildGoalHistory({ goal, startDate: "2026-01-01", endDate: "2026-01-31", completedDates, weekEndsOn: 6, asOf: "2026-01-06" });
   assert.deepEqual(history.weeks.map((week) => [week.weekStart, week.expectedCount, week.completedCount]), [
     ["2025-12-28", 2, 2],
     ["2026-01-04", 3, 2],
@@ -115,9 +117,9 @@ test("Weekly history evaluates only active dates, caps partial weeks, and omits 
   assert.equal(history.weeks[1]?.status, "in_progress");
   assert.equal(history.weeks.some((week) => week.expectedCount === 0), false);
 
-  const beforeStart = buildGoalHistory({ goal, startDate: "2026-01-01", endDate: "2026-01-31", completedDates: [], asOf: "2026-01-01" });
+  const beforeStart = buildGoalHistory({ goal, startDate: "2026-01-01", endDate: "2026-01-31", completedDates: [], weekEndsOn: 6, asOf: "2026-01-01" });
   assert.equal(beforeStart.weeks.every((week) => week.status === "upcoming"), true);
-  const afterEnd = buildGoalHistory({ goal, startDate: "2026-01-01", endDate: "2026-01-31", completedDates: [], asOf: "2026-01-07" });
+  const afterEnd = buildGoalHistory({ goal, startDate: "2026-01-01", endDate: "2026-01-31", completedDates: [], weekEndsOn: 6, asOf: "2026-01-07" });
   assert.equal(afterEnd.weeks.every((week) => week.status === "not_accomplished"), true);
 });
 
@@ -135,7 +137,7 @@ test("the current week is in progress before a Daily goal's first scheduled week
     reminderEnabled: false,
   };
   // 2026-10-01 is a Thursday in the week of Sunday 2026-09-27 to Saturday 2026-10-03.
-  const statuses = (asOf, completedDates = []) => buildGoalHistory({ goal, startDate: "2026-10-01", endDate: "2026-10-31", completedDates, asOf })
+  const statuses = (asOf, completedDates = []) => buildGoalHistory({ goal, startDate: "2026-10-01", endDate: "2026-10-31", completedDates, weekEndsOn: 6, asOf })
     .weeks.slice(0, 2).map((week) => [week.weekStart, week.status]);
   assert.deepEqual(statuses("2026-10-01"), [["2026-09-27", "in_progress"], ["2026-10-04", "upcoming"]]);
   assert.deepEqual(statuses("2026-10-03"), [["2026-09-27", "in_progress"], ["2026-10-04", "upcoming"]]);

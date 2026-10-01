@@ -1,4 +1,5 @@
 import type { Activity, ActivityGroup, Mood } from "./daylio.ts";
+import { DEFAULT_WEEK_ENDS_ON, weekRangeLabel, weekStartsOn } from "./daylio.ts";
 import type { InsightsDay } from "./insights.ts";
 import { summarizeMood } from "./insights.ts";
 
@@ -86,7 +87,7 @@ export type WeekCohort = "higher" | "typical";
 export type QualifyingWeek = {
   weekStart: string;
   weekEnd: string;
-  /** Monday-Sunday label kept in the data for accessible consumers. */
+  /** Date range and weekday range, for example "2026-01-05–2026-01-11 (Monday–Sunday)". */
   label: string;
   loggedDays: number;
   moodCount: number;
@@ -119,6 +120,8 @@ export type WeekActivityComparison = {
 
 export type BestWeeksAnalysis = {
   minimumLoggedDays: number;
+  /** Weekday range the weeks run over, for example "Monday–Sunday". */
+  weekRange: string;
   qualifyingWeekCount: number;
   moodLoggedWeekCount: number;
   weeks: QualifyingWeek[];
@@ -142,6 +145,8 @@ export type BestWeeksAnalysisInput = {
   asOf: string;
   /** Four logged days keeps a week informative while allowing some gaps. */
   minimumLoggedDays?: number;
+  /** JavaScript weekday (0 = Sunday) on which a week ends. Defaults to Sunday. */
+  weekEndsOn?: number;
 };
 
 type DateParts = { year: number; month: number; day: number };
@@ -195,9 +200,11 @@ function weekdayIndex(value: string): number | null {
   return sundayFirst === 0 ? 6 : sundayFirst - 1;
 }
 
-function mondayOf(value: string): string | null {
-  const index = weekdayIndex(value);
-  return index === null ? null : addDays(value, -index);
+function weekStartOf(value: string, weekEndsOn: number): string | null {
+  const timestamp = parseDate(value);
+  if (timestamp === null) return null;
+  const daysIntoWeek = (new Date(timestamp).getUTCDay() - weekStartsOn(weekEndsOn) + 7) % 7;
+  return addDays(value, -daysIntoWeek);
 }
 
 function uniqueDaysInRange(days: readonly InsightsDay[], startDate: string, endDate: string): InsightsDay[] {
@@ -326,11 +333,13 @@ function activityIdsForWeek(days: readonly InsightsDay[], activities: readonly A
 
 function makeWeek({
   weekStart,
+  weekRange,
   days,
   moods,
   activities,
 }: {
   weekStart: string;
+  weekRange: string;
   days: readonly InsightsDay[];
   moods: readonly Mood[];
   activities: readonly Activity[];
@@ -345,7 +354,7 @@ function makeWeek({
   return {
     weekStart,
     weekEnd,
-    label: `${weekStart}–${weekEnd} (Monday–Sunday)`,
+    label: `${weekStart}–${weekEnd} (${weekRange})`,
     loggedDays: days.length,
     moodCount: summary.count,
     moodMean: summary.mean,
@@ -429,7 +438,7 @@ function compareActivities(activities: readonly Activity[], higherWeeks: readonl
 }
 
 /**
- * Build ended, full Monday-Sunday week cohorts. A week needs at least four
+ * Build ended, full week cohorts. Weeks end on `weekEndsOn`. A week needs at least four
  * distinct logged days by default. Higher weeks are the deterministic upper
  * half of mood-logged weeks, retaining ties at the boundary; equal means yield
  * one typical cohort and no invented "best" week.
@@ -439,10 +448,12 @@ export function summarizeBestWeeks(input: BestWeeksAnalysisInput): BestWeeksAnal
   const startDate = parseDate(input.startDate) === null ? "1000-01-01" : input.startDate;
   const endDate = parseDate(input.endDate) === null ? "9999-12-31" : input.endDate;
   const asOf = parseDate(input.asOf) === null ? endDate : input.asOf;
+  const weekEndsOn = input.weekEndsOn ?? DEFAULT_WEEK_ENDS_ON;
+  const weekRange = weekRangeLabel(weekEndsOn);
   const days = uniqueDaysInRange(input.days, startDate, endDate);
   const byWeek = new Map<string, InsightsDay[]>();
   for (const day of days) {
-    const weekStart = mondayOf(day.logicalDate);
+    const weekStart = weekStartOf(day.logicalDate, weekEndsOn);
     if (!weekStart) continue;
     const weekDays = byWeek.get(weekStart) ?? [];
     weekDays.push(day);
@@ -454,7 +465,7 @@ export function summarizeBestWeeks(input: BestWeeksAnalysisInput): BestWeeksAnal
       const weekEnd = addDays(weekStart, 6);
       return weekEnd !== null && compareDates(weekStart, startDate) >= 0 && compareDates(weekEnd, endDate) <= 0 && compareDates(weekEnd, asOf) < 0;
     })
-    .map(([weekStart, weekDays]) => makeWeek({ weekStart, days: weekDays, moods: input.moods, activities: input.activities }))
+    .map(([weekStart, weekDays]) => makeWeek({ weekStart, weekRange, days: weekDays, moods: input.moods, activities: input.activities }))
     .filter((week) => week.loggedDays >= minimumLoggedDays);
 
   const classified = classifyWeeks(weeks);
@@ -464,6 +475,7 @@ export function summarizeBestWeeks(input: BestWeeksAnalysisInput): BestWeeksAnal
   const allWeeks = [...higherWeeks, ...typicalWeeks, ...unclassifiedWeeks].sort((a, b) => compareDates(a.weekStart, b.weekStart));
   return {
     minimumLoggedDays,
+    weekRange,
     qualifyingWeekCount: allWeeks.length,
     moodLoggedWeekCount: higherWeeks.length + typicalWeeks.length,
     weeks: allWeeks,
@@ -474,7 +486,7 @@ export function summarizeBestWeeks(input: BestWeeksAnalysisInput): BestWeeksAnal
     typical: cohortSummary("typical", typicalWeeks),
     activityComparisons: compareActivities(input.activities, higherWeeks, typicalWeeks),
     moodThreshold: classified.threshold,
-    cohortMethod: "Qualifying weeks have at least four logged days, run Monday–Sunday, fit wholly inside the selected range, and ended before the as-of date. Higher-mood weeks are the upper half of mood-logged weeks; ties stay together, and equal weekly means produce no separate higher cohort.",
+    cohortMethod: `Qualifying weeks have at least four logged days, run ${weekRange}, fit wholly inside the selected range, and ended before the as-of date. Higher-mood weeks are the upper half of mood-logged weeks; ties stay together, and equal weekly means produce no separate higher cohort.`,
   };
 }
 

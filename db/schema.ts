@@ -113,6 +113,12 @@ export const dayActivitySelections = sqliteTable("day_activity_selections", {
   ...timestamps,
 }, (table) => ({ dateActivityIdx: uniqueIndex("day_activity_selections_date_activity_idx").on(table.logicalDate, table.activityId) }));
 
+export const appSettings = sqliteTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
 export const importRuns = sqliteTable("import_runs", {
   id: text("id").primaryKey(),
   sourceSystem: text("source_system").notNull(),

@@ -23,6 +23,7 @@ export type RhythmInsightsProps = {
   startDate: string;
   endDate: string;
   asOf: string;
+  weekEndsOn: number;
 };
 
 const DEFAULT_MOOD_MIN = 1;
@@ -190,10 +191,10 @@ function CohortMetric({ label, value, detail }: { label: string; value: string; 
   return <article className="insight-rhythm-metric"><span>{label}</span><strong>{value}</strong><small>{detail}</small></article>;
 }
 
-function WeekRow({ week, names }: { week: QualifyingWeek; names: Map<string, string> }) {
+function WeekRow({ week, weekRange, names }: { week: QualifyingWeek; weekRange: string; names: Map<string, string> }) {
   const topActivities = Object.entries(week.activityDays).sort((a, b) => b[1] - a[1] || (names.get(a[0]) ?? a[0]).localeCompare(names.get(b[0]) ?? b[0])).slice(0, 3);
   return <tr>
-    <th scope="row"><span>{`${formatRangeDate(week.weekStart)} – ${formatRangeDate(week.weekEnd)}`}</span><small>Monday–Sunday</small></th>
+    <th scope="row"><span>{`${formatRangeDate(week.weekStart)} – ${formatRangeDate(week.weekEnd)}`}</span><small>{weekRange}</small></th>
     <td>{week.moodMean === null ? "No mood" : `${formatMean(week.moodMean)} (n=${week.moodCount})`}</td>
     <td>{week.loggedDays}</td>
     <td>{week.cohort === "higher" ? "Higher mood" : week.cohort === "typical" ? "Typical / rest" : "No mood cohort"}</td>
@@ -214,7 +215,7 @@ function BestWeeksSection({ analysis, activities, groups }: { analysis: BestWeek
       <div><p className="insights-kicker">Week patterns</p><h2 id="insights-best-weeks-heading">What higher-mood weeks have in common</h2></div>
       <span className="insight-rhythm-section-icon" aria-hidden="true">↗</span>
     </div>
-    <p className="insights-help">Weeks are Monday–Sunday, include at least {analysis.minimumLoggedDays} logged days, fit fully inside the selected range, and ended before the as-of date. Higher mood means the upper mood band among qualifying mood-logged weeks; ties stay together. The comparisons describe association in your records and do not measure duration or causation.</p>
+    <p className="insights-help">Weeks are {analysis.weekRange}, include at least {analysis.minimumLoggedDays} logged days, fit fully inside the selected range, and ended before the as-of date. Higher mood means the upper mood band among qualifying mood-logged weeks; ties stay together. The comparisons describe association in your records and do not measure duration or causation.</p>
     {analysis.qualifyingWeekCount === 0 ? <div className="insights-empty">There are no ended full weeks with enough logged days in this range yet.</div> : <>
       <div className="insight-rhythm-cohort-metrics">
         <CohortMetric label="Higher-mood weeks" value={String(analysis.higher.weekCount)} detail={analysis.higher.weekCount === 0 ? "No distinct higher cohort" : `Mean mood ${formatMean(analysis.higher.moodMean)}`} />
@@ -240,19 +241,19 @@ function BestWeeksSection({ analysis, activities, groups }: { analysis: BestWeek
       </div>
       <div className="insight-rhythm-week-list">
         <div className="insight-rhythm-subheading"><div><h3>Qualifying weeks</h3><p>Sample sizes stay visible so sparse weeks are easy to discount.</p></div><span className="insight-rhythm-subheading-note">{analysis.qualifyingWeekCount} weeks</span></div>
-        <div className="insight-rhythm-table-scroll"><table className="insight-rhythm-table insight-rhythm-week-table"><caption className="sr-only">Qualifying Monday to Sunday weeks</caption><thead><tr><th scope="col">Week</th><th scope="col">Mean mood</th><th scope="col">Logged days</th><th scope="col">Cohort</th><th scope="col">Common activities</th></tr></thead><tbody>{analysis.weeks.map((week) => <WeekRow key={week.weekStart} week={week} names={names} />)}</tbody></table></div>
+        <div className="insight-rhythm-table-scroll"><table className="insight-rhythm-table insight-rhythm-week-table"><caption className="sr-only">Qualifying {analysis.weekRange} weeks</caption><thead><tr><th scope="col">Week</th><th scope="col">Mean mood</th><th scope="col">Logged days</th><th scope="col">Cohort</th><th scope="col">Common activities</th></tr></thead><tbody>{analysis.weeks.map((week) => <WeekRow key={week.weekStart} week={week} weekRange={analysis.weekRange} names={names} />)}</tbody></table></div>
       </div>
     </>}
   </section>;
 }
 
-export function RhythmInsights({ days, moods, activities, groups, startDate, endDate, asOf }: RhythmInsightsProps) {
+export function RhythmInsights({ days, moods, activities, groups, startDate, endDate, asOf, weekEndsOn }: RhythmInsightsProps) {
   const [selectedYear, setSelectedYear] = useState("");
   const [selectedActivityId, setSelectedActivityId] = useState("");
   const availableRhythms = useMemo(() => summarizeRhythms({ days, moods, startDate, endDate, year: null, activityId: null }), [days, moods, startDate, endDate]);
   const effectiveSelectedYear = selectedYear !== "" && availableRhythms.yearOptions.includes(Number(selectedYear)) ? selectedYear : "";
   const rhythmAnalysis = useMemo(() => summarizeRhythms({ days, moods, startDate, endDate, year: effectiveSelectedYear === "" ? null : Number(effectiveSelectedYear), activityId: selectedActivityId || null }), [days, moods, startDate, endDate, effectiveSelectedYear, selectedActivityId]);
-  const bestWeeks = useMemo(() => buildBestWeeksAnalysis({ days, moods, activities, groups, startDate, endDate, asOf }), [days, moods, activities, groups, startDate, endDate, asOf]);
+  const bestWeeks = useMemo(() => buildBestWeeksAnalysis({ days, moods, activities, groups, startDate, endDate, asOf, weekEndsOn }), [days, moods, activities, groups, startDate, endDate, asOf, weekEndsOn]);
   const selectedActivityName = selectedActivityId ? activityNameById(activities).get(selectedActivityId) ?? selectedActivityId : null;
   const hasDays = rhythmAnalysis.loggedCount > 0;
 

@@ -16,7 +16,7 @@ const sections = [
   ["insights-best-weeks", "Best weeks"],
 ];
 
-export function InsightsView() {
+export function InsightsView({ weekEndsOn }: { weekEndsOn: number }) {
   const [data, setData] = useState<InsightsData | null>(null);
   const [error, setError] = useState("");
   const [request, setRequest] = useState(0);
@@ -90,7 +90,7 @@ export function InsightsView() {
             <nav className="insights-jump-links" aria-label="Insight sections">{sections.map(([id, label]) => <a key={id} href={`#${id}`}>{label}<span aria-hidden="true">↗</span></a>)}</nav>
             <p className="insights-method-note">These are associations, not explanations. “Not recorded” means an activity wasn’t selected on a recorded day; missing days are excluded. Small samples can change quickly.</p>
             <RelationshipInsights days={days} moods={data.moods} activities={data.activities} groups={data.groups} />
-            <RhythmInsights days={days} moods={data.moods} activities={data.activities} groups={data.groups} startDate={range.startDate} endDate={range.endDate} asOf={asOf} />
+            <RhythmInsights days={days} moods={data.moods} activities={data.activities} groups={data.groups} startDate={range.startDate} endDate={range.endDate} asOf={asOf} weekEndsOn={weekEndsOn} />
           </>}
         </>}
       </>}

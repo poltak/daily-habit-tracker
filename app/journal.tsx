@@ -13,11 +13,14 @@ import {
   type GoalRepeatType,
   type Mood,
   ALL_WEEKDAYS_MASK,
+  WEEKDAY_NAMES,
   addDays,
   goalRepeatType,
   goalWeekdayMask,
   isLogicalDate,
   logicalDateFromDate,
+  weekStartsOn,
+  weekdayOrder,
 } from "../lib/daylio";
 import {
   clearStoredDraft,
@@ -1802,6 +1805,7 @@ export default function Journal() {
             days={calendarDays}
             moods={data.moods}
             today={data.today}
+            weekEndsOn={data.settings.weekEndsOn}
             isLoading={isLoadingCalendar}
             onMonth={setCalendarMonth}
             onOpenDate={(date) => {
@@ -1810,13 +1814,14 @@ export default function Journal() {
             }}
           />
         )}
-        {data && view === "insights" && <InsightsView />}
+        {data && view === "insights" && <InsightsView weekEndsOn={data.settings.weekEndsOn} />}
         {data && view === "goal" && selectedGoalId && goalConfigDraft && (
           <GoalDetailView
             goal={data.goals.find((candidate) => candidate.id === selectedGoalId) ?? null}
             activities={data.activities}
             history={goalHistory}
             month={goalHistoryMonth}
+            weekEndsOn={data.settings.weekEndsOn}
             config={goalConfigDraft}
             isLoadingHistory={isLoadingGoalHistory}
             isSavingConfig={isSavingGoalConfig}
@@ -2472,6 +2477,7 @@ function GoalDetailView({
   activities,
   history,
   month,
+  weekEndsOn,
   config,
   isLoadingHistory,
   isSavingConfig,
@@ -2487,6 +2493,7 @@ function GoalDetailView({
   activities: Activity[];
   history: GoalHistory | null;
   month: string;
+  weekEndsOn: number;
   config: GoalConfigDraft;
   isLoadingHistory: boolean;
   isSavingConfig: boolean;
@@ -2513,12 +2520,14 @@ function GoalDetailView({
   // While another month loads, or if that load fails, the previous month's results must not show under the new month.
   const monthHistory = history?.month === resolvedMonth ? history : null;
   const historyDays = new Map((monthHistory?.days ?? []).map((day) => [day.logicalDate, day]));
+  // Calendar rows start on the first day of the week so they line up with the weekly results below.
   const cells = [
-    ...Array(firstDay).fill(null),
+    ...Array((firstDay - weekStartsOn(weekEndsOn) + 7) % 7).fill(null),
     ...Array.from({ length: daysInMonth }, (_, index) => `${resolvedMonth}-${String(index + 1).padStart(2, "0")}`),
   ];
   const label = new Intl.DateTimeFormat("en", { month: "long", year: "numeric" }).format(new Date(year, monthNumber - 1, 1));
   const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const calendarWeekdays = weekdayOrder(weekEndsOn).map((weekday) => weekdays[weekday]);
   const linkedActivity = activities.find((activity) => activity.id === config.activityId);
   const activityOptions = activities.filter((activity) => !activity.archived || activity.id === config.activityId);
   const isDirty = config.name !== goal.name || config.activityId !== goal.activityId || config.materialIcon !== goal.materialIcon || config.repeatType !== goalRepeatType(goal) || config.weekdaysMask !== goalWeekdayMask(goal) || config.targetPerWeek !== Math.min(7, Math.max(1, goal.targetPerWeek ?? 1));
@@ -2627,7 +2636,7 @@ function GoalDetailView({
           <button className={`icon-button ${isLoadingHistory ? "pending-action" : ""}`} aria-label="Next month" aria-busy={isLoadingHistory} disabled={isLoadingHistory} onClick={() => shiftMonth(1)}><Icon name={isLoadingHistory ? UI_ICONS.sync : "chevron_right"} /></button>
         </div>
         <p className="muted goal-history-explainer">{goalRepeatType(goal) === "daily" ? "Green days are completed; pale days are not completed. A dash marks an expected day." : `Green days are completed. Each week needs ${goal.targetPerWeek ?? 1} completed ${(goal.targetPerWeek ?? 1) === 1 ? "day" : "days"}.`}</p>
-        <div className="calendar-weekdays">{weekdays.map((weekday) => <span key={weekday}>{weekday}</span>)}</div>
+        <div className="calendar-weekdays">{calendarWeekdays.map((weekday) => <span key={weekday}>{weekday}</span>)}</div>
         <div className="calendar-grid goal-calendar-grid">
           {cells.map((date, index) => {
             if (!date) return <span className="calendar-blank" key={`blank-${index}`} />;
@@ -2664,6 +2673,7 @@ function CalendarView({
   days,
   moods,
   today,
+  weekEndsOn,
   isLoading,
   onMonth,
   onOpenDate,
@@ -2672,6 +2682,7 @@ function CalendarView({
   days: CalendarEntryDay[];
   moods: Mood[];
   today: string;
+  weekEndsOn: number;
   isLoading: boolean;
   onMonth: (month: string) => void;
   onOpenDate: (date: string) => void;
@@ -2682,7 +2693,7 @@ function CalendarView({
   const daysInMonth = new Date(year, monthNumber, 0).getDate();
   const entriesByDate = new Map(days.map((day) => [day.logicalDate, day]));
   const cells = [
-    ...Array(firstDay).fill(null),
+    ...Array((firstDay - weekStartsOn(weekEndsOn) + 7) % 7).fill(null),
     ...Array.from(
       { length: daysInMonth },
       (_, index) => `${resolvedMonth}-${String(index + 1).padStart(2, "0")}`,
@@ -2730,7 +2741,7 @@ function CalendarView({
           </button>
         </div>
         <div className="calendar-weekdays">
-          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+          {weekdayOrder(weekEndsOn).map((weekday) => WEEKDAY_NAMES[weekday].slice(0, 3)).map((day) => (
             <span key={day}>{day}</span>
           ))}
         </div>

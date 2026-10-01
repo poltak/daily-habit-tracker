@@ -1,6 +1,7 @@
 import {
   type Activity,
   type ActivityGroup,
+  type AppSettings,
   type Bootstrap,
   type CalendarEntryDay,
   type DayMoodSelection,
@@ -15,11 +16,14 @@ import {
   type SelectionMutationResult,
   buildGoalHistory,
   DaylioMemoryStore,
+  DEFAULT_SETTINGS,
   MOODS,
   addDays,
   isGoalIcon,
   isLogicalDate,
+  isWeekday,
   normalizeGoalConfig,
+  validateSettingsPatch,
   store as memoryStore,
 } from "./daylio.ts";
 import { validateEntryInput, validateEntryReferences as assertEntryReferences, validateExpectedVersion, versionConflict, type EntryInputCandidate } from "./entry-validation.ts";
@@ -120,16 +124,31 @@ export class D1DaylioStore {
   }
 
   async bootstrap(entryLimit = 30, entryOffset = 0): Promise<Bootstrap> {
-    const [moodRows, groupRows, activityRows, goalRows, entries] = await Promise.all([
+    const [moodRows, groupRows, activityRows, goalRows, entries, settings] = await Promise.all([
       rows<MoodRow>(this.database, this.database.prepare("SELECT id, name, score, emoji, color FROM mood_levels ORDER BY score DESC")),
       rows<GroupRow>(this.database, this.database.prepare("SELECT id, name, sort_order, archived_at FROM activity_groups ORDER BY sort_order")),
       rows<ActivityRow>(this.database, this.database.prepare("SELECT id, group_id, name, material_icon, source_icon_id, sort_order, archived_at FROM activities ORDER BY sort_order")),
       rows<GoalRow>(this.database, this.database.prepare("SELECT id, activity_id, name, material_icon, repeat_type, schedule_type, target_per_week, weekdays_mask, start_date, end_date, sort_order, archived_at, reminder_enabled, reminder_time, source_state FROM goals ORDER BY sort_order")),
       this.listEntries(entryLimit, entryOffset),
+      this.getSettings(),
     ]);
     const today = new Date();
     const todayValue = `${today.getFullYear()}-${`${today.getMonth() + 1}`.padStart(2, "0")}-${`${today.getDate()}`.padStart(2, "0")}`;
-    return { moods: moodRows.map(toMood), groups: groupRows.map(toGroup), activities: activityRows.map(toActivity), goals: goalRows.map(toGoal), entries, today: todayValue, yesterday: addDays(todayValue, -1) };
+    return { moods: moodRows.map(toMood), groups: groupRows.map(toGroup), activities: activityRows.map(toActivity), goals: goalRows.map(toGoal), entries, settings, today: todayValue, yesterday: addDays(todayValue, -1) };
+  }
+
+  async getSettings(): Promise<AppSettings> {
+    const row = await this.database.prepare("SELECT value FROM app_settings WHERE key = 'week_ends_on' LIMIT 1").first<{ value: string }>();
+    const weekEndsOn = Number(row?.value);
+    return { weekEndsOn: row && isWeekday(weekEndsOn) ? weekEndsOn : DEFAULT_SETTINGS.weekEndsOn };
+  }
+
+  async updateSettings(input: unknown): Promise<AppSettings> {
+    const patch = validateSettingsPatch(input);
+    if (patch.weekEndsOn !== undefined) {
+      await this.database.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES ('week_ends_on', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").bind(String(patch.weekEndsOn), new Date().toISOString()).run();
+    }
+    return this.getSettings();
   }
 
   async listEntries(limit = 30, offset = 0) {
@@ -525,8 +544,12 @@ export class D1DaylioStore {
     const goalRow = await this.database.prepare("SELECT id, activity_id, name, material_icon, repeat_type, schedule_type, target_per_week, weekdays_mask, start_date, end_date, sort_order, archived_at, reminder_enabled, reminder_time, source_state FROM goals WHERE id = ? LIMIT 1").bind(goalId).first<GoalRow>();
     if (!goalRow) throw new Error("Goal not found.");
     const goal = toGoal(goalRow);
-    const completionRows = await rows<{ logical_date: string }>(this.database, this.database.prepare("SELECT logical_date FROM goal_completions WHERE goal_id = ? AND logical_date BETWEEN ? AND ? ORDER BY logical_date").bind(goalId, addDays(startDate, -7), addDays(endDate, 7)));
-    return buildGoalHistory({ goal, startDate, endDate, completedDates: completionRows.map((row) => row.logical_date), asOf });
+    // The week rows can reach up to six days outside the requested range on either side.
+    const [completionResult, settings] = await Promise.all([
+      rows<{ logical_date: string }>(this.database, this.database.prepare("SELECT logical_date FROM goal_completions WHERE goal_id = ? AND logical_date BETWEEN ? AND ? ORDER BY logical_date").bind(goalId, addDays(startDate, -7), addDays(endDate, 7))),
+      this.getSettings(),
+    ]);
+    return buildGoalHistory({ goal, startDate, endDate, completedDates: completionResult.map((row) => row.logical_date), weekEndsOn: settings.weekEndsOn, asOf });
   }
 
   async reorderCatalog(payload: unknown) {
@@ -549,7 +572,7 @@ export class D1DaylioStore {
   }
 
   async exportData() {
-    const names = ["mood_levels", "activity_groups", "activities", "entries", "entry_activities", "goals", "goal_completions", "day_mood_selections", "day_activity_selections", "import_runs"];
+    const names = ["mood_levels", "activity_groups", "activities", "entries", "entry_activities", "goals", "goal_completions", "day_mood_selections", "day_activity_selections", "import_runs", "app_settings"];
     const results = await this.database.batch(names.map((table) => this.database.prepare(`SELECT * FROM ${table}`)));
     const tables = Object.fromEntries(names.map((name, index) => [name, results[index].results ?? []]));
     return { formatVersion: 1, exportedAt: new Date().toISOString(), tables };

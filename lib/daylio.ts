@@ -149,12 +149,18 @@ export type EntryInput = {
   legacyNote?: string;
 };
 
+export type AppSettings = {
+  /** JavaScript weekday (0 = Sunday) on which a week ends. Goal weeks and insight weeks both use it. */
+  weekEndsOn: number;
+};
+
 export type Bootstrap = {
   moods: Mood[];
   groups: ActivityGroup[];
   activities: Activity[];
   goals: Goal[];
   entries: Entry[];
+  settings: AppSettings;
   today: string;
   yesterday: string;
 };
@@ -337,12 +343,44 @@ export function dayOfWeek(logicalDate: string) {
   return new Date(year, month - 1, day).getDay();
 }
 
-export function startOfWeek(logicalDate: string) {
-  return addDays(logicalDate, -dayOfWeek(logicalDate));
+export const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+export const DEFAULT_WEEK_ENDS_ON = 0;
+export const DEFAULT_SETTINGS: AppSettings = { weekEndsOn: DEFAULT_WEEK_ENDS_ON };
+
+export function isWeekday(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 6;
 }
 
-export function endOfWeek(logicalDate: string) {
-  return addDays(startOfWeek(logicalDate), 6);
+export function validateSettingsPatch(patch: unknown): Partial<AppSettings> {
+  if (!patch || typeof patch !== "object" || Array.isArray(patch)) throw new Error("Settings changes must be an object.");
+  for (const key of Object.keys(patch)) {
+    if (key !== "weekEndsOn") throw new Error(`Unsupported setting: ${key}.`);
+  }
+  const { weekEndsOn } = patch as { weekEndsOn?: unknown };
+  if (weekEndsOn !== undefined && !isWeekday(weekEndsOn)) throw new Error("Choose a weekday for the end of the week.");
+  return weekEndsOn === undefined ? {} : { weekEndsOn };
+}
+
+export function weekStartsOn(weekEndsOn: number) {
+  return (weekEndsOn + 1) % 7;
+}
+
+/** Weekday indexes in display order for a week that ends on `weekEndsOn`. */
+export function weekdayOrder(weekEndsOn: number) {
+  return Array.from({ length: 7 }, (_, index) => (weekStartsOn(weekEndsOn) + index) % 7);
+}
+
+/** "Monday–Sunday" for a week that ends on Sunday. */
+export function weekRangeLabel(weekEndsOn: number) {
+  return `${WEEKDAY_NAMES[weekStartsOn(weekEndsOn)]}–${WEEKDAY_NAMES[weekEndsOn]}`;
+}
+
+export function startOfWeek(logicalDate: string, weekEndsOn = DEFAULT_WEEK_ENDS_ON) {
+  return addDays(logicalDate, -((dayOfWeek(logicalDate) - weekStartsOn(weekEndsOn) + 7) % 7));
+}
+
+export function endOfWeek(logicalDate: string, weekEndsOn = DEFAULT_WEEK_ENDS_ON) {
+  return addDays(startOfWeek(logicalDate, weekEndsOn), 6);
 }
 
 function isGoalDateActive(goal: Pick<Goal, "startDate" | "endDate">, logicalDate: string) {
@@ -359,12 +397,14 @@ export function buildGoalHistory({
   startDate,
   endDate,
   completedDates,
+  weekEndsOn = DEFAULT_WEEK_ENDS_ON,
   asOf = logicalDateFromDate(),
 }: {
   goal: Goal;
   startDate: string;
   endDate: string;
   completedDates: Iterable<string>;
+  weekEndsOn?: number;
   asOf?: string;
 }): GoalHistory {
   if (!isLogicalDate(startDate) || !isLogicalDate(endDate) || startDate > endDate || !isLogicalDate(asOf)) throw new Error("Choose a valid history range.");
@@ -376,8 +416,8 @@ export function buildGoalHistory({
 
   const weeks: GoalHistoryWeek[] = [];
   const repeatType = goalRepeatType(goal);
-  for (let weekStart = startOfWeek(startDate); weekStart <= endDate; weekStart = addDays(weekStart, 7)) {
-    const weekEnd = endOfWeek(weekStart);
+  for (let weekStart = startOfWeek(startDate, weekEndsOn); weekStart <= endDate; weekStart = addDays(weekStart, 7)) {
+    const weekEnd = addDays(weekStart, 6);
     const weekDates: string[] = [];
     for (let date = weekStart; date <= weekEnd; date = addDays(date, 1)) weekDates.push(date);
     const activeDates = weekDates.filter((date) => isGoalDateActive(goal, date));
@@ -438,6 +478,7 @@ export class DaylioMemoryStore {
   private goalCompletions = new Map<string, { goalId: string; logicalDate: string; entryId?: string; createdAt: string; updatedAt: string }>();
   private dayMoodSelections = new Map<string, { moodId: string; createdAt: string; updatedAt: string }>();
   private dayActivitySelections = new Map<string, { logicalDate: string; activityId: string; selected: boolean; createdAt: string; updatedAt: string }>();
+  private settings: AppSettings = { ...DEFAULT_SETTINGS };
 
   private completedGoalIdsForDate(logicalDate: string) {
     return [...this.goalCompletions.values()]
@@ -458,9 +499,15 @@ export class DaylioMemoryStore {
       activities: [...this.activities.values()].sort((a, b) => a.sortOrder - b.sortOrder),
       goals: [...this.goals.values()].sort((a, b) => a.sortOrder - b.sortOrder),
       entries: this.listEntries(30),
+      settings: { ...this.settings },
       today,
       yesterday,
     };
+  }
+
+  updateSettings(input: unknown): AppSettings {
+    this.settings = { ...this.settings, ...validateSettingsPatch(input) };
+    return { ...this.settings };
   }
 
   listEntries(limit = 30, offset = 0) {
@@ -766,9 +813,9 @@ export class DaylioMemoryStore {
     const goal = this.goals.get(goalId);
     if (!goal) throw new Error("Goal not found.");
     const completedDates = [...this.goalCompletions.values()]
-      .filter((completion) => completion.goalId === goalId && completion.logicalDate >= startOfWeek(startDate) && completion.logicalDate <= endOfWeek(endDate))
+      .filter((completion) => completion.goalId === goalId)
       .map((completion) => completion.logicalDate);
-    return buildGoalHistory({ goal, startDate, endDate, completedDates, asOf });
+    return buildGoalHistory({ goal, startDate, endDate, completedDates, weekEndsOn: this.settings.weekEndsOn, asOf });
   }
 
   exportData() {
@@ -781,6 +828,7 @@ export class DaylioMemoryStore {
       goals: [...this.goals.values()],
       entries: [...this.entries.values()].map((entry) => this.withGoalCompletions(entry)),
       goalCompletions: [...this.goalCompletions.values()],
+      settings: { ...this.settings },
       dayMoodSelections: [...this.dayMoodSelections].map(([logicalDate, selection]) => ({ logicalDate, ...selection })),
       dayActivitySelections: [...this.dayActivitySelections.values()],
     };

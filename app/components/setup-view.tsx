@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { type Bootstrap } from "../../lib/daylio";
+import { type Bootstrap, WEEKDAY_NAMES, weekRangeLabel } from "../../lib/daylio";
 import { filterActivityGroups } from "../../lib/activity-groups";
 import { ACTIVITY_ICON_CHOICES, UI_ICONS } from "../../lib/icons";
 import { type ThemePreference } from "../../lib/theme";
@@ -230,6 +230,27 @@ export function SetupView({ data, themePreference, onThemeChange, onRefresh, onM
 
   function isCatalogPending({ kind, id }: { kind: CatalogKind; id: string }) {
     return isPending(catalogActionKey({ kind, id })) || isKindReordering(kind);
+  }
+
+  async function saveWeekEnd(weekEndsOn: number) {
+    await runPending({
+      key: "settings",
+      action: async () => {
+        try {
+          const response = await fetch("/api/settings", {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ weekEndsOn }),
+          });
+          const result = (await response.json()) as { error?: string };
+          if (!response.ok) throw new Error(result.error ?? "Could not save the week setting.");
+          await onRefresh();
+          onMessage({ kind: "success", text: `Weeks now run ${weekRangeLabel(weekEndsOn)}.` });
+        } catch (error) {
+          onMessage({ kind: "error", text: (error as Error).message });
+        }
+      },
+    });
   }
 
   async function create({ payload, reset }: { payload: Record<string, unknown>; reset: () => void }) {
@@ -468,6 +489,22 @@ export function SetupView({ data, themePreference, onThemeChange, onRefresh, onM
               </label>
             ))}
           </div>
+        </section>
+
+        <section className="settings-card week-card" aria-busy={isPending("settings")}>
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Week</p>
+              <h2>Choose when your week ends</h2>
+              <p className="muted small-copy">Weekly goal results, weekly insights, and calendars run {weekRangeLabel(data.settings.weekEndsOn)}. This applies on every device.</p>
+            </div>
+          </div>
+          <label className="goal-config-field week-end-field">
+            <span>Week ends on</span>
+            <select value={data.settings.weekEndsOn} disabled={isPending("settings")} onChange={(event) => void saveWeekEnd(Number(event.target.value))}>
+              {WEEKDAY_NAMES.map((name, weekday) => <option key={name} value={weekday}>{name}</option>)}
+            </select>
+          </label>
         </section>
 
         <section className="settings-card">

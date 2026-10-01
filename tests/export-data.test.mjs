@@ -16,13 +16,15 @@ for (const kind of ["memory", "D1"]) {
     if (database) database.batches.length = 0;
     const exported = await store.exportData();
     if (database) {
-      assert.deepEqual(database.batches, [10]);
+      assert.deepEqual(database.batches, [11]);
+      assert.deepEqual(exported.tables.app_settings, []);
       assert.equal(exported.tables.entries.length, 0);
       assert.equal(exported.tables.goal_completions[0].logical_date, date);
       assert.equal(exported.tables.day_mood_selections[0].mood_id, "mood-rad");
       assert.equal(exported.tables.day_activity_selections[0].selected, 0);
     } else {
       assert.equal(exported.entries.length, 0);
+      assert.deepEqual(exported.settings, { weekEndsOn: 0 });
       assert.equal(exported.goalCompletions[0].logicalDate, date);
       assert.equal(exported.dayMoodSelections[0].logicalDate, date);
       assert.equal(exported.dayMoodSelections[0].moodId, "mood-rad");
