@@ -251,50 +251,83 @@ function resolveActiveActivityGroupId({
     ?? "";
 }
 
-function applyGoalCompletionStates({
-  completedGoalIds,
-  completions,
-}: {
-  completedGoalIds: string[];
-  completions: Array<{ goalId: string; completed: boolean }>;
-}) {
-  const next = new Set(completedGoalIds);
-  for (const completion of completions) {
-    if (completion.completed) next.add(completion.goalId);
-    else next.delete(completion.goalId);
+/** Returns `ids` with each toggle applied: `true` adds the id and `false` removes it. */
+function applyToggles(ids: readonly string[], toggles: Iterable<readonly [string, boolean]>) {
+  const next = new Set(ids);
+  for (const [id, on] of toggles) {
+    if (on) next.add(id);
+    else next.delete(id);
   }
   return [...next];
 }
 
-function applyActivitySelectionStates({
-  activityIds,
-  selections,
-}: {
-  activityIds: string[];
-  selections: Array<{ activityId: string; selected: boolean }>;
-}) {
-  const next = new Set(activityIds);
-  for (const selection of selections) {
-    if (selection.selected) next.add(selection.activityId);
-    else next.delete(selection.activityId);
-  }
-  return [...next];
+function completionToggles(completions: Array<{ goalId: string; completed: boolean }>) {
+  return completions.map((completion) => [completion.goalId, completion.completed] as const);
 }
 
-function restoreGoalCompletionStates({
-  completedGoalIds,
-  previousStates,
-}: {
-  completedGoalIds: string[];
-  previousStates: Map<string, boolean>;
-}) {
-  const next = new Set(completedGoalIds);
-  for (const [goalId, completed] of previousStates) {
-    if (completed) next.add(goalId);
-    else next.delete(goalId);
-  }
-  return [...next];
+function selectionToggles(selections: Array<{ activityId: string; selected: boolean }>) {
+  return selections.map((selection) => [selection.activityId, selection.selected] as const);
 }
+
+type DayState = { entry: Entry | null; completedGoalIds: string[]; daySelections?: DaySelections };
+
+/** Reads one day's saved state. A day without an entry answers 404 with the same body shape. */
+async function fetchDayState({ logicalDate, signal, errorText }: { logicalDate: string; signal: AbortSignal; errorText: string }): Promise<DayState> {
+  const response = await fetch(`/api/entries/${logicalDate}`, { cache: "no-store", signal });
+  if (!response.ok && response.status !== 404) throw new Error(errorText);
+  const result = (await response.json()) as { entry?: Entry | null; completedGoalIds?: string[]; daySelections?: DaySelections };
+  const entry = result.entry ?? null;
+  return { entry, completedGoalIds: result.completedGoalIds ?? entry?.completedGoalIds ?? [], daySelections: result.daySelections };
+}
+
+/** Month label and day cells for a calendar grid whose rows start on the first day of the week. */
+function monthGrid({ month, weekEndsOn }: { month: string; weekEndsOn: number }) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const firstDay = new Date(year, monthNumber - 1, 1).getDay();
+  const daysInMonth = new Date(year, monthNumber, 0).getDate();
+  const cells: Array<string | null> = [
+    ...Array((firstDay - weekStartsOn(weekEndsOn) + 7) % 7).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, index) => `${month}-${String(index + 1).padStart(2, "0")}`),
+  ];
+  const label = new Intl.DateTimeFormat("en", { month: "long", year: "numeric" }).format(new Date(year, monthNumber - 1, 1));
+  const weekdays = weekdayOrder(weekEndsOn).map((weekday) => WEEKDAY_NAMES[weekday].slice(0, 3));
+  const shifted = (amount: number) => {
+    const next = new Date(year, monthNumber - 1 + amount, 1);
+    return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}`;
+  };
+  return { cells, label, weekdays, shifted };
+}
+
+function NoticeBanner({ message }: { message: Notice }) {
+  return (
+    <div className={`notice ${message.kind}`} role="status">
+      {message.kind === "success" ? "✓" : message.kind === "info" ? "↻" : "!"} {message.text}
+    </div>
+  );
+}
+
+const NAV_ITEMS: Array<{ view: View; label: string; icon: string }> = [
+  { view: "log", label: "Log", icon: UI_ICONS.log },
+  { view: "calendar", label: "Calendar", icon: UI_ICONS.calendar },
+  { view: "insights", label: "Insights", icon: "insights" },
+  { view: "settings", label: "Setup", icon: UI_ICONS.settings },
+];
+
+const GROUP_ICONS: Record<string, string> = {
+  social: "diversity_3",
+  hobbies: "toys_and_games",
+  health: "favorite",
+  study: "menu_book",
+  productivity: "work",
+  vices: "favorite",
+  everyday: "door_open",
+  substances: "nutrition",
+  emotions: "adjust",
+  people: "group",
+  work: "business_center",
+  home: "home",
+  leisure: "sports_esports",
+};
 
 export default function Journal() {
   const { preference: themePreference, updatePreference: updateThemePreference } = useJournalTheme();
@@ -490,12 +523,7 @@ export default function Journal() {
 
   function openGoal(goalId: string) {
     if (pendingGoalConfigRef.current) return;
-    const goal = data?.goals.find((candidate) => candidate.id === goalId && !candidate.archived);
-    if (!goal) return;
-    setSelectedGoalId(goalId);
-    setGoalConfigDraft(goalConfigFromGoal(goal));
-    setGoalHistory(null);
-    setGoalHistoryMonth((selectedDate || data?.today || "").slice(0, 7));
+    if (!data?.goals.some((candidate) => candidate.id === goalId && !candidate.archived)) return;
     changeView("goal", { goalId });
   }
 
@@ -605,27 +633,9 @@ export default function Journal() {
   }
 
   useEffect(() => {
-    const request = bootstrapRequestGate.current.begin();
-    let cancelled = false;
-    fetch("/api/bootstrap", { cache: "no-store", signal: request.signal })
-      .then(async (response) => {
-        if (!response.ok) throw new Error("Could not connect to your journal.");
-        return (await response.json()) as Bootstrap;
-      })
-      .then((next) => {
-        if (cancelled || !request.isCurrent()) return;
-        applyBootstrap(next);
-        setConnectionState("online");
-      })
-      .catch((error: Error) => {
-        if (!cancelled && request.isCurrent() && !request.signal.aborted) {
-          setConnectionState(navigator.onLine ? "error" : "offline");
-          setMessage({ kind: "error", text: error.message });
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
+    Promise.resolve().then(loadBootstrap).catch((error: Error) => {
+      if (error.name !== "AbortError") setMessage({ kind: "error", text: error.message });
+    });
     // Fetch once for this layout. Later refreshes are explicit user actions.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -826,32 +836,8 @@ export default function Journal() {
     setMessage(null);
     setIsLoadingDate(true);
     try {
-      const response = await fetch(`/api/entries/${nextDate}`, {
-        cache: "no-store",
-        signal: request.signal,
-      });
-      let serverEntry: Entry | null = null;
-      let serverCompletedGoalIds: string[] = [];
-      let serverSelections: DaySelections | undefined;
-      if (response.status !== 404) {
-        if (!response.ok) throw new Error("Could not load that date.");
-        const result = (await response.json()) as {
-          entry: Entry;
-          completedGoalIds?: string[];
-          daySelections?: DaySelections;
-        };
-        serverEntry = result.entry;
-        serverCompletedGoalIds =
-          result.completedGoalIds ?? serverEntry.completedGoalIds;
-        serverSelections = result.daySelections;
-      } else {
-        const result = (await response.json()) as {
-          completedGoalIds?: string[];
-          daySelections?: DaySelections;
-        };
-        serverCompletedGoalIds = result.completedGoalIds ?? [];
-        serverSelections = result.daySelections;
-      }
+      const { entry: serverEntry, completedGoalIds: serverCompletedGoalIds, daySelections: serverSelections } =
+        await fetchDayState({ logicalDate: nextDate, signal: request.signal, errorText: "Could not load that date." });
       if (!request.isCurrent()) return;
       const recovered = draftForDate({
         logicalDate: nextDate,
@@ -949,32 +935,8 @@ export default function Journal() {
       !hasPendingGoalToggle(logicalDate) &&
       !hasPendingSelectionToggle(logicalDate);
     try {
-      const response = await fetch(`/api/entries/${logicalDate}`, {
-        cache: "no-store",
-        signal: request.signal,
-      });
-      let serverEntry: Entry | null = null;
-      let serverCompletedGoalIds: string[] = [];
-      let serverSelections: DaySelections | undefined;
-      if (response.status !== 404) {
-        if (!response.ok) throw new Error("Could not refresh that date.");
-        const result = (await response.json()) as {
-          entry: Entry;
-          completedGoalIds?: string[];
-          daySelections?: DaySelections;
-        };
-        serverEntry = result.entry;
-        serverCompletedGoalIds = result.completedGoalIds ?? serverEntry.completedGoalIds;
-        serverSelections = result.daySelections;
-      } else {
-        const result = (await response.json()) as {
-          completedGoalIds?: string[];
-          daySelections?: DaySelections;
-        };
-        serverCompletedGoalIds = result.completedGoalIds ?? [];
-        serverSelections = result.daySelections;
-      }
-
+      const { entry: serverEntry, completedGoalIds: serverCompletedGoalIds, daySelections: serverSelections } =
+        await fetchDayState({ logicalDate, signal: request.signal, errorText: "Could not refresh that date." });
       if (!isRelevant()) return;
 
       const nextDraft = draftFromDayRefreshState({
@@ -1052,6 +1014,35 @@ export default function Journal() {
     return [...pendingSelectionRef.current].some((key) => key.startsWith(prefix));
   }
 
+  function hasOtherPendingSelectionFor(logicalDate: string, key: string) {
+    return [...pendingSelectionRef.current].some((pendingKey) => pendingKey !== key && pendingKey.startsWith(`${logicalDate}:`));
+  }
+
+  // A saved toggle clears the stored draft once no other toggle is pending,
+  // and clears the error state once no toggle for the day has failed.
+  function settleSavedSelection(logicalDate: string, key: string) {
+    const hasOtherPendingSelection = hasOtherPendingSelectionFor(logicalDate, key);
+    if (!hasOtherPendingSelection && !hasLocalDraftRef.current) {
+      clearStoredDraft(logicalDate);
+      markLocalDraft(false);
+    }
+    const hasFailedSelection = [...failedSelectionRef.current].some((failedKey) => failedKey.startsWith(`${logicalDate}:`));
+    if (!hasFailedSelection) {
+      setConnectionState("online");
+      setMessage(null);
+    }
+  }
+
+  // A failed toggle has already been rolled back in the draft. Keep the stored draft
+  // only if there was one before, or another toggle is still pending.
+  function settleFailedSelection({ logicalDate, key, hadLocalDraft, text }: { logicalDate: string; key: string; hadLocalDraft: boolean; text: string }) {
+    if (hadLocalDraft || hasOtherPendingSelectionFor(logicalDate, key)) writeStoredDraft(logicalDate, draftRef.current);
+    else clearStoredDraft(logicalDate);
+    markLocalDraft(hadLocalDraft);
+    setConnectionState(navigator.onLine ? "error" : "offline");
+    setMessage({ kind: "error", text });
+  }
+
   async function toggleMood(id: string) {
     const logicalDate = selectedDateRef.current || selectedDate;
     const key = selectionPendingKey(logicalDate, "mood");
@@ -1089,32 +1080,13 @@ export default function Journal() {
               }
             : current,
         );
-        const hasOtherPendingSelection = [...pendingSelectionRef.current].some(
-          (pendingKey) => pendingKey !== key && pendingKey.startsWith(`${logicalDate}:`),
-        );
-        if (!hasOtherPendingSelection && !hasLocalDraftRef.current) {
-          clearStoredDraft(logicalDate);
-          markLocalDraft(false);
-        }
-        const hasFailedSelection = [...failedSelectionRef.current].some(
-          (failedKey) => failedKey.startsWith(`${logicalDate}:`),
-        );
-        if (!hasFailedSelection) {
-          setConnectionState("online");
-          setMessage(null);
-        }
+        settleSavedSelection(logicalDate, key);
       }
     } catch (error) {
       failedSelectionRef.current.add(key);
       if (selectedDateRef.current === logicalDate && selectedDateEpochRef.current === dateEpoch) {
         updateDraft({ moodId: previousMoodId }, { markLocal: false });
-        if (hadLocalDraft || [...pendingSelectionRef.current].some((pendingKey) => pendingKey !== key && pendingKey.startsWith(`${logicalDate}:`)))
-          writeStoredDraft(logicalDate, draftRef.current);
-        else
-          clearStoredDraft(logicalDate);
-        markLocalDraft(hadLocalDraft);
-        setConnectionState(navigator.onLine ? "error" : "offline");
-        setMessage({ kind: "error", text: `${(error as Error).message} The mood was restored.` });
+        settleFailedSelection({ logicalDate, key, hadLocalDraft, text: `${(error as Error).message} The mood was restored.` });
       } else writeStoredDraft(logicalDate, nextDraft);
     } finally {
       pendingSelectionRef.current.delete(key);
@@ -1139,10 +1111,7 @@ export default function Journal() {
     const previousGoalStates = new Map(
       linkedGoalIds.map((goalId) => [goalId, draftRef.current.completedGoalIds.includes(goalId)]),
     );
-    const nextCompletedGoalIds = applyGoalCompletionStates({
-      completedGoalIds: draftRef.current.completedGoalIds,
-      completions: linkedGoalIds.map((goalId) => ({ goalId, completed: nextSelected })),
-    });
+    const nextCompletedGoalIds = applyToggles(draftRef.current.completedGoalIds, completionToggles(linkedGoalIds.map((goalId) => ({ goalId, completed: nextSelected }))));
     const nextDraft = {
       ...draftRef.current,
       activityIds: nextActivityIds,
@@ -1188,14 +1157,8 @@ export default function Journal() {
       if (selectedDateRef.current === logicalDate && selectedDateEpochRef.current === dateEpoch) {
         updateDraft(
           {
-            activityIds: applyActivitySelectionStates({
-              activityIds: draftRef.current.activityIds,
-              selections: affectedActivitySelections,
-            }),
-            completedGoalIds: applyGoalCompletionStates({
-              completedGoalIds: draftRef.current.completedGoalIds,
-              completions: affectedGoalCompletions,
-            }),
+            activityIds: applyToggles(draftRef.current.activityIds, selectionToggles(affectedActivitySelections)),
+            completedGoalIds: applyToggles(draftRef.current.completedGoalIds, completionToggles(affectedGoalCompletions)),
           },
           { markLocal: false },
         );
@@ -1207,34 +1170,15 @@ export default function Journal() {
                   entry.logicalDate === logicalDate
                     ? {
                         ...entry,
-                        activityIds: applyActivitySelectionStates({
-                          activityIds: entry.activityIds,
-                          selections: affectedActivitySelections,
-                        }),
-                        completedGoalIds: applyGoalCompletionStates({
-                          completedGoalIds: entry.completedGoalIds,
-                          completions: affectedGoalCompletions,
-                        }),
+                        activityIds: applyToggles(entry.activityIds, selectionToggles(affectedActivitySelections)),
+                        completedGoalIds: applyToggles(entry.completedGoalIds, completionToggles(affectedGoalCompletions)),
                       }
                     : entry,
                 ),
               }
             : current,
         );
-        const hasOtherPendingSelection = [...pendingSelectionRef.current].some(
-          (pendingKey) => pendingKey !== key && pendingKey.startsWith(`${logicalDate}:`),
-        );
-        if (!hasOtherPendingSelection && !hasLocalDraftRef.current) {
-          clearStoredDraft(logicalDate);
-          markLocalDraft(false);
-        }
-        const hasFailedSelection = [...failedSelectionRef.current].some(
-          (failedKey) => failedKey.startsWith(`${logicalDate}:`),
-        );
-        if (!hasFailedSelection) {
-          setConnectionState("online");
-          setMessage(null);
-        }
+        settleSavedSelection(logicalDate, key);
       }
     } catch (error) {
       failedSelectionRef.current.add(key);
@@ -1244,20 +1188,11 @@ export default function Journal() {
             activityIds: previousSelected
               ? [...new Set([...draftRef.current.activityIds, id])]
               : draftRef.current.activityIds.filter((item) => item !== id),
-            completedGoalIds: restoreGoalCompletionStates({
-              completedGoalIds: draftRef.current.completedGoalIds,
-              previousStates: previousGoalStates,
-            }),
+            completedGoalIds: applyToggles(draftRef.current.completedGoalIds, previousGoalStates),
           },
           { markLocal: false },
         );
-        if (hadLocalDraft || [...pendingSelectionRef.current].some((pendingKey) => pendingKey !== key && pendingKey.startsWith(`${logicalDate}:`)))
-          writeStoredDraft(logicalDate, draftRef.current);
-        else
-          clearStoredDraft(logicalDate);
-        markLocalDraft(hadLocalDraft);
-        setConnectionState(navigator.onLine ? "error" : "offline");
-        setMessage({ kind: "error", text: `${(error as Error).message} The activity was restored.` });
+        settleFailedSelection({ logicalDate, key, hadLocalDraft, text: `${(error as Error).message} The activity was restored.` });
       } else writeStoredDraft(logicalDate, nextDraft);
     } finally {
       pendingSelectionRef.current.delete(key);
@@ -1316,15 +1251,9 @@ export default function Journal() {
     const previousActivitySelected = linkedActivityId
       ? draftRef.current.activityIds.includes(linkedActivityId)
       : undefined;
-    const nextCompletedGoalIds = applyGoalCompletionStates({
-      completedGoalIds: draftRef.current.completedGoalIds,
-      completions: affectedGoalIds.map((goalId) => ({ goalId, completed: nextChecked })),
-    });
+    const nextCompletedGoalIds = applyToggles(draftRef.current.completedGoalIds, completionToggles(affectedGoalIds.map((goalId) => ({ goalId, completed: nextChecked }))));
     const nextActivityIds = linkedActivityId
-      ? applyActivitySelectionStates({
-          activityIds: draftRef.current.activityIds,
-          selections: [{ activityId: linkedActivityId, selected: nextChecked }],
-        })
+      ? applyToggles(draftRef.current.activityIds, selectionToggles([{ activityId: linkedActivityId, selected: nextChecked }]))
       : draftRef.current.activityIds;
     const dateEpoch = selectedDateEpochRef.current;
     beginLocalMutation();
@@ -1392,14 +1321,8 @@ export default function Journal() {
         setDraft((current) => {
           const next = {
             ...current,
-            completedGoalIds: applyGoalCompletionStates({
-              completedGoalIds: current.completedGoalIds,
-              completions: affectedGoalCompletions,
-            }),
-            activityIds: applyActivitySelectionStates({
-              activityIds: current.activityIds,
-              selections: affectedActivitySelections,
-            }),
+            completedGoalIds: applyToggles(current.completedGoalIds, completionToggles(affectedGoalCompletions)),
+            activityIds: applyToggles(current.activityIds, selectionToggles(affectedActivitySelections)),
           };
           draftRef.current = next;
           return next;
@@ -1412,14 +1335,8 @@ export default function Journal() {
                   entry.logicalDate === logicalDate
                     ? {
                         ...entry,
-                        completedGoalIds: applyGoalCompletionStates({
-                          completedGoalIds: entry.completedGoalIds,
-                          completions: affectedGoalCompletions,
-                        }),
-                        activityIds: applyActivitySelectionStates({
-                          activityIds: entry.activityIds,
-                          selections: affectedActivitySelections,
-                        }),
+                        completedGoalIds: applyToggles(entry.completedGoalIds, completionToggles(affectedGoalCompletions)),
+                        activityIds: applyToggles(entry.activityIds, selectionToggles(affectedActivitySelections)),
                       }
                     : entry,
                 ),
@@ -1437,15 +1354,9 @@ export default function Journal() {
         setDraft((current) => {
           const next = {
             ...current,
-            completedGoalIds: restoreGoalCompletionStates({
-              completedGoalIds: current.completedGoalIds,
-              previousStates: previousGoalStates,
-            }),
+            completedGoalIds: applyToggles(current.completedGoalIds, previousGoalStates),
             activityIds: linkedActivityId && previousActivitySelected !== undefined
-              ? applyActivitySelectionStates({
-                  activityIds: current.activityIds,
-                  selections: [{ activityId: linkedActivityId, selected: previousActivitySelected }],
-                })
+              ? applyToggles(current.activityIds, selectionToggles([{ activityId: linkedActivityId, selected: previousActivitySelected }]))
               : current.activityIds,
           };
           draftRef.current = next;
@@ -1685,6 +1596,9 @@ export default function Journal() {
     }
   }
 
+  // Leaving the current view is blocked while it has an update in flight.
+  const navLocked = isSavingGoalConfig || isActivityCreateBusy || (isSetupBusy && view === "settings");
+
   return (
     <div className={`app-shell view-${view}`}>
       <a className="skip-link" href="#journal-content">Skip to content</a>
@@ -1693,7 +1607,7 @@ export default function Journal() {
           className="brand"
           onClick={() => changeView("log")}
           aria-label="Go to log"
-          disabled={isSavingGoalConfig || isActivityCreateBusy || (isSetupBusy && view === "settings")}
+          disabled={navLocked}
         >
           <span className="brand-mark" aria-hidden="true" />
           <span>daymark</span>
@@ -1757,16 +1671,7 @@ export default function Journal() {
             }}
           />
         )}
-        {data && message && view !== "log" && (
-          <div className={`notice ${message.kind}`} role="status">
-            {message.kind === "success"
-              ? "✓"
-              : message.kind === "info"
-                ? "↻"
-                : "!"}{" "}
-            {message.text}
-          </div>
-        )}
+        {data && message && view !== "log" && <NoticeBanner message={message} />}
         {data && view === "log" && (
           <LogView
             data={data}
@@ -1854,51 +1759,21 @@ export default function Journal() {
       <nav
         className="bottom-nav"
         aria-label="Primary navigation"
-        aria-busy={isSavingGoalConfig || isActivityCreateBusy || (isSetupBusy && view === "settings")}
+        aria-busy={navLocked}
       >
         <span className="nav-heading" aria-hidden="true">Your journal</span>
-        <button
-          className={view === "log" ? "active" : ""}
-          aria-current={view === "log" ? "page" : undefined}
-          onClick={() => changeView("log")}
-          disabled={isSavingGoalConfig || isActivityCreateBusy || (isSetupBusy && view === "settings")}
-        >
-          <span className="nav-icon">
-            <Icon name={UI_ICONS.log} />
-          </span>
-          <span>Log</span>
-        </button>
-        <button
-          className={view === "calendar" ? "active" : ""}
-          aria-current={view === "calendar" ? "page" : undefined}
-          onClick={() => changeView("calendar")}
-          disabled={isSavingGoalConfig || isActivityCreateBusy || (isSetupBusy && view === "settings")}
-        >
-          <span className="nav-icon">
-            <Icon name={UI_ICONS.calendar} />
-          </span>
-          <span>Calendar</span>
-        </button>
-        <button
-          className={view === "insights" ? "active" : ""}
-          aria-current={view === "insights" ? "page" : undefined}
-          onClick={() => changeView("insights")}
-          disabled={isSavingGoalConfig || isActivityCreateBusy || (isSetupBusy && view === "settings")}
-        >
-          <span className="nav-icon"><Icon name="insights" /></span>
-          <span>Insights</span>
-        </button>
-        <button
-          className={view === "settings" ? "active" : ""}
-          aria-current={view === "settings" ? "page" : undefined}
-          onClick={() => changeView("settings")}
-          disabled={isSavingGoalConfig || isActivityCreateBusy || (isSetupBusy && view === "settings")}
-        >
-          <span className="nav-icon">
-            <Icon name={UI_ICONS.settings} />
-          </span>
-          <span>Setup</span>
-        </button>
+        {NAV_ITEMS.map((item) => (
+          <button
+            key={item.view}
+            className={view === item.view ? "active" : ""}
+            aria-current={view === item.view ? "page" : undefined}
+            onClick={() => changeView(item.view)}
+            disabled={navLocked}
+          >
+            <span className="nav-icon"><Icon name={item.icon} /></span>
+            <span>{item.label}</span>
+          </button>
+        ))}
         <span className="nav-footer"><Icon name="spa" /><span>A more intentional<br />you, one day at a time.</span></span>
       </nav>
     </div>
@@ -1989,6 +1864,7 @@ function LogView({
       query: activityQuery,
     });
   }, [activityQuery, data.activities, data.groups]);
+  const activeGoals = data.goals.filter((goal) => !goal.archived);
   const formBusy = isSaving || isDeleting;
   const goalsBusy = [...pendingGoalKeys].some((key) =>
     key.startsWith(`${selectedDate}:`),
@@ -2017,16 +1893,7 @@ function LogView({
           </div>
         </section>
 
-        {message && (
-          <div className={`notice ${message.kind}`} role="status">
-            {message.kind === "success"
-              ? "✓"
-              : message.kind === "info"
-                ? "↻"
-                : "!"}{" "}
-            {message.text}
-          </div>
-        )}
+        {message && <NoticeBanner message={message} />}
 
         {!isLoadingDate && !isDateReady && (
           <button className="secondary-button" onClick={() => onDate(selectedDate)}>Retry day</button>
@@ -2036,26 +1903,24 @@ function LogView({
           <div className="section-heading">
             <h2>Goals</h2>
             <span className="section-count" aria-label="Completed goals">
-              {data.goals.filter((goal) => !goal.archived && draft.completedGoalIds.includes(goal.id)).length}/{data.goals.filter((goal) => !goal.archived).length}
+              {activeGoals.filter((goal) => draft.completedGoalIds.includes(goal.id)).length}/{activeGoals.length}
             </span>
           </div>
           <div className="goal-list">
-            {data.goals
-              .filter((goal) => !goal.archived)
-              .map((goal) => (
-                <GoalRow
-                  key={goal.id}
-                  goal={goal}
-                  activity={activityFor(data.activities, goal.activityId)}
-                  checked={draft.completedGoalIds.includes(goal.id)}
-                  pending={pendingGoalKeys.has(`${selectedDate}:${goal.id}`)}
-                  disabled={isLoadingDate || !isDateReady}
-                  onToggle={() => {
-                    void onToggleGoal(goal.id);
-                  }}
-                  onOpen={() => onOpenGoal(goal.id)}
-                />
-              ))}
+            {activeGoals.map((goal) => (
+              <GoalRow
+                key={goal.id}
+                goal={goal}
+                activity={activityFor(data.activities, goal.activityId)}
+                checked={draft.completedGoalIds.includes(goal.id)}
+                pending={pendingGoalKeys.has(`${selectedDate}:${goal.id}`)}
+                disabled={isLoadingDate || !isDateReady}
+                onToggle={() => {
+                  void onToggleGoal(goal.id);
+                }}
+                onOpen={() => onOpenGoal(goal.id)}
+              />
+            ))}
           </div>
         </section>
 
@@ -2333,21 +2198,7 @@ function ActivityGroupList({
   return (
     <div className="activity-groups">
       {groups.map(({ group, activities }) => {
-        const groupIcon = ({
-          social: "diversity_3",
-          hobbies: "toys_and_games",
-          health: "favorite",
-          study: "menu_book",
-          productivity: "work",
-          vices: "favorite",
-          everyday: "door_open",
-          substances: "nutrition",
-          emotions: "adjust",
-          people: "group",
-          work: "business_center",
-          home: "home",
-          leisure: "sports_esports",
-        } as Record<string, string>)[group.name.toLowerCase()] ?? "category";
+        const groupIcon = GROUP_ICONS[group.name.toLowerCase()] ?? "category";
         const summary = summarizeActivityGroup({
           activityIds: activities.map((activity) => activity.id),
           selectedActivityIds,
@@ -2505,29 +2356,16 @@ function GoalDetailView({
       </section>
     );
   }
-  const resolvedMonth = /^\d{4}-\d{2}$/.test(month) ? month : new Date().toISOString().slice(0, 7);
-  const [year, monthNumber] = resolvedMonth.split("-").map(Number);
-  const firstDay = new Date(year, monthNumber - 1, 1).getDay();
-  const daysInMonth = new Date(year, monthNumber, 0).getDate();
+  const resolvedMonth = /^\d{4}-\d{2}$/.test(month) ? month : logicalDateFromDate().slice(0, 7);
   // While another month loads, or if that load fails, the previous month's results must not show under the new month.
   const monthHistory = history?.month === resolvedMonth ? history : null;
   const historyDays = new Map((monthHistory?.days ?? []).map((day) => [day.logicalDate, day]));
-  // Calendar rows start on the first day of the week so they line up with the weekly results below.
-  const cells = [
-    ...Array((firstDay - weekStartsOn(weekEndsOn) + 7) % 7).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, index) => `${resolvedMonth}-${String(index + 1).padStart(2, "0")}`),
-  ];
-  const label = new Intl.DateTimeFormat("en", { month: "long", year: "numeric" }).format(new Date(year, monthNumber - 1, 1));
-  const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const calendarWeekdays = weekdayOrder(weekEndsOn).map((weekday) => weekdays[weekday]);
+  // The calendar rows line up with the weekly results below.
+  const { cells, label, weekdays: calendarWeekdays, shifted } = monthGrid({ month: resolvedMonth, weekEndsOn });
+  const weekdays = WEEKDAY_NAMES.map((name) => name.slice(0, 3));
   const linkedActivity = activities.find((activity) => activity.id === config.activityId);
   const activityOptions = activities.filter((activity) => !activity.archived || activity.id === config.activityId);
   const isDirty = config.name !== goal.name || config.activityId !== goal.activityId || config.materialIcon !== goal.materialIcon || config.repeatType !== goalRepeatType(goal) || config.weekdaysMask !== goalWeekdayMask(goal) || config.targetPerWeek !== Math.min(7, Math.max(1, goal.targetPerWeek ?? 1));
-
-  function shiftMonth(amount: number) {
-    const next = new Date(year, monthNumber - 1 + amount, 1);
-    onMonth(`${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}`);
-  }
 
   function toggleWeekday(index: number) {
     const nextMask = config.weekdaysMask ^ (1 << index);
@@ -2623,9 +2461,9 @@ function GoalDetailView({
 
       <section className="calendar-card goal-history-card" aria-busy={isLoadingHistory}>
         <div className="calendar-heading">
-          <button className={`icon-button ${isLoadingHistory ? "pending-action" : ""}`} aria-label="Previous month" aria-busy={isLoadingHistory} disabled={isLoadingHistory} onClick={() => shiftMonth(-1)}><Icon name={isLoadingHistory ? UI_ICONS.sync : "chevron_left"} /></button>
+          <button className={`icon-button ${isLoadingHistory ? "pending-action" : ""}`} aria-label="Previous month" aria-busy={isLoadingHistory} disabled={isLoadingHistory} onClick={() => onMonth(shifted(-1))}><Icon name={isLoadingHistory ? UI_ICONS.sync : "chevron_left"} /></button>
           <h2>{label}</h2>
-          <button className={`icon-button ${isLoadingHistory ? "pending-action" : ""}`} aria-label="Next month" aria-busy={isLoadingHistory} disabled={isLoadingHistory} onClick={() => shiftMonth(1)}><Icon name={isLoadingHistory ? UI_ICONS.sync : "chevron_right"} /></button>
+          <button className={`icon-button ${isLoadingHistory ? "pending-action" : ""}`} aria-label="Next month" aria-busy={isLoadingHistory} disabled={isLoadingHistory} onClick={() => onMonth(shifted(1))}><Icon name={isLoadingHistory ? UI_ICONS.sync : "chevron_right"} /></button>
         </div>
         <p className="muted goal-history-explainer">{goalRepeatType(goal) === "daily" ? "Green days are completed; pale days are not completed. A dash marks an expected day." : `Green days are completed. Each week needs ${goal.targetPerWeek ?? 1} completed ${(goal.targetPerWeek ?? 1) === 1 ? "day" : "days"}.`}</p>
         <div className="calendar-weekdays">{calendarWeekdays.map((weekday) => <span key={weekday}>{weekday}</span>)}</div>
@@ -2680,27 +2518,8 @@ function CalendarView({
   onOpenDate: (date: string) => void;
 }) {
   const resolvedMonth = /^\d{4}-\d{2}$/.test(month) ? month : today.slice(0, 7);
-  const [year, monthNumber] = resolvedMonth.split("-").map(Number);
-  const firstDay = new Date(year, monthNumber - 1, 1).getDay();
-  const daysInMonth = new Date(year, monthNumber, 0).getDate();
   const entriesByDate = new Map(days.map((day) => [day.logicalDate, day]));
-  const cells = [
-    ...Array((firstDay - weekStartsOn(weekEndsOn) + 7) % 7).fill(null),
-    ...Array.from(
-      { length: daysInMonth },
-      (_, index) => `${resolvedMonth}-${String(index + 1).padStart(2, "0")}`,
-    ),
-  ];
-  const label = new Intl.DateTimeFormat("en", {
-    month: "long",
-    year: "numeric",
-  }).format(new Date(year, monthNumber - 1, 1));
-  function shiftMonth(amount: number) {
-    const next = new Date(year, monthNumber - 1 + amount, 1);
-    onMonth(
-      `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}`,
-    );
-  }
+  const { cells, label, weekdays, shifted } = monthGrid({ month: resolvedMonth, weekEndsOn });
   return (
     <section className="page-section calendar-page">
       <div className="page-intro">
@@ -2717,7 +2536,7 @@ function CalendarView({
             aria-label={isLoading ? "Loading month" : "Previous month"}
             aria-busy={isLoading}
             disabled={isLoading}
-            onClick={() => shiftMonth(-1)}
+            onClick={() => onMonth(shifted(-1))}
           >
             <Icon name={isLoading ? UI_ICONS.sync : "chevron_left"} />
           </button>
@@ -2727,13 +2546,13 @@ function CalendarView({
             aria-label={isLoading ? "Loading month" : "Next month"}
             aria-busy={isLoading}
             disabled={isLoading}
-            onClick={() => shiftMonth(1)}
+            onClick={() => onMonth(shifted(1))}
           >
             <Icon name={isLoading ? UI_ICONS.sync : "chevron_right"} />
           </button>
         </div>
         <div className="calendar-weekdays">
-          {weekdayOrder(weekEndsOn).map((weekday) => WEEKDAY_NAMES[weekday].slice(0, 3)).map((day) => (
+          {weekdays.map((day) => (
             <span key={day}>{day}</span>
           ))}
         </div>

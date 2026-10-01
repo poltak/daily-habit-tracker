@@ -68,7 +68,7 @@ test("activity creation keeps the parent route busy until POST and refresh finis
   assert.match(pageSource, /activityCreateBusyRef\.current && viewRef\.current === "add-activity" && nextRoute\.view !== "add-activity" && !pendingRouteNoticeRef\.current/);
   assert.match(pageSource, /groupId: currentView === "add-activity" \? activityGroupIdRef\.current/);
   assert.match(pageSource, /returnView: currentView === "add-activity" \? activityReturnViewRef\.current/);
-  assert.match(pageSource, /disabled=\{isSavingGoalConfig \|\| isActivityCreateBusy/);
+  assert.match(pageSource, /const navLocked = isSavingGoalConfig \|\| isActivityCreateBusy/);
   assert.match(pageSource, /onBusyChange\(true\)/);
   assert.match(pageSource, /onBusyChange\(false\)/);
 });

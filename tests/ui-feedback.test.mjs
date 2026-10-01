@@ -57,7 +57,8 @@ test("bootstrap refreshes and setup navigation use a latest-request gate", () =>
   assert.match(pageSource, /bootstrapRequestGate\.current\.begin\(\)/);
   assert.match(pageSource, /if \(request\.isCurrent\(\)\)/);
   assert.match(pageSource, /onBusyChange=\{setIsSetupBusy\}/);
-  assert.match(pageSource, /disabled=\{isSavingGoalConfig \|\| isActivityCreateBusy \|\| \(isSetupBusy && view === "settings"\)\}/);
+  assert.match(pageSource, /const navLocked = isSavingGoalConfig \|\| isActivityCreateBusy \|\| \(isSetupBusy && view === "settings"\);/);
+  assert.equal((pageSource.match(/disabled=\{navLocked\}/g) ?? []).length, 2, "the brand button and every nav button");
 });
 
 test("calendar shows entry moods and replaces the Entries route", () => {
@@ -65,10 +66,8 @@ test("calendar shows entry moods and replaces the Entries route", () => {
   assert.match(pageSource, /type View = "log" \| "calendar" \| "settings" \| "goal"/);
   assert.match(pageSource, /if \(requestedView === "entries"\) return \{ view: "calendar" \}/);
   assert.doesNotMatch(pageSource, /function EntriesView/);
-  assert.doesNotMatch(pageSource, /<span>Entries<\/span>/);
-  assert.match(pageSource, /<span>Log<\/span>/);
-  assert.match(pageSource, /<span>Calendar<\/span>/);
-  assert.match(pageSource, /<span>Setup<\/span>/);
+  assert.doesNotMatch(pageSource, /label: "Entries"|<span>Entries<\/span>/);
+  assert.deepEqual([...pageSource.matchAll(/\{ view: "(\w+)", label: "(\w+)", icon:/g)].map((match) => `${match[1]}:${match[2]}`), ["log:Log", "calendar:Calendar", "insights:Insights", "settings:Setup"]);
   assert.match(calendarView, /days: CalendarEntryDay\[\]/);
   assert.match(calendarView, /moodFor\(moods, entry\.moodId\)/);
   assert.match(calendarView, /className="calendar-mood-emoji"/);
@@ -113,7 +112,7 @@ test("mood and activity selections persist independently with optimistic pending
   assert.match(pageSource, /filter\(\(goal\) => !goal\.archived && goal\.activityId === linkedActivityId\)/);
   assert.match(pageSource, /for \(const goalKey of linkedGoalKeys\)/);
   assert.match(pageSource, /affectedGoalCompletions/);
-  assert.match(pageSource, /restoreGoalCompletionStates/);
+  assert.match(pageSource, /completedGoalIds: applyToggles\(draftRef\.current\.completedGoalIds, previousGoalStates\)/);
   assert.match(pageSource, /const failedSelectionRef = useRef<Set<string>>\(new Set\(\)\)/);
   assert.equal(
     pageSource.match(/failedSelectionRef\.current\.delete\(key\)/g)?.length,
@@ -135,7 +134,7 @@ test("mood and activity selections persist independently with optimistic pending
   assert.match(pageSource, /!hasOtherPendingSelection && !hasLocalDraftRef\.current/);
   assert.match(pageSource, /const hasFailedSelection = \[\.\.\.failedSelectionRef\.current\]\.some\(/);
   assert.match(pageSource, /if \(!hasFailedSelection\) \{[\s\S]*setConnectionState\("online"\);[\s\S]*setMessage\(null\);/);
-  assert.match(pageSource, /activityIds: applyActivitySelectionStates\(\{[\s\S]*activityIds: entry\.activityIds/);
+  assert.match(pageSource, /activityIds: applyToggles\(entry\.activityIds, selectionToggles\(affectedActivitySelections\)\)/);
 });
 
 test("visible log refreshes merge the selected day without replacing local work", () => {
@@ -146,8 +145,9 @@ test("visible log refreshes merge the selected day without replacing local work"
   assert.match(pageSource, /document\.addEventListener\("visibilitychange", refreshOnReturn\)/);
   const refreshStart = pageSource.indexOf("async function refreshSelectedDay");
   const refreshHandler = pageSource.slice(refreshStart, pageSource.indexOf("function openDatePicker", refreshStart));
-  assert.match(refreshHandler, /fetch\(`\/api\/entries\/\$\{logicalDate\}`/);
-  assert.match(refreshHandler, /response\.status !== 404/);
+  assert.match(refreshHandler, /fetchDayState\(\{ logicalDate, signal: request\.signal/);
+  assert.match(pageSource, /fetch\(`\/api\/entries\/\$\{logicalDate\}`, \{ cache: "no-store", signal \}\)/);
+  assert.match(pageSource, /if \(!response\.ok && response\.status !== 404\) throw new Error\(errorText\)/);
   assert.match(refreshHandler, /hasLocalDraftRef\.current/);
   assert.match(refreshHandler, /localMutationEpochRef\.current === mutationEpoch/);
   assert.match(refreshHandler, /if \(request\.signal\.aborted \|\| !isRelevant\(\)\) return/);

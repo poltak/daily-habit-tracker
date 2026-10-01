@@ -236,7 +236,7 @@ test("goal UI separates completion from detail navigation and exposes repeat con
   assert.match(pageSource, /Every day/);
   assert.match(pageSource, /api\/goals\/\$\{selectedGoalId\}\/history/);
   assert.match(pageSource, /asOf: logicalDateFromDate\(\)/);
-  assert.match(pageSource, /disabled=\{isSavingGoalConfig/);
+  assert.match(pageSource, /const navLocked = isSavingGoalConfig/);
   assert.match(pageSource, /activeGoalConfigSaveRef/);
   assert.match(pageSource, /Wait for the goal update to finish before leaving this goal/);
   assert.match(pageSource, /goal-day \$\{state/);

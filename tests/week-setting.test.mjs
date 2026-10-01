@@ -86,5 +86,6 @@ test("the week setting has a table, an API route, and a Setup control", async ()
   const pageSource = await read("../app/journal.tsx");
   assert.match(pageSource, /<InsightsView weekEndsOn=\{data\.settings\.weekEndsOn\} \/>/);
   assert.equal((pageSource.match(/weekEndsOn=\{data\.settings\.weekEndsOn\}/g) ?? []).length, 3, "insights, the calendar, and the goal page all receive it");
-  assert.equal((pageSource.match(/\(firstDay - weekStartsOn\(weekEndsOn\) \+ 7\) % 7/g) ?? []).length, 2, "both calendar grids start on the first day of the week");
+  assert.match(pageSource, /\(firstDay - weekStartsOn\(weekEndsOn\) \+ 7\) % 7/);
+  assert.equal((pageSource.match(/monthGrid\(\{ month: resolvedMonth, weekEndsOn \}\)/g) ?? []).length, 2, "both calendar grids start on the first day of the week");
 });
