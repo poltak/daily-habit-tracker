@@ -159,26 +159,21 @@ try {
     await page.getByRole("button", { name: "Saved", exact: true, disabled: true }).waitFor();
     const firstActivityGroup = page.locator(".activity-groups details").first();
     const addActivityButton = firstActivityGroup.getByRole("button", { name: /^Add new activity to / });
-    if (device === "desktop") {
-      await firstActivityGroup.locator("summary").hover();
-      const positions = await page.evaluate(() => {
-        const group = document.querySelector(".activity-groups details");
-        const title = group.querySelector(".group-title").getBoundingClientRect();
-        const button = group.querySelector(".add-activity-button");
-        const buttonRect = button.getBoundingClientRect();
-        const count = group.querySelector(".group-summary-meta > span").getBoundingClientRect();
-        return {
-          opacity: getComputedStyle(button).opacity,
-          titleRight: title.right,
-          buttonLeft: buttonRect.left,
-          buttonRight: buttonRect.right,
-          countLeft: count.left,
-        };
-      });
-      assert.equal(positions.opacity, "1");
-      assert.ok(positions.titleRight <= positions.buttonLeft, "The hover button must not cover the group name.");
-      assert.ok(positions.buttonRight <= positions.countLeft, "The hover button must sit before the activity count.");
-    }
+    await firstActivityGroup.locator("summary").hover();
+    assert.equal(await addActivityButton.isVisible(), false, "A collapsed group must not show the Add new button, even on hover.");
+    await firstActivityGroup.locator("summary").click();
+    await addActivityButton.waitFor();
+    const overlaps = await page.evaluate(() => {
+      const group = document.querySelector(".activity-groups details");
+      const button = group.querySelector(".add-activity-button").getBoundingClientRect();
+      const overlapsButton = (selector) => {
+        const rect = group.querySelector(selector).getBoundingClientRect();
+        return rect.left < button.right && button.left < rect.right && rect.top < button.bottom && button.top < rect.bottom;
+      };
+      return { title: overlapsButton(".group-title"), count: overlapsButton(".group-summary-meta > span") };
+    });
+    assert.equal(overlaps.title, false, "The Add new button must not cover the group name.");
+    assert.equal(overlaps.count, false, "The Add new button must not cover the activity count.");
     await assertFits(page);
     await addActivityButton.click();
     await page.getByPlaceholder("Activity name").fill("Test afternoon walk");

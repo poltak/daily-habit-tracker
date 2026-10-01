@@ -28,6 +28,14 @@ test("log and setup group headers share an isolated Add new action", () => {
   assert.match(stylesSource, /\.add-activity-button\s*\{/);
 });
 
+test("Add new shows only in expanded groups, with no hover reveal", () => {
+  assert.match(stylesSource, /details:not\(\[open\]\) > summary \.add-activity-button\s*\{\s*display:\s*none;\s*\}/);
+  const buttonRules = stylesSource.split("\n").filter((line) => line.includes(".add-activity-button"));
+  for (const rule of buttonRules) {
+    assert.doesNotMatch(rule, /details:hover|opacity|pointer-events/);
+  }
+});
+
 test("add activity form uses the icon picker and catalog activity contract", () => {
   const createView = pageSource.slice(pageSource.indexOf("function AddActivityView"));
   assert.match(createView, /<h1>Add new activity<\/h1>/);

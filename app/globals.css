@@ -608,8 +608,8 @@ body {
 .group-icon .material-symbols-rounded { font-size: 20px; }
 .group-summary-meta { margin-left: auto; gap: 13px; font-size: 13px; font-weight: 500; }
 .group-summary-meta > span { white-space: nowrap; }
-.add-activity-button { flex: 0 0 auto; width: 82px; opacity: 0; pointer-events: none; }
-.add-activity-button:focus-visible, .activity-groups details:hover .add-activity-button { opacity: 1; pointer-events: auto; background: var(--surface); box-shadow: 0 3px 12px color-mix(in srgb, var(--ink) 12%, transparent); }
+.add-activity-button { flex: 0 0 auto; }
+details:not([open]) > summary .add-activity-button { display: none; }
 .activity-groups details[open] { padding-bottom: 10px; }
 .activity-grid { padding: 0 10px; }
 .goal-list { gap: 8px; }

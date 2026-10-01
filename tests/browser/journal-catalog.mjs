@@ -50,7 +50,10 @@ try {
   await page.getByRole("status").filter({ hasText: "Reorder unavailable" }).waitFor();
   assert.deepEqual((await groupRows.allTextContents()).slice(0, 2), ["Work", "Health"]);
 
-  await page.getByRole("button", { name: "Add new activity to Health", exact: true }).click();
+  const addToHealth = page.getByRole("button", { name: "Add new activity to Health", exact: true });
+  assert.equal(await addToHealth.isVisible(), false, "A collapsed group must not show the Add new button.");
+  await page.locator(".management-groups summary").filter({ hasText: /^Health/ }).click();
+  await addToHealth.click();
   await page.getByPlaceholder("Activity name", { exact: true }).fill("Audit activity");
   await page.getByRole("button", { name: "Add activity", exact: true }).click();
   await page.getByRole("button", { name: "Retry refresh", exact: true }).waitFor();
