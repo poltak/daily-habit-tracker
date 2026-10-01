@@ -333,10 +333,15 @@ export class D1DaylioStore {
     if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
     if (typeof activityId !== "string" || !activityId.trim()) throw new Error("One activity is no longer available.");
     if (typeof selected !== "boolean") throw new Error("Activity selection must be a boolean.");
-    const activity = await this.database.prepare("SELECT id FROM activities WHERE id = ? LIMIT 1").bind(activityId).first<{ id: string }>();
-    if (!activity) throw new Error("One activity is no longer available.");
-    const linkedGoals = await rows<{ id: string }>(this.database, this.database.prepare("SELECT id FROM goals WHERE activity_id = ? AND archived_at IS NULL ORDER BY id").bind(activityId));
-    const entry = await this.database.prepare("SELECT id FROM entries WHERE logical_date = ? AND deleted_at IS NULL LIMIT 1").bind(logicalDate).first<{ id: string }>();
+    // One round trip for the three lookups the write depends on.
+    const [activityResult, goalResult, entryResult] = await this.database.batch<{ id: string }>([
+      this.database.prepare("SELECT id FROM activities WHERE id = ? LIMIT 1").bind(activityId),
+      this.database.prepare("SELECT id FROM goals WHERE activity_id = ? AND archived_at IS NULL ORDER BY id").bind(activityId),
+      this.database.prepare("SELECT id FROM entries WHERE logical_date = ? AND deleted_at IS NULL LIMIT 1").bind(logicalDate),
+    ]);
+    if (!activityResult.results[0]) throw new Error("One activity is no longer available.");
+    const linkedGoals = goalResult.results;
+    const entry = entryResult.results[0];
     const timestamp = new Date().toISOString();
     const statements = [this.database.prepare("INSERT INTO day_activity_selections (logical_date, activity_id, selected, created_at, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(logical_date, activity_id) DO UPDATE SET selected = excluded.selected, updated_at = excluded.updated_at").bind(logicalDate, activityId, selected ? 1 : 0, timestamp, timestamp)];
     for (const goal of linkedGoals) {
@@ -369,12 +374,16 @@ export class D1DaylioStore {
     if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
     if (typeof goalId !== "string" || !goalId.trim()) throw new Error("One goal is no longer available.");
     if (typeof completed !== "boolean") throw new Error("Goal completion must be a boolean.");
-    const goal = await this.database.prepare("SELECT id, activity_id FROM goals WHERE id = ? LIMIT 1").bind(goalId).first<{ id: string; activity_id: string | null }>();
+    // One round trip for the three lookups the write depends on.
+    const [goalResult, linkedResult, entryResult] = await this.database.batch<{ id: string; activity_id?: string | null }>([
+      this.database.prepare("SELECT id, activity_id FROM goals WHERE id = ? LIMIT 1").bind(goalId),
+      this.database.prepare("SELECT id FROM goals WHERE archived_at IS NULL AND activity_id = (SELECT activity_id FROM goals WHERE id = ?) ORDER BY id").bind(goalId),
+      this.database.prepare("SELECT id FROM entries WHERE logical_date = ? AND deleted_at IS NULL LIMIT 1").bind(logicalDate),
+    ]);
+    const goal = goalResult.results[0];
     if (!goal) throw new Error("One goal is no longer available.");
-    const linkedGoals = goal.activity_id
-      ? await rows<{ id: string }>(this.database, this.database.prepare("SELECT id FROM goals WHERE activity_id = ? AND archived_at IS NULL ORDER BY id").bind(goal.activity_id))
-      : [{ id: goal.id }];
-    const entry = await this.database.prepare("SELECT id FROM entries WHERE logical_date = ? AND deleted_at IS NULL LIMIT 1").bind(logicalDate).first<{ id: string }>();
+    const linkedGoals = goal.activity_id ? linkedResult.results : [{ id: goal.id }];
+    const entry = entryResult.results[0];
     const timestamp = new Date().toISOString();
     const statements = linkedGoals.map((linkedGoal) => completed
       ? this.database.prepare("INSERT INTO goal_completions (id, goal_id, logical_date, entry_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(goal_id, logical_date) DO UPDATE SET entry_id = excluded.entry_id, updated_at = excluded.updated_at").bind(`completion-${linkedGoal.id}-${logicalDate}`, linkedGoal.id, logicalDate, entry?.id ?? null, timestamp, timestamp)
@@ -420,8 +429,7 @@ export class D1DaylioStore {
   async saveEntry(logicalDate: string, input: unknown) {
     if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
     const validated = validateEntryInput(input);
-    await this.validateEntryReferences(validated);
-    const persisted = await this.getPersistedEntry(logicalDate);
+    const [persisted] = await Promise.all([this.getPersistedEntry(logicalDate), this.validateEntryReferences(validated)]);
     const existing = persisted && !persisted.deleted_at ? persisted : null;
     if (validated.expectedVersion !== undefined && (existing?.version ?? 0) !== validated.expectedVersion) throw versionConflict();
     const id = persisted?.id ?? `entry-${crypto.randomUUID()}`;

@@ -38,13 +38,44 @@ test("memory store keeps linked goal and activity state coupled", () => {
 test("archived linked goals stay out of coupled toggles", () => {
   assert.match(daylioSource, /filter\(\(goal\) => !goal\.archived && goal\.activityId === activityId\)/);
   assert.match(daylioSource, /filter\(\(candidate\) => !candidate\.archived && candidate\.activityId === goal\.activityId\)/);
-  assert.equal(
-    serverStoreSource.match(/SELECT id FROM goals WHERE activity_id = \? AND archived_at IS NULL ORDER BY id/g)?.length,
-    2,
-  );
+  assert.match(serverStoreSource, /SELECT id FROM goals WHERE activity_id = \? AND archived_at IS NULL ORDER BY id/);
+  assert.match(serverStoreSource, /SELECT id FROM goals WHERE archived_at IS NULL AND activity_id = \(SELECT activity_id FROM goals WHERE id = \?\) ORDER BY id/);
   assert.match(pageSource, /filter\(\(goal\) => !goal\.archived && goal\.activityId === id\)/);
   assert.match(pageSource, /filter\(\(goal\) => !goal\.archived && goal\.activityId === linkedActivityId\)/);
 });
+
+for (const kind of ["memory", "D1"]) {
+  test(`${kind} toggles skip archived linked goals and reject unknown items`, async (t) => {
+    const { DaylioMemoryStore } = await import("../lib/memory-store.ts");
+    const { D1DaylioStore } = await import("../lib/server-store.ts");
+    const { createTestDatabase } = await import("./helpers/d1-database.mjs");
+    const database = kind === "D1" ? createTestDatabase() : null;
+    if (database) t.after(() => database.sqlite.close());
+    const store = database ? new D1DaylioStore(database) : new DaylioMemoryStore();
+    const archivedGoal = await store.createGoal({ name: "Lift", activityId: "activity-gym", startDate: "2026-01-01" });
+    await store.updateGoal(archivedGoal.id, { archived: true });
+    const soloGoal = await store.createGoal({ name: "Solo", activityId: null, startDate: "2026-01-01" });
+    if (database) database.batches.length = 0;
+
+    const byActivity = await store.setActivitySelection("2026-01-02", "activity-gym", true);
+    assert.deepEqual(byActivity.affectedGoalCompletions.map((completion) => completion.goalId), ["goal-move"]);
+    // One batch of three lookups, then one batch with the selection and the completion.
+    if (database) assert.deepEqual(database.batches, [3, 2]);
+
+    const byGoal = await store.setGoalCompletion("2026-01-03", "goal-move", true);
+    assert.deepEqual(byGoal.affectedGoalCompletions.map((completion) => completion.goalId), ["goal-move"]);
+    assert.deepEqual(byGoal.affectedActivitySelections, [{ logicalDate: "2026-01-03", activityId: "activity-gym", selected: true }]);
+    if (database) assert.deepEqual(database.batches.slice(2), [3, 2]);
+
+    const bySoloGoal = await store.setGoalCompletion("2026-01-03", soloGoal.id, true);
+    assert.deepEqual(bySoloGoal.affectedGoalCompletions.map((completion) => completion.goalId), [soloGoal.id]);
+    assert.equal(bySoloGoal.selection, undefined);
+    assert.deepEqual((await store.getGoalCompletionIds("2026-01-03")).sort(), ["goal-move", soloGoal.id].sort());
+
+    await assert.rejects(async () => store.setGoalCompletion("2026-01-03", "goal-missing", true), /no longer available/);
+    await assert.rejects(async () => store.setActivitySelection("2026-01-03", "activity-missing", true), /no longer available/);
+  });
+}
 
 test("the placeholder cleanup migration only unlinks identified imported goal activities", () => {
   assert.match(placeholderMigration, /UPDATE `goals`[\s\S]*SET `activity_id` = NULL/);
