@@ -28,7 +28,6 @@ test("the app brand mark uses the canonical vector asset", async () => {
   assert.match(icon, /#E78363/);
   assert.match(icon, /#FFFFFF/);
   assert.match(styles, /\.brand-mark \{[^}]*width: 34px;[^}]*height: 34px;[^}]*box-shadow: var\(--accent-shadow\);/s);
-  assert.match(styles, /\.brand-mark \{ width: 30px; height: 30px; \}/);
 });
 
 function readPng(buffer) {

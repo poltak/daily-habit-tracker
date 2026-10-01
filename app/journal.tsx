@@ -40,6 +40,7 @@ import {
 } from "../lib/activity-groups";
 import { createLatestRequestGate } from "../lib/latest-request-gate";
 import { Icon } from "./components/icon";
+import { MoodFace } from "./components/mood-face";
 import { IconPicker, SetupView } from "./components/setup-view";
 import { useJournalTheme } from "./components/theme-control";
 import { InsightsView } from "./components/insights-view";
@@ -128,6 +129,11 @@ function friendlyDate(value: string) {
     day: "numeric",
     year: "numeric",
   }).format(new Date(year, month - 1, day));
+}
+
+function longDate(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Intl.DateTimeFormat("en", { month: "long", day: "numeric" }).format(new Date(year, month - 1, day));
 }
 
 function shortDate(value: string) {
@@ -1599,8 +1605,11 @@ export default function Journal() {
   // Leaving the current view is blocked while it has an update in flight.
   const navLocked = isSavingGoalConfig || isActivityCreateBusy || (isSetupBusy && view === "settings");
 
+  // The sky behind the header takes the colour of the selected day's mood.
+  const dayColor = view === "log" ? data?.moods.find((mood) => mood.id === draft.moodId)?.color : undefined;
+
   return (
-    <div className={`app-shell view-${view}`}>
+    <div className={`app-shell view-${view}`} style={dayColor ? ({ "--day-color": dayColor } as React.CSSProperties) : undefined}>
       <a className="skip-link" href="#journal-content">Skip to content</a>
       <header className="topbar">
         <button
@@ -1886,7 +1895,7 @@ function LogView({
         <section className="hero-card">
           <div>
             <p className="eyebrow">Your daily check-in</p>
-            <h1>How was your day?</h1>
+            <h1>{selectedDate === data.today ? "How was your day?" : selectedDate === data.yesterday ? "How was yesterday?" : `How was ${longDate(selectedDate)}?`}</h1>
             <p className="muted">
               Take a breath. Unclench.
             </p>
@@ -1940,7 +1949,7 @@ function LogView({
                 disabled={isLoadingDate || !isDateReady || pendingSelectionKeys.has(`${selectedDate}:mood:`)}
                 onClick={() => onMood(mood.id)}
               >
-                <span className="mood-emoji">{mood.emoji}</span>
+                <MoodFace className="mood-emoji" score={mood.score} color={mood.color} />
                 <span>{mood.name}</span>
               </button>
             ))}
@@ -2001,7 +2010,7 @@ function LogView({
         <div>
           <strong>{existing ? "Your entry is saved" : "Ready to save your day?"}</strong>
           <span>
-            {friendlyDate(selectedDate)} · {draft.activityIds.length} activities
+            {friendlyDate(selectedDate)} · {draft.activityIds.length} {draft.activityIds.length === 1 ? "activity" : "activities"}
           </span>
         </div>
         <div className="save-actions">
@@ -2570,7 +2579,7 @@ function CalendarView({
                 aria-label={`${friendlyDate(date)}${mood ? `, ${mood.name} mood, entry exists` : entry ? ", entry exists" : ", empty"}`}
               >
                 <span>{Number(date.slice(-2))}</span>
-                {mood && <span className="calendar-mood-emoji" aria-hidden="true">{mood.emoji}</span>}
+                {mood && <MoodFace className="calendar-mood-emoji" score={mood.score} color={mood.color} />}
               </button>
             );
           })}
