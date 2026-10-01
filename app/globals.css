@@ -548,10 +548,10 @@ body {
   background: color-mix(in srgb, var(--paper) 84%, transparent);
 }
 .topbar-date { font-size: 15px; font-weight: 650; color: var(--ink); }
-.topbar-date-switcher { display: inline-flex; align-items: center; gap: 20px; }
+.topbar-date-switcher { display: inline-flex; align-items: center; gap: 20px; touch-action: pan-y; -webkit-user-select: none; user-select: none; }
 .topbar-date-switcher button { width: 32px; height: 32px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 9px; color: var(--ink); background: transparent; }
 .topbar-date-switcher button:hover { background: var(--surface-muted); }
-.topbar-date-label { white-space: nowrap; }
+.topbar-date-label { white-space: nowrap; transition: transform .12s ease-out; }
 .connection-pill.online { display: none; }
 .topbar-actions { position: relative; display: inline-flex; min-height: 42px; border: 1px solid var(--line); border-radius: 11px; overflow: hidden; background: color-mix(in srgb, var(--card) 80%, transparent); }
 .topbar-actions button, .topbar-calendar { min-width: 78px; border: 0; background: transparent; color: var(--ink); display: grid; place-items: center; padding: 0 16px; font-weight: 650; }

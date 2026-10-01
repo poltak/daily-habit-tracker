@@ -29,6 +29,7 @@ import {
   writeStoredDraft,
 } from "../lib/draft-storage";
 import { draftFromDayRefreshState } from "../lib/day-refresh";
+import { dayOffsetFromSwipe } from "../lib/day-swipe";
 import { UI_ICONS } from "../lib/icons";
 import {
   filterActivityGroups,
@@ -293,6 +294,8 @@ function restoreGoalCompletionStates({
 export default function Journal() {
   const { preference: themePreference, updatePreference: updateThemePreference } = useJournalTheme();
   const dateInputRef = useRef<HTMLInputElement>(null);
+  const dateLabelRef = useRef<HTMLSpanElement>(null);
+  const dateSwipeStartRef = useRef<{ x: number; y: number } | null>(null);
   const [data, setData] = useState<Bootstrap | null>(null);
   const [view, setView] = useState<View>("log");
   const [selectedDate, setSelectedDate] = useState("");
@@ -763,6 +766,30 @@ export default function Journal() {
       if (!request.signal.aborted) gate.cancel();
     };
   }, [goalHistoryMonth, goalHistoryRevision, selectedGoalId, view]);
+
+  function beginDateSwipe(event: React.TouchEvent) {
+    const touch = event.touches.length === 1 ? event.touches[0] : null;
+    dateSwipeStartRef.current = touch ? { x: touch.clientX, y: touch.clientY } : null;
+  }
+
+  // The label follows the finger a short way so the swipe has visible feedback.
+  function trackDateSwipe(event: React.TouchEvent) {
+    const start = dateSwipeStartRef.current;
+    const touch = event.touches[0];
+    if (!start || !touch || !dateLabelRef.current) return;
+    const pull = Math.max(-28, Math.min(28, (touch.clientX - start.x) / 3));
+    dateLabelRef.current.style.transform = `translateX(${pull}px)`;
+  }
+
+  function endDateSwipe(event: React.TouchEvent | null) {
+    const start = dateSwipeStartRef.current;
+    dateSwipeStartRef.current = null;
+    if (dateLabelRef.current) dateLabelRef.current.style.transform = "";
+    const touch = event?.changedTouches[0];
+    if (!start || !touch || isLoadingDate || !selectedDate) return;
+    const offset = dayOffsetFromSwipe({ deltaX: touch.clientX - start.x, deltaY: touch.clientY - start.y });
+    if (offset !== 0) void chooseDate(addDays(selectedDate, offset));
+  }
 
   async function chooseDate(nextDate: string) {
     if (!isLogicalDate(nextDate)) return;
@@ -1676,9 +1703,9 @@ export default function Journal() {
         </button>
         <div className={`topbar-date ${view === "log" ? "is-log" : ""}`}>
           {view === "log" && selectedDate && data ? (
-            <div className="topbar-date-switcher" aria-label="Choose the journal day" aria-live="polite">
+            <div className="topbar-date-switcher" aria-label="Choose the journal day" aria-live="polite" onTouchStart={beginDateSwipe} onTouchMove={trackDateSwipe} onTouchEnd={endDateSwipe} onTouchCancel={() => endDateSwipe(null)}>
               <button aria-label="Previous day" disabled={isLoadingDate} onClick={() => void chooseDate(addDays(selectedDate, -1))}><Icon name="chevron_left" /></button>
-              <span className="topbar-date-label">{friendlyDate(selectedDate)}</span>
+              <span className="topbar-date-label" ref={dateLabelRef}>{friendlyDate(selectedDate)}</span>
               <button aria-label="Next day" disabled={isLoadingDate} onClick={() => void chooseDate(addDays(selectedDate, 1))}><Icon name="chevron_right" /></button>
             </div>
           ) : view === "log"
