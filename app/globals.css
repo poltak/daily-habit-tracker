@@ -57,7 +57,7 @@
   --surface-info: #e7eef8;
   --ink: #221e2f;
   --ink-inverse: #fffdf9;
-  --muted: #6a6474;
+  --muted: #5f596a;
   --line: #e9e1d4;
   --line-strong: #dcd2c2;
 
@@ -67,6 +67,7 @@
   --brand: #e78363;
   --brand-strong: #d9643f;
   --brand-ink: #3d180b;
+  --brand-text: #9c3c20;
   --mint: #d6ebdf;
   --positive: #2c6a55;
   --positive-strong: #1f5643;
@@ -93,6 +94,7 @@
   --sky-a: #f6d5c3;
   --sky-b: #f3cfdd;
   --sky-c: #dcd6f3;
+  --sky-tint: 34%;
   --sky-stars: 0;
 
   /* Chart series, checked for colour-blind separation and contrast on the card surface. */
@@ -132,6 +134,7 @@
   --brand: #f0936f;
   --brand-strong: #f5a789;
   --brand-ink: #3a170b;
+  --brand-text: #f0936f;
   --mint: #224436;
   --positive: #8fd8b6;
   --positive-strong: #a9e4c7;
@@ -155,6 +158,7 @@
   --sky-a: #3a2a55;
   --sky-b: #1f2a55;
   --sky-c: #44254a;
+  --sky-tint: 46%;
   --sky-stars: 1;
 }
 
@@ -206,8 +210,7 @@ button:disabled { cursor: wait; opacity: .6; }
 
 .muted { color: var(--muted); line-height: 1.55; margin: 0; }
 .small-copy { font-size: 12.5px; }
-.eyebrow { margin: 0; color: var(--brand-strong); font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
-:root[data-theme="dark"] .eyebrow { color: var(--brand); }
+.eyebrow { margin: 0; color: var(--brand-text); font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
 .skip-link { position: fixed; top: 8px; left: 16px; z-index: 50; transform: translateY(-160%); padding: 12px 18px; background: var(--ink); color: var(--ink-inverse); border-radius: 12px; }
 .skip-link:focus { transform: translateY(0); }
 
@@ -238,7 +241,7 @@ button:disabled { cursor: wait; opacity: .6; }
     radial-gradient(1px 1px at 83% 8%, rgba(255, 255, 255, calc(.9 * var(--sky-stars))), transparent 60%),
     radial-gradient(1px 1px at 92% 34%, rgba(255, 255, 255, calc(.6 * var(--sky-stars))), transparent 60%),
     radial-gradient(1px 1px at 36% 44%, rgba(255, 255, 255, calc(.5 * var(--sky-stars))), transparent 60%),
-    radial-gradient(70% 90% at 8% -10%, color-mix(in srgb, var(--day-color) 46%, transparent), transparent 70%),
+    radial-gradient(70% 90% at 8% -10%, color-mix(in srgb, var(--day-color) var(--sky-tint), transparent), transparent 70%),
     radial-gradient(60% 80% at 96% -6%, var(--sky-b), transparent 68%),
     radial-gradient(70% 70% at 55% 4%, var(--sky-c), transparent 72%),
     linear-gradient(var(--sky-a), var(--sky-a));
