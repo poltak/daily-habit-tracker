@@ -84,6 +84,45 @@ activity overrides, excludes deleted entries, and uses the same API access
 protection as the rest of the journal. The patterns describe associations, not
 causes.
 
+## MCP server for agents
+
+The Worker serves a Model Context Protocol endpoint at `/api/mcp`, so an AI
+agent can read the journal's history and add entries. It is a stateless
+Streamable HTTP server: each `POST` carries one JSON-RPC message and gets a JSON
+reply. It uses the same D1 database and the same access check as the rest of
+`/api`.
+
+| Tool | What it does |
+| --- | --- |
+| `get_overview` | The moods and their scores, activities by group, goals and schedules, the week setting, and the first day, last day and count of recorded days. Agents call this first. |
+| `get_days` | Each recorded day in a date range: date, weekday, mood, score, activities and completed goals. At most 366 days per call. |
+| `summarize_mood` | Recorded days, mean mood, share of good days and the mood distribution, for any span, grouped by month, year, week or weekday. |
+| `summarize_activities` | For each activity: days recorded, mean mood with and without it, and the difference. Uses the same calculation as the Insights screen. |
+| `get_goal_history` | One goal's completed dates and weekly results in a date range. |
+| `save_day` | Adds the entry for one day. It refuses to overwrite an existing day unless `replace_existing` is true. |
+
+Reads return names, not IDs, to keep responses small. Two activities with the
+same name are told apart by their group, for example `Walk (Health)`. `save_day`
+accepts names or IDs, and it keeps goals and activities coupled the way the Log
+screen does: listing an activity completes the goals linked to it.
+
+Connect Claude Code to a local dev server, which needs no authentication:
+
+```bash
+claude mcp add --transport http daymark http://localhost:3000/api/mcp
+```
+
+In production the endpoint sits behind Cloudflare Access like every `/api`
+route. Fetch an Access token for your own identity with `cloudflared` and send
+it in the `cf-access-token` header:
+
+```bash
+claude mcp add --transport http daymark https://<your-host>/api/mcp \
+  --header "cf-access-token: $(cloudflared access token -app=https://<your-host>)"
+```
+
+The token expires with your Access session. Run the command again to renew it.
+
 ## Cloudflare deployment
 
 `wrangler.jsonc` declares the D1 binding and migrations. The GitHub workflow
