@@ -16,6 +16,7 @@ import {
   type RelationshipDayFilter,
   type RelationshipMoodSummary,
 } from "../../lib/insights-relationships.ts";
+import { MoodFace } from "./mood-face";
 import "./insights-relationships.css";
 
 type RelationshipInsightsProps = {
@@ -119,7 +120,7 @@ function MoodDistribution({
                 <title>{`${mood.name}: ${count} (${Math.round(percentage)}%)`}</title>
               </rect>
               {count > 0 ? <text x={x + barWidth / 2} y={Math.max(8, y - 4)} textAnchor="middle" className="insight-rel-chart-count">{count}</text> : null}
-              <text x={x + barWidth / 2} y={chartBottom + 17} textAnchor="middle" className="insight-rel-chart-label">{mood.emoji}</text>
+              <MoodFace score={mood.score} color={mood.color} x={x + barWidth / 2 - 7} y={chartBottom + 6} width={14} height={14} />
             </g>
           );
         })}
