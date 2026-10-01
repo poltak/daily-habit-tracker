@@ -419,7 +419,6 @@ export default function Journal() {
   }
 
   function writeRoute(route: Route, { replace = false }: { replace?: boolean } = {}) {
-    if (typeof window === "undefined") return;
     const depth = replace ? routeDepthRef.current : routeDepthRef.current + 1;
     const state = { ...(window.history.state ?? {}), [HISTORY_STATE_KEY]: true, daymarkView: route.view, daymarkGoalId: route.goalId ?? null, daymarkDepth: depth };
     if (replace) window.history.replaceState(state, "", routeUrl(route));
@@ -528,7 +527,6 @@ export default function Journal() {
   }
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
     const initialRoute = routeFromLocation(window.location);
     const initialState = window.history.state as { [HISTORY_STATE_KEY]?: boolean; daymarkDepth?: number } | null;
     routeDepthRef.current = initialState?.[HISTORY_STATE_KEY] && Number.isInteger(initialState.daymarkDepth) ? initialState.daymarkDepth! : 0;
@@ -706,16 +704,11 @@ export default function Journal() {
       .then(async (response) => {
         if (!response) return null;
         if (!response.ok) throw new Error("Could not load that month.");
-        return (await response.json()) as {
-          days?: CalendarEntryDay[];
-          dates?: string[];
-        };
+        return (await response.json()) as { days: CalendarEntryDay[] };
       })
       .then((result) => {
         if (result && !cancelled) {
-          setCalendarDays(
-            result.days ?? (result.dates ?? []).map((logicalDate) => ({ logicalDate, moodId: "" })),
-          );
+          setCalendarDays(result.days);
           setConnectionState("online");
           setMessage(null);
         }
@@ -1827,7 +1820,7 @@ export default function Journal() {
             iconPickerOpen={goalIconPickerOpen}
             onBack={closeGoal}
             onMonth={setGoalHistoryMonth}
-            onConfig={(next) => setGoalConfigDraft(next)}
+            onConfig={setGoalConfigDraft}
             onSaveConfig={() => void saveGoalConfig()}
             onOpenIconPicker={() => setGoalIconPickerOpen(true)}
             onCloseIconPicker={() => setGoalIconPickerOpen(false)}
@@ -2436,7 +2429,7 @@ function GoalRow({
   onOpen: () => void;
 }) {
   const detail = goalRepeatType(goal) === "weekly"
-    ? `${goal.targetPerWeek ?? 1} ${goal.targetPerWeek === 7 ? "days" : goal.targetPerWeek === 1 ? "day" : "days"} this week`
+    ? `${goal.targetPerWeek ?? 1} ${(goal.targetPerWeek ?? 1) === 1 ? "day" : "days"} this week`
     : goalWeekdayMask(goal) === ALL_WEEKDAYS_MASK
       ? "Every day"
       : "Selected weekdays";
@@ -2447,7 +2440,7 @@ function GoalRow({
         className="goal-checkbox"
         onClick={onToggle}
         disabled={unavailable}
-        aria-label={`${checked ? "Mark" : "Mark"} ${goal.name} ${checked ? "not completed" : "completed"}`}
+        aria-label={`Mark ${goal.name} ${checked ? "not completed" : "completed"}`}
         aria-pressed={checked}
         aria-busy={pending}
       >

@@ -291,8 +291,6 @@ export function compareActivityCalendarDays({
   };
 }
 
-/** Alias with a shorter name for consumers that already use "window" terminology. */
-export const compareActivityWindow = compareActivityCalendarDays;
 
 function pairKey(activityAId: string, activityBId: string) {
   return [activityAId, activityBId].sort().join("::");
@@ -439,5 +437,3 @@ export function rankActivityPairs({
   return { comparisons: ranked, suggestions };
 }
 
-/** Alias for call sites that prefer an imperative "build" name. */
-export const buildActivityPairComparisons = rankActivityPairs;

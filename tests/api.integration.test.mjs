@@ -353,7 +353,7 @@ test("Wrangler-backed API covers persistence, catalog, calendar, pagination, imp
   assert.equal("goals" in insights.body, false);
   assert.ok(insights.body.days.every((day) => !Object.hasOwn(day, "legacyNote")));
   const calendar = await json("/api/calendar?month=2026-02");
-  assert.deepEqual(calendar.body.dates, ["2026-02-02", "2026-02-03"]);
+  assert.deepEqual(Object.keys(calendar.body), ["days"]);
   assert.deepEqual(calendar.body.days, [
     { logicalDate: "2026-02-02", moodId: "mood-meh" },
     { logicalDate: "2026-02-03", moodId: "mood-good" },

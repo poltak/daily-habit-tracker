@@ -52,8 +52,6 @@ type MoodRow = { id: string; name: string; score: number; emoji: string; color: 
 type GroupRow = { id: string; name: string; sort_order: number; archived_at: string | null };
 type ActivityRow = { id: string; group_id: string; name: string; material_icon: string; source_icon_id: string | null; sort_order: number; archived_at: string | null };
 type GoalRow = { id: string; activity_id: string | null; name: string; material_icon: string | null; repeat_type: GoalRepeatType | null; schedule_type: Goal["scheduleType"]; target_per_week: number | null; weekdays_mask: number | null; start_date: string | null; end_date: string | null; sort_order: number; archived_at: string | null; reminder_enabled: number; reminder_time: string | null; source_state: number | null };
-type GoalCompletionRow = { id: string; goal_id: string; logical_date: string; entry_id: string | null; created_at: string; updated_at: string };
-type DayMoodSelectionRow = { logical_date: string; mood_id: string; created_at: string; updated_at: string };
 type DayActivitySelectionRow = { logical_date: string; activity_id: string; selected: number; created_at: string; updated_at: string };
 
 // Journal data is only ever stored in D1. Without the binding, fail every request
@@ -96,24 +94,29 @@ export async function seedDatabase(database: Database) {
   ]);
 }
 
-async function rows<T>(database: Database, statement: D1PreparedStatement) {
+// Column lists matching GoalRow, ActivityRow and GroupRow.
+const GOAL_COLUMNS = "id, activity_id, name, material_icon, repeat_type, schedule_type, target_per_week, weekdays_mask, start_date, end_date, sort_order, archived_at, reminder_enabled, reminder_time, source_state";
+const ACTIVITY_COLUMNS = "id, group_id, name, material_icon, source_icon_id, sort_order, archived_at";
+const GROUP_COLUMNS = "id, name, sort_order, archived_at";
+
+async function rows<T>(statement: D1PreparedStatement) {
   const result = await statement.all<T>();
   return result.results ?? [];
 }
 
-function toMood(row: { id: string; name: string; score: number; emoji: string; color: string }): Mood {
+function toMood(row: MoodRow): Mood {
   return { id: row.id, name: row.name, score: row.score, emoji: row.emoji, color: row.color };
 }
 
-function toGroup(row: { id: string; name: string; sort_order: number; archived_at: string | null }): ActivityGroup {
+function toGroup(row: GroupRow): ActivityGroup {
   return { id: row.id, name: row.name, sortOrder: row.sort_order, archived: Boolean(row.archived_at) };
 }
 
-function toActivity(row: { id: string; group_id: string; name: string; material_icon: string; source_icon_id: string | null; sort_order: number; archived_at: string | null }): Activity {
+function toActivity(row: ActivityRow): Activity {
   return { id: row.id, groupId: row.group_id, name: row.name, icon: iconForActivity(row.name, row.material_icon !== "✨" ? row.material_icon : row.source_icon_id ?? undefined), sourceIconId: row.source_icon_id ?? undefined, sortOrder: row.sort_order, archived: Boolean(row.archived_at) };
 }
 
-function toGoal(row: { id: string; activity_id: string | null; name: string; material_icon?: string | null; repeat_type?: GoalRepeatType | null; schedule_type: Goal["scheduleType"]; target_per_week: number | null; weekdays_mask: number | null; start_date?: string | null; end_date?: string | null; sort_order: number; archived_at: string | null; reminder_enabled: number; reminder_time: string | null; source_state: number | null }): Goal {
+function toGoal(row: GoalRow): Goal {
   const repeatType = row.repeat_type === "weekly" || row.schedule_type === "times_per_week" ? "weekly" : "daily";
   return { id: row.id, activityId: row.activity_id, name: row.name, materialIcon: isGoalIcon(row.material_icon) ? row.material_icon : "task_alt", repeatType, scheduleType: row.schedule_type, targetPerWeek: row.target_per_week ?? undefined, weekdaysMask: row.weekdays_mask ?? undefined, startDate: row.start_date ?? undefined, endDate: row.end_date ?? undefined, sortOrder: row.sort_order, archived: Boolean(row.archived_at), reminderEnabled: Boolean(row.reminder_enabled), reminderTime: row.reminder_time ?? undefined, sourceState: row.source_state ?? undefined };
 }
@@ -134,10 +137,10 @@ export class D1DaylioStore {
 
   async bootstrap(): Promise<Bootstrap> {
     const [moodRows, groupRows, activityRows, goalRows, settings] = await Promise.all([
-      rows<MoodRow>(this.database, this.database.prepare("SELECT id, name, score, emoji, color FROM mood_levels ORDER BY score DESC")),
-      rows<GroupRow>(this.database, this.database.prepare("SELECT id, name, sort_order, archived_at FROM activity_groups ORDER BY sort_order")),
-      rows<ActivityRow>(this.database, this.database.prepare("SELECT id, group_id, name, material_icon, source_icon_id, sort_order, archived_at FROM activities ORDER BY sort_order")),
-      rows<GoalRow>(this.database, this.database.prepare("SELECT id, activity_id, name, material_icon, repeat_type, schedule_type, target_per_week, weekdays_mask, start_date, end_date, sort_order, archived_at, reminder_enabled, reminder_time, source_state FROM goals ORDER BY sort_order")),
+      rows<MoodRow>(this.database.prepare("SELECT id, name, score, emoji, color FROM mood_levels ORDER BY score DESC")),
+      rows<GroupRow>(this.database.prepare(`SELECT ${GROUP_COLUMNS} FROM activity_groups ORDER BY sort_order`)),
+      rows<ActivityRow>(this.database.prepare(`SELECT ${ACTIVITY_COLUMNS} FROM activities ORDER BY sort_order`)),
+      rows<GoalRow>(this.database.prepare(`SELECT ${GOAL_COLUMNS} FROM goals ORDER BY sort_order`)),
       this.getSettings(),
     ]);
     const today = new Date();
@@ -192,8 +195,8 @@ export class D1DaylioStore {
   async getInsightsData(): Promise<InsightsData> {
     const [moodResult, groupResult, activityResult, entryResult, linkResult, activitySelectionResult] = await this.database.batch([
       this.database.prepare("SELECT id, name, score, emoji, color FROM mood_levels ORDER BY score DESC"),
-      this.database.prepare("SELECT id, name, sort_order, archived_at FROM activity_groups ORDER BY sort_order"),
-      this.database.prepare("SELECT id, group_id, name, material_icon, source_icon_id, sort_order, archived_at FROM activities ORDER BY sort_order"),
+      this.database.prepare(`SELECT ${GROUP_COLUMNS} FROM activity_groups ORDER BY sort_order`),
+      this.database.prepare(`SELECT ${ACTIVITY_COLUMNS} FROM activities ORDER BY sort_order`),
       this.database.prepare(`
         SELECT entries.id, entries.logical_date, COALESCE(day_mood_selections.mood_id, entries.mood_id) AS effective_mood_id
         FROM entries
@@ -249,13 +252,8 @@ export class D1DaylioStore {
     };
   }
 
-  async listEntryDates(startDate: string, endDate: string) {
-    const results = await this.listEntryDays(startDate, endDate);
-    return results.map((day) => day.logicalDate);
-  }
-
   async listEntryDays(startDate: string, endDate: string): Promise<CalendarEntryDay[]> {
-    const results = await rows<{ logical_date: string; mood_id: string }>(this.database, this.database.prepare("SELECT entries.logical_date, COALESCE(day_mood_selections.mood_id, entries.mood_id) AS mood_id FROM entries LEFT JOIN day_mood_selections ON day_mood_selections.logical_date = entries.logical_date WHERE entries.deleted_at IS NULL AND entries.logical_date BETWEEN ? AND ? ORDER BY entries.logical_date").bind(startDate, endDate));
+    const results = await rows<{ logical_date: string; mood_id: string }>(this.database.prepare("SELECT entries.logical_date, COALESCE(day_mood_selections.mood_id, entries.mood_id) AS mood_id FROM entries LEFT JOIN day_mood_selections ON day_mood_selections.logical_date = entries.logical_date WHERE entries.deleted_at IS NULL AND entries.logical_date BETWEEN ? AND ? ORDER BY entries.logical_date").bind(startDate, endDate));
     return results.map((row) => ({ logicalDate: row.logical_date, moodId: row.mood_id }));
   }
 
@@ -296,27 +294,7 @@ export class D1DaylioStore {
   }
 
   async getDaySelections(logicalDate: string): Promise<DaySelections> {
-    if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
-    const entry = await this.database.prepare("SELECT id, mood_id FROM entries WHERE logical_date = ? AND deleted_at IS NULL LIMIT 1").bind(logicalDate).first<{ id: string; mood_id: string }>();
-    const [moodSelection, activitySelections] = await Promise.all([
-      this.database.prepare("SELECT logical_date, mood_id, created_at, updated_at FROM day_mood_selections WHERE logical_date = ? LIMIT 1").bind(logicalDate).first<DayMoodSelectionRow>(),
-      rows<DayActivitySelectionRow>(this.database, this.database.prepare("SELECT logical_date, activity_id, selected, created_at, updated_at FROM day_activity_selections WHERE logical_date = ? ORDER BY activity_id").bind(logicalDate)),
-    ]);
-    const baseActivityRows = entry
-      ? await rows<{ activity_id: string }>(this.database, this.database.prepare("SELECT activity_id FROM entry_activities WHERE entry_id = ?").bind(entry.id))
-      : [];
-    const activityIds = new Set(baseActivityRows.map((row) => row.activity_id));
-    for (const selection of activitySelections) {
-      if (selection.selected) activityIds.add(selection.activity_id);
-      else activityIds.delete(selection.activity_id);
-    }
-    return {
-      logicalDate,
-      moodId: moodSelection?.mood_id ?? entry?.mood_id ?? null,
-      activityIds: [...activityIds],
-      moodOverride: Boolean(moodSelection),
-      activityOverrideIds: activitySelections.map((selection) => selection.activity_id),
-    };
+    return (await this.getEntryState(logicalDate)).daySelections;
   }
 
   async setMoodSelection(logicalDate: string, moodId: string): Promise<DayMoodSelection> {
@@ -360,14 +338,8 @@ export class D1DaylioStore {
     };
   }
 
-  private async getGoalCompletionRows(logicalDate: string) {
-    return rows<GoalCompletionRow>(this.database, this.database.prepare("SELECT id, goal_id, logical_date, entry_id, created_at, updated_at FROM goal_completions WHERE logical_date = ? ORDER BY goal_id").bind(logicalDate));
-  }
-
   async getGoalCompletionIds(logicalDate: string) {
-    if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
-    const completions = await this.getGoalCompletionRows(logicalDate);
-    return completions.map((completion) => completion.goal_id);
+    return (await this.getEntryState(logicalDate)).completedGoalIds;
   }
 
   async setGoalCompletion(logicalDate: string, goalId: string, completed: boolean): Promise<SelectionMutationResult> {
@@ -400,7 +372,7 @@ export class D1DaylioStore {
   }
 
   private async getPersistedEntry(logicalDate: string) {
-    const result = await rows<EntryRow>(this.database, this.database.prepare("SELECT * FROM entries WHERE logical_date = ? LIMIT 1").bind(logicalDate));
+    const result = await rows<EntryRow>(this.database.prepare("SELECT * FROM entries WHERE logical_date = ? LIMIT 1").bind(logicalDate));
     return result[0] ?? null;
   }
 
@@ -485,16 +457,16 @@ export class D1DaylioStore {
   async createGroup(name: string) {
     validateCatalogPatch({ kind: "group", patch: { name } });
     const clean = name.trim(); if (!clean) throw new Error("Group name is required.");
-    const result = await this.database.prepare("INSERT INTO activity_groups (id, name, sort_order) VALUES (?, ?, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM activity_groups)) RETURNING id, name, sort_order, archived_at").bind(`group-${crypto.randomUUID()}`, clean).first<{ id: string; name: string; sort_order: number; archived_at: string | null }>();
+    const result = await this.database.prepare(`INSERT INTO activity_groups (id, name, sort_order) VALUES (?, ?, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM activity_groups)) RETURNING ${GROUP_COLUMNS}`).bind(`group-${crypto.randomUUID()}`, clean).first<GroupRow>();
     if (!result) throw new Error("Could not create the group.");
     return toGroup(result);
   }
 
   async updateGroup(id: string, input: unknown) {
     const patch = validateCatalogPatch({ kind: "group", patch: input });
-    const current = await this.database.prepare("SELECT id, name, sort_order, archived_at FROM activity_groups WHERE id = ?").bind(id).first<{ id: string; name: string; sort_order: number; archived_at: string | null }>();
+    const current = await this.database.prepare(`SELECT ${GROUP_COLUMNS} FROM activity_groups WHERE id = ?`).bind(id).first<GroupRow>();
     if (!current) throw new Error("Group not found.");
-    const result = await this.database.prepare("UPDATE activity_groups SET name = ?, sort_order = ?, archived_at = ? WHERE id = ? RETURNING id, name, sort_order, archived_at").bind(patch.name?.trim() || current.name, patch.sortOrder ?? current.sort_order, patch.archived === undefined ? current.archived_at : patch.archived ? new Date().toISOString() : null, id).first<{ id: string; name: string; sort_order: number; archived_at: string | null }>();
+    const result = await this.database.prepare(`UPDATE activity_groups SET name = ?, sort_order = ?, archived_at = ? WHERE id = ? RETURNING ${GROUP_COLUMNS}`).bind(patch.name?.trim() || current.name, patch.sortOrder ?? current.sort_order, patch.archived === undefined ? current.archived_at : patch.archived ? new Date().toISOString() : null, id).first<GroupRow>();
     if (!result) throw new Error("Could not update the group.");
     return toGroup(result);
   }
@@ -505,7 +477,7 @@ export class D1DaylioStore {
     if (!group) throw new Error("Choose an activity group.");
     const clean = name.trim(); if (!clean) throw new Error("Activity name is required.");
     const id = `activity-${crypto.randomUUID()}`;
-    const result = await this.database.prepare("INSERT INTO activities (id, group_id, name, material_icon, sort_order) VALUES (?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM activities)) RETURNING id, group_id, name, material_icon, source_icon_id, sort_order, archived_at").bind(id, groupId, clean, iconForActivity(clean, icon)).first<{ id: string; group_id: string; name: string; material_icon: string; source_icon_id: string | null; sort_order: number; archived_at: string | null }>();
+    const result = await this.database.prepare(`INSERT INTO activities (id, group_id, name, material_icon, sort_order) VALUES (?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM activities)) RETURNING ${ACTIVITY_COLUMNS}`).bind(id, groupId, clean, iconForActivity(clean, icon)).first<ActivityRow>();
     if (!result) throw new Error("Could not create the activity.");
     return toActivity(result);
   }
@@ -516,9 +488,9 @@ export class D1DaylioStore {
       const group = await this.database.prepare("SELECT id FROM activity_groups WHERE id = ?").bind(patch.groupId).first();
       if (!group) throw new Error("Choose an activity group.");
     }
-    const current = await this.database.prepare("SELECT id, group_id, name, material_icon, source_icon_id, sort_order, archived_at FROM activities WHERE id = ?").bind(id).first<{ id: string; group_id: string; name: string; material_icon: string; source_icon_id: string | null; sort_order: number; archived_at: string | null }>();
+    const current = await this.database.prepare(`SELECT ${ACTIVITY_COLUMNS} FROM activities WHERE id = ?`).bind(id).first<ActivityRow>();
     if (!current) throw new Error("Activity not found.");
-    const result = await this.database.prepare("UPDATE activities SET name = ?, group_id = ?, material_icon = ?, sort_order = ?, archived_at = ? WHERE id = ? RETURNING id, group_id, name, material_icon, source_icon_id, sort_order, archived_at").bind(patch.name?.trim() || current.name, patch.groupId ?? current.group_id, iconForActivity(patch.name?.trim() || current.name, patch.icon ?? current.material_icon), patch.sortOrder ?? current.sort_order, patch.archived ? new Date().toISOString() : patch.archived === false ? null : current.archived_at, id).first<{ id: string; group_id: string; name: string; material_icon: string; source_icon_id: string | null; sort_order: number; archived_at: string | null }>();
+    const result = await this.database.prepare(`UPDATE activities SET name = ?, group_id = ?, material_icon = ?, sort_order = ?, archived_at = ? WHERE id = ? RETURNING ${ACTIVITY_COLUMNS}`).bind(patch.name?.trim() || current.name, patch.groupId ?? current.group_id, iconForActivity(patch.name?.trim() || current.name, patch.icon ?? current.material_icon), patch.sortOrder ?? current.sort_order, patch.archived ? new Date().toISOString() : patch.archived === false ? null : current.archived_at, id).first<ActivityRow>();
     if (!result) throw new Error("Could not update the activity.");
     return toActivity(result);
   }
@@ -532,14 +504,14 @@ export class D1DaylioStore {
     }
     const config = normalizeGoalConfig(input);
     const id = `goal-${crypto.randomUUID()}`;
-    const result = await this.database.prepare("INSERT INTO goals (id, activity_id, name, material_icon, repeat_type, schedule_type, target_per_week, weekdays_mask, start_date, sort_order, reminder_enabled, reminder_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM goals), ?, ?) RETURNING id, activity_id, name, material_icon, repeat_type, schedule_type, target_per_week, weekdays_mask, start_date, end_date, sort_order, archived_at, reminder_enabled, reminder_time, source_state").bind(id, input.activityId ?? null, input.name.trim() || "Activity goal", isGoalIcon(input.materialIcon) ? input.materialIcon : "task_alt", config.repeatType, config.scheduleType, config.targetPerWeek, config.weekdaysMask, goalStartDate(startDate), input.reminderEnabled ? 1 : 0, input.reminderTime ?? null).first<GoalRow>();
+    const result = await this.database.prepare(`INSERT INTO goals (id, activity_id, name, material_icon, repeat_type, schedule_type, target_per_week, weekdays_mask, start_date, sort_order, reminder_enabled, reminder_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM goals), ?, ?) RETURNING ${GOAL_COLUMNS}`).bind(id, input.activityId ?? null, input.name.trim() || "Activity goal", isGoalIcon(input.materialIcon) ? input.materialIcon : "task_alt", config.repeatType, config.scheduleType, config.targetPerWeek, config.weekdaysMask, goalStartDate(startDate), input.reminderEnabled ? 1 : 0, input.reminderTime ?? null).first<GoalRow>();
     if (!result) throw new Error("Could not create the goal.");
     return toGoal(result);
   }
 
   async updateGoal(id: string, input: unknown) {
     const patch = validateCatalogPatch({ kind: "goal", patch: input });
-    const current = await this.database.prepare("SELECT id, activity_id, name, material_icon, repeat_type, schedule_type, target_per_week, weekdays_mask, start_date, end_date, sort_order, archived_at, reminder_enabled, reminder_time, source_state FROM goals WHERE id = ?").bind(id).first<GoalRow>();
+    const current = await this.database.prepare(`SELECT ${GOAL_COLUMNS} FROM goals WHERE id = ?`).bind(id).first<GoalRow>();
     if (!current) throw new Error("Goal not found.");
     if (patch.activityId !== undefined && patch.activityId !== null) {
       const activity = await this.database.prepare("SELECT id FROM activities WHERE id = ? LIMIT 1").bind(patch.activityId).first<{ id: string }>();
@@ -551,19 +523,19 @@ export class D1DaylioStore {
       targetPerWeek: patch.targetPerWeek === undefined ? current.target_per_week : patch.targetPerWeek,
       weekdaysMask: patch.weekdaysMask === undefined ? current.weekdays_mask : patch.weekdaysMask,
     });
-    const result = await this.database.prepare("UPDATE goals SET name = ?, activity_id = ?, material_icon = ?, repeat_type = ?, schedule_type = ?, target_per_week = ?, weekdays_mask = ?, sort_order = ?, reminder_enabled = ?, reminder_time = ?, archived_at = ? WHERE id = ? RETURNING id, activity_id, name, material_icon, repeat_type, schedule_type, target_per_week, weekdays_mask, start_date, end_date, sort_order, archived_at, reminder_enabled, reminder_time, source_state").bind(patch.name?.trim() || current.name, patch.activityId === undefined ? current.activity_id : patch.activityId, isGoalIcon(patch.materialIcon) ? patch.materialIcon : patch.materialIcon === undefined ? current.material_icon ?? "task_alt" : "task_alt", config.repeatType, config.scheduleType, config.targetPerWeek, config.weekdaysMask, patch.sortOrder ?? current.sort_order, patch.reminderEnabled === undefined ? current.reminder_enabled : patch.reminderEnabled ? 1 : 0, patch.reminderTime ?? current.reminder_time, patch.archived === undefined ? current.archived_at : patch.archived ? new Date().toISOString() : null, id).first<GoalRow>();
+    const result = await this.database.prepare(`UPDATE goals SET name = ?, activity_id = ?, material_icon = ?, repeat_type = ?, schedule_type = ?, target_per_week = ?, weekdays_mask = ?, sort_order = ?, reminder_enabled = ?, reminder_time = ?, archived_at = ? WHERE id = ? RETURNING ${GOAL_COLUMNS}`).bind(patch.name?.trim() || current.name, patch.activityId === undefined ? current.activity_id : patch.activityId, isGoalIcon(patch.materialIcon) ? patch.materialIcon : patch.materialIcon === undefined ? current.material_icon ?? "task_alt" : "task_alt", config.repeatType, config.scheduleType, config.targetPerWeek, config.weekdaysMask, patch.sortOrder ?? current.sort_order, patch.reminderEnabled === undefined ? current.reminder_enabled : patch.reminderEnabled ? 1 : 0, patch.reminderTime ?? current.reminder_time, patch.archived === undefined ? current.archived_at : patch.archived ? new Date().toISOString() : null, id).first<GoalRow>();
     if (!result) throw new Error("Could not update the goal.");
     return toGoal(result);
   }
 
   async getGoalHistory({ goalId, startDate, endDate, asOf }: GoalHistoryRequest): Promise<GoalHistory> {
     if (!isLogicalDate(startDate) || !isLogicalDate(endDate) || startDate > endDate) throw new Error("Choose a valid history range.");
-    const goalRow = await this.database.prepare("SELECT id, activity_id, name, material_icon, repeat_type, schedule_type, target_per_week, weekdays_mask, start_date, end_date, sort_order, archived_at, reminder_enabled, reminder_time, source_state FROM goals WHERE id = ? LIMIT 1").bind(goalId).first<GoalRow>();
+    const goalRow = await this.database.prepare(`SELECT ${GOAL_COLUMNS} FROM goals WHERE id = ? LIMIT 1`).bind(goalId).first<GoalRow>();
     if (!goalRow) throw new Error("Goal not found.");
     const goal = toGoal(goalRow);
     // The week rows can reach up to six days outside the requested range on either side.
     const [completionResult, firstResult, settings] = await Promise.all([
-      rows<{ logical_date: string }>(this.database, this.database.prepare("SELECT logical_date FROM goal_completions WHERE goal_id = ? AND logical_date BETWEEN ? AND ? ORDER BY logical_date").bind(goalId, addDays(startDate, -7), addDays(endDate, 7))),
+      rows<{ logical_date: string }>(this.database.prepare("SELECT logical_date FROM goal_completions WHERE goal_id = ? AND logical_date BETWEEN ? AND ? ORDER BY logical_date").bind(goalId, addDays(startDate, -7), addDays(endDate, 7))),
       this.database.prepare("SELECT MIN(logical_date) AS logical_date FROM goal_completions WHERE goal_id = ?").bind(goalId).first<{ logical_date: string | null }>(),
       this.getSettings(),
     ]);
@@ -574,7 +546,7 @@ export class D1DaylioStore {
     const { kind, updates } = validateCatalogReorder(payload);
     const table = { group: "activity_groups", activity: "activities", goal: "goals" }[kind];
     const json = JSON.stringify(updates);
-    const existing = await rows<{ id: string }>(this.database, this.database.prepare(`SELECT id FROM ${table} WHERE id IN (SELECT json_extract(value, '$.id') FROM json_each(?))`).bind(json));
+    const existing = await rows<{ id: string }>(this.database.prepare(`SELECT id FROM ${table} WHERE id IN (SELECT json_extract(value, '$.id') FROM json_each(?))`).bind(json));
     if (existing.length !== updates.length) throw new Error("Catalog item not found.");
     try {
       // A stale sort value violates NOT NULL and rolls back the entire move.
@@ -599,7 +571,7 @@ export class D1DaylioStore {
   async importData(payload: ImportPayload) {
     validateImportPayload(payload);
     const sourceIdsByDate = new Map(payload.entries.map((entry) => [entry.logicalDate, `daylio-entry-${entry.sourceId}`]));
-    const conflicts = await rows<{ id: string; logical_date: string }>(this.database, this.database.prepare("SELECT id, logical_date FROM entries WHERE logical_date IN (SELECT value FROM json_each(?))").bind(JSON.stringify([...sourceIdsByDate.keys()])));
+    const conflicts = await rows<{ id: string; logical_date: string }>(this.database.prepare("SELECT id, logical_date FROM entries WHERE logical_date IN (SELECT value FROM json_each(?))").bind(JSON.stringify([...sourceIdsByDate.keys()])));
     if (conflicts.some((entry) => entry.id !== sourceIdsByDate.get(entry.logical_date))) throw new Error("Import would replace an entry from a different source.");
     const sourceSha256 = payload.sourceSha256 ?? `manual-${crypto.randomUUID()}`;
     const runId = `import-${sourceSha256.slice(0, 32)}`;
@@ -625,7 +597,7 @@ export class D1DaylioStore {
     // The app's seed data uses a unique score index for the five moods. Reuse
     // an existing mood with the same score (including an earlier import) so a
     // real Daylio import is idempotent instead of colliding with the seed rows.
-    const existingMoods = await rows<{ id: string; score: number }>(this.database, this.database.prepare("SELECT id, score FROM mood_levels"));
+    const existingMoods = await rows<{ id: string; score: number }>(this.database.prepare("SELECT id, score FROM mood_levels"));
     const moodIds = new Map(payload.moods.map((item) => [item.sourceId, existingMoods.find((mood) => mood.score === item.score)?.id ?? `daylio-mood-${item.sourceId}`]));
     const groupIds = new Map(payload.groups.map((item) => [item.sourceId, `daylio-group-${item.sourceId}`]));
     const activityIds = new Map(payload.activities.map((item) => [item.sourceId, `daylio-activity-${item.sourceId}`]));

@@ -1,5 +1,4 @@
 import { isActivityIcon } from "./icons.ts";
-import { isValidTime } from "./entry-validation.ts";
 
 export type Mood = {
   id: string;
@@ -134,18 +133,6 @@ export type CalendarEntryDay = {
   moodId: string;
 };
 
-export type EntryInput = {
-  moodId: string;
-  activityIds: string[];
-  completedGoalIds: string[];
-  localTime?: string;
-  timezone?: string;
-  timezoneOffsetMinutes?: number;
-  expectedVersion?: number;
-  legacyNoteTitle?: string;
-  legacyNote?: string;
-};
-
 export type AppSettings = {
   /** JavaScript weekday (0 = Sunday) on which a week ends. Goal weeks and insight weeks both use it. */
   weekEndsOn: number;
@@ -235,6 +222,16 @@ export function isLogicalDate(value: string) {
   return !Number.isNaN(parsed.valueOf()) && logicalDateFromDate(parsed) === value;
 }
 
+/** First and last logical dates of a "YYYY-MM" month. */
+export function monthDateRange(month: string) {
+  if (!/^\d{4}-\d{2}$/.test(month)) throw new Error("Choose a valid month.");
+  const [year, monthNumber] = month.split("-").map(Number);
+  const startDate = `${month}-01`;
+  const endDate = `${month}-${String(new Date(year, monthNumber, 0).getDate()).padStart(2, "0")}`;
+  if (!isLogicalDate(startDate) || !isLogicalDate(endDate)) throw new Error("Choose a valid month.");
+  return { startDate, endDate };
+}
+
 export function isGoalIcon(value: unknown): value is string {
   return isActivityIcon(value);
 }
@@ -311,10 +308,6 @@ export function weekRangeLabel(weekEndsOn: number) {
 
 export function startOfWeek(logicalDate: string, weekEndsOn = DEFAULT_WEEK_ENDS_ON) {
   return addDays(logicalDate, -((dayOfWeek(logicalDate) - weekStartsOn(weekEndsOn) + 7) % 7));
-}
-
-export function endOfWeek(logicalDate: string, weekEndsOn = DEFAULT_WEEK_ENDS_ON) {
-  return addDays(startOfWeek(logicalDate, weekEndsOn), 6);
 }
 
 /** A new goal starts on the date the device sent, or the server's date when none was sent. */
@@ -402,8 +395,4 @@ export function buildGoalHistory({
     });
   }
   return { goal: storedGoal, month: startDate.slice(0, 7), startDate, endDate, asOf, days, weeks };
-}
-
-export function isTime(value: string) {
-  return isValidTime(value);
 }

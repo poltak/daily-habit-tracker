@@ -178,10 +178,6 @@ export class DaylioMemoryStore {
     };
   }
 
-  listEntryDates(startDate: string, endDate: string) {
-    return this.listEntryDays(startDate, endDate).map((day) => day.logicalDate);
-  }
-
   listEntryDays(startDate: string, endDate: string): CalendarEntryDay[] {
     return [...this.entries.values()]
       .filter((entry) => !entry.deletedAt && entry.logicalDate >= startDate && entry.logicalDate <= endDate)

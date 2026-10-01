@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { buildGoalHistory, endOfWeek, startOfWeek, validateSettingsPatch, weekRangeLabel, weekdayOrder } from "../lib/daylio.ts";
+import { addDays, buildGoalHistory, startOfWeek, validateSettingsPatch, weekRangeLabel, weekdayOrder } from "../lib/daylio.ts";
 import { DaylioMemoryStore } from "../lib/memory-store.ts";
 import { D1DaylioStore } from "../lib/server-store.ts";
 import { buildBestWeeksAnalysis } from "../lib/insights-rhythms.ts";
 import { createTestDatabase } from "./helpers/d1-database.mjs";
 
 test("week boundaries follow the weekday the week ends on", () => {
+  const endOfWeek = (date, weekEndsOn) => addDays(startOfWeek(date, weekEndsOn), 6);
   // 2026-10-01 is a Thursday.
   assert.deepEqual([startOfWeek("2026-10-01"), endOfWeek("2026-10-01")], ["2026-09-28", "2026-10-04"], "weeks end on Sunday by default");
   assert.deepEqual([startOfWeek("2026-10-01", 6), endOfWeek("2026-10-01", 6)], ["2026-09-27", "2026-10-03"]);

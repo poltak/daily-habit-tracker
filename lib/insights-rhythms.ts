@@ -443,7 +443,7 @@ function compareActivities(activities: readonly Activity[], higherWeeks: readonl
  * half of mood-logged weeks, retaining ties at the boundary; equal means yield
  * one typical cohort and no invented "best" week.
  */
-export function summarizeBestWeeks(input: BestWeeksAnalysisInput): BestWeeksAnalysis {
+export function buildBestWeeksAnalysis(input: BestWeeksAnalysisInput): BestWeeksAnalysis {
   const minimumLoggedDays = Math.max(1, Math.floor(input.minimumLoggedDays ?? MINIMUM_LOGGED_DAYS));
   const startDate = parseDate(input.startDate) === null ? "1000-01-01" : input.startDate;
   const endDate = parseDate(input.endDate) === null ? "9999-12-31" : input.endDate;
@@ -489,9 +489,6 @@ export function summarizeBestWeeks(input: BestWeeksAnalysisInput): BestWeeksAnal
     cohortMethod: `Qualifying weeks have at least four logged days, run ${weekRange}, fit wholly inside the selected range, and ended before the as-of date. Higher-mood weeks are the upper half of mood-logged weeks; ties stay together, and equal weekly means produce no separate higher cohort.`,
   };
 }
-
-/** Alias for callers that prefer an explicit analysis name. */
-export const buildBestWeeksAnalysis = summarizeBestWeeks;
 
 export function activityNameById(activities: readonly Activity[]): Map<string, string> {
   return new Map(activities.map((activity) => [activity.id, activity.name]));
