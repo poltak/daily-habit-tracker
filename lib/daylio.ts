@@ -383,6 +383,13 @@ export function endOfWeek(logicalDate: string, weekEndsOn = DEFAULT_WEEK_ENDS_ON
   return addDays(startOfWeek(logicalDate, weekEndsOn), 6);
 }
 
+/** A new goal starts on the date the device sent, or the server's date when none was sent. */
+export function goalStartDate(requested?: string) {
+  if (requested === undefined) return logicalDateFromDate();
+  if (typeof requested !== "string" || !isLogicalDate(requested)) throw new Error("Choose a valid goal start date.");
+  return requested;
+}
+
 function isGoalDateActive(goal: Pick<Goal, "startDate" | "endDate">, logicalDate: string) {
   return (!goal.startDate || logicalDate >= goal.startDate) && (!goal.endDate || logicalDate <= goal.endDate);
 }
@@ -393,10 +400,11 @@ export function isGoalDateScheduled(goal: Pick<Goal, "repeatType" | "scheduleTyp
 }
 
 export function buildGoalHistory({
-  goal,
+  goal: storedGoal,
   startDate,
   endDate,
   completedDates,
+  firstCompletedDate,
   weekEndsOn = DEFAULT_WEEK_ENDS_ON,
   asOf = logicalDateFromDate(),
 }: {
@@ -404,10 +412,17 @@ export function buildGoalHistory({
   startDate: string;
   endDate: string;
   completedDates: Iterable<string>;
+  /** The goal's earliest completion on any date, which may fall outside the requested range. */
+  firstCompletedDate?: string | null;
   weekEndsOn?: number;
   asOf?: string;
 }): GoalHistory {
   if (!isLogicalDate(startDate) || !isLogicalDate(endDate) || startDate > endDate || !isLogicalDate(asOf)) throw new Error("Choose a valid history range.");
+  // A goal counts from its start date, or from its first completion when that came earlier,
+  // for example a goal created after midnight and then ticked for yesterday.
+  const goal = storedGoal.startDate && firstCompletedDate && firstCompletedDate < storedGoal.startDate
+    ? { ...storedGoal, startDate: firstCompletedDate }
+    : storedGoal;
   const completed = new Set(completedDates);
   const days: GoalHistoryDay[] = [];
   for (let date = startDate; date <= endDate; date = addDays(date, 1)) {
@@ -452,7 +467,7 @@ export function buildGoalHistory({
       accomplished: status === "accomplished" ? true : status === "not_accomplished" ? false : null,
     });
   }
-  return { goal, month: startDate.slice(0, 7), startDate, endDate, asOf, days, weeks };
+  return { goal: storedGoal, month: startDate.slice(0, 7), startDate, endDate, asOf, days, weeks };
 }
 
 export function isTime(value: string) {
@@ -775,8 +790,9 @@ export class DaylioMemoryStore {
     return next;
   }
 
-  createGoal(input: { name: string; activityId?: string | null; repeatType?: GoalRepeatType; scheduleType?: Goal["scheduleType"]; targetPerWeek?: number | null; weekdaysMask?: number | null; materialIcon?: string; reminderEnabled?: boolean; reminderTime?: string }) {
-    validateCatalogPatch({ kind: "goal", patch: input });
+  createGoal(input: { name: string; activityId?: string | null; repeatType?: GoalRepeatType; scheduleType?: Goal["scheduleType"]; targetPerWeek?: number | null; weekdaysMask?: number | null; materialIcon?: string; reminderEnabled?: boolean; reminderTime?: string; startDate?: string }) {
+    const { startDate, ...fields } = input;
+    validateCatalogPatch({ kind: "goal", patch: fields });
     if (input.activityId !== null && input.activityId !== undefined && !this.activities.has(input.activityId)) throw new Error("Choose an activity for the goal.");
     const config = normalizeGoalConfig(input);
     const goal: Goal = {
@@ -785,6 +801,7 @@ export class DaylioMemoryStore {
       name: input.name.trim() || "Activity goal",
       materialIcon: isGoalIcon(input.materialIcon) ? input.materialIcon : "task_alt",
       ...config,
+      startDate: goalStartDate(startDate),
       sortOrder: this.goals.size,
       archived: false,
       reminderEnabled: input.reminderEnabled ?? false,
@@ -816,8 +833,9 @@ export class DaylioMemoryStore {
     if (!goal) throw new Error("Goal not found.");
     const completedDates = [...this.goalCompletions.values()]
       .filter((completion) => completion.goalId === goalId)
-      .map((completion) => completion.logicalDate);
-    return buildGoalHistory({ goal, startDate, endDate, completedDates, weekEndsOn: this.settings.weekEndsOn, asOf });
+      .map((completion) => completion.logicalDate)
+      .sort();
+    return buildGoalHistory({ goal, startDate, endDate, completedDates, firstCompletedDate: completedDates[0], weekEndsOn: this.settings.weekEndsOn, asOf });
   }
 
   exportData() {
@@ -896,6 +914,13 @@ export class DaylioMemoryStore {
         const timestamp = nowIso();
         this.goalCompletions.set(goalCompletionKey(completion.logicalDate, goalId), { goalId, logicalDate: completion.logicalDate, entryId: entry?.id, createdAt: timestamp, updatedAt: timestamp });
       }
+    }
+    // An imported goal starts on its first completion, or today when it has none.
+    for (const goalId of goalIds.values()) {
+      const goal = this.goals.get(goalId)!;
+      if (goal.startDate) continue;
+      const firstCompletion = [...this.goalCompletions.values()].filter((completion) => completion.goalId === goalId).map((completion) => completion.logicalDate).sort()[0];
+      goal.startDate = firstCompletion ?? logicalDateFromDate();
     }
     return this.bootstrap();
   }

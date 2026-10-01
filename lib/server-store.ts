@@ -19,6 +19,7 @@ import {
   DEFAULT_SETTINGS,
   MOODS,
   addDays,
+  goalStartDate,
   isGoalIcon,
   isLogicalDate,
   isWeekday,
@@ -115,6 +116,9 @@ function toGoal(row: { id: string; activity_id: string | null; name: string; mat
 function toEntry(row: EntryRow, activityIds: string[], completedGoalIds: string[], moodId = row.mood_id): Entry {
   return { id: row.id, logicalDate: row.logical_date, localTime: row.local_time ?? "23:00", timezone: row.timezone ?? "", timezoneOffsetMinutes: row.timezone_offset_minutes ?? undefined, moodId, activityIds, completedGoalIds, legacyNoteTitle: row.legacy_note_title ?? undefined, legacyNote: row.legacy_note ?? undefined, version: row.version, createdAt: row.created_at, updatedAt: row.updated_at, deletedAt: row.deleted_at ?? undefined };
 }
+
+// Keep this statement the same as drizzle/0009_backfill_goal_start_dates.sql.
+export const GOAL_START_DATE_BACKFILL = "UPDATE goals SET start_date = COALESCE((SELECT MIN(logical_date) FROM goal_completions WHERE goal_completions.goal_id = goals.id), substr(created_at, 1, 10)) WHERE start_date IS NULL";
 
 export class D1DaylioStore {
   private readonly database: Database;
@@ -507,15 +511,16 @@ export class D1DaylioStore {
     return toActivity(result);
   }
 
-  async createGoal(input: { name: string; activityId?: string | null; repeatType?: GoalRepeatType; scheduleType?: Goal["scheduleType"]; targetPerWeek?: number | null; weekdaysMask?: number | null; materialIcon?: string; reminderEnabled?: boolean; reminderTime?: string }) {
-    validateCatalogPatch({ kind: "goal", patch: input });
+  async createGoal(input: { name: string; activityId?: string | null; repeatType?: GoalRepeatType; scheduleType?: Goal["scheduleType"]; targetPerWeek?: number | null; weekdaysMask?: number | null; materialIcon?: string; reminderEnabled?: boolean; reminderTime?: string; startDate?: string }) {
+    const { startDate, ...fields } = input;
+    validateCatalogPatch({ kind: "goal", patch: fields });
     if (input.activityId !== undefined && input.activityId !== null) {
       const activity = await this.database.prepare("SELECT id FROM activities WHERE id = ? LIMIT 1").bind(input.activityId).first<{ id: string }>();
       if (!activity) throw new Error("Choose an activity for the goal.");
     }
     const config = normalizeGoalConfig(input);
     const id = `goal-${crypto.randomUUID()}`;
-    const result = await this.database.prepare("INSERT INTO goals (id, activity_id, name, material_icon, repeat_type, schedule_type, target_per_week, weekdays_mask, sort_order, reminder_enabled, reminder_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM goals), ?, ?) RETURNING id, activity_id, name, material_icon, repeat_type, schedule_type, target_per_week, weekdays_mask, start_date, end_date, sort_order, archived_at, reminder_enabled, reminder_time, source_state").bind(id, input.activityId ?? null, input.name.trim() || "Activity goal", isGoalIcon(input.materialIcon) ? input.materialIcon : "task_alt", config.repeatType, config.scheduleType, config.targetPerWeek, config.weekdaysMask, input.reminderEnabled ? 1 : 0, input.reminderTime ?? null).first<GoalRow>();
+    const result = await this.database.prepare("INSERT INTO goals (id, activity_id, name, material_icon, repeat_type, schedule_type, target_per_week, weekdays_mask, start_date, sort_order, reminder_enabled, reminder_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM goals), ?, ?) RETURNING id, activity_id, name, material_icon, repeat_type, schedule_type, target_per_week, weekdays_mask, start_date, end_date, sort_order, archived_at, reminder_enabled, reminder_time, source_state").bind(id, input.activityId ?? null, input.name.trim() || "Activity goal", isGoalIcon(input.materialIcon) ? input.materialIcon : "task_alt", config.repeatType, config.scheduleType, config.targetPerWeek, config.weekdaysMask, goalStartDate(startDate), input.reminderEnabled ? 1 : 0, input.reminderTime ?? null).first<GoalRow>();
     if (!result) throw new Error("Could not create the goal.");
     return toGoal(result);
   }
@@ -545,11 +550,12 @@ export class D1DaylioStore {
     if (!goalRow) throw new Error("Goal not found.");
     const goal = toGoal(goalRow);
     // The week rows can reach up to six days outside the requested range on either side.
-    const [completionResult, settings] = await Promise.all([
+    const [completionResult, firstResult, settings] = await Promise.all([
       rows<{ logical_date: string }>(this.database, this.database.prepare("SELECT logical_date FROM goal_completions WHERE goal_id = ? AND logical_date BETWEEN ? AND ? ORDER BY logical_date").bind(goalId, addDays(startDate, -7), addDays(endDate, 7))),
+      this.database.prepare("SELECT MIN(logical_date) AS logical_date FROM goal_completions WHERE goal_id = ?").bind(goalId).first<{ logical_date: string | null }>(),
       this.getSettings(),
     ]);
-    return buildGoalHistory({ goal, startDate, endDate, completedDates: completionResult.map((row) => row.logical_date), weekEndsOn: settings.weekEndsOn, asOf });
+    return buildGoalHistory({ goal, startDate, endDate, completedDates: completionResult.map((row) => row.logical_date), firstCompletedDate: firstResult?.logical_date, weekEndsOn: settings.weekEndsOn, asOf });
   }
 
   async reorderCatalog(payload: unknown) {
@@ -640,6 +646,8 @@ export class D1DaylioStore {
     const entryIdsByDate = new Map(payload.entries.map((item) => [item.logicalDate, `daylio-entry-${item.sourceId}`]));
     const completionStatements = payload.completions.map((item) => this.database.prepare("INSERT OR IGNORE INTO goal_completions (id, goal_id, logical_date, local_time, entry_id, source_system, source_id) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(`daylio-completion-${item.sourceId}`, goalIds.get(item.goalSourceId) ?? "", item.logicalDate, item.localTime ?? null, entryIdsByDate.get(item.logicalDate) ?? null, "daylio", item.sourceId));
     for (let index = 0; index < completionStatements.length; index += 50) await this.database.batch(completionStatements.slice(index, index + 50));
+    // An imported goal starts on its first completion, or on its import date when it has none.
+    await this.database.prepare(GOAL_START_DATE_BACKFILL).run();
     return this.bootstrap();
   }
 }

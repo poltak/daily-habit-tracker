@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { type Bootstrap, WEEKDAY_NAMES, weekRangeLabel } from "../../lib/daylio";
+import { type Bootstrap, WEEKDAY_NAMES, logicalDateFromDate, weekRangeLabel } from "../../lib/daylio";
 import { filterActivityGroups } from "../../lib/activity-groups";
 import { ACTIVITY_ICON_CHOICES, UI_ICONS } from "../../lib/icons";
 import { type ThemePreference } from "../../lib/theme";
@@ -641,7 +641,7 @@ export function SetupView({ data, themePreference, onThemeChange, onRefresh, onM
           </div>
           <div className="inline-form stacked-mobile">
             <input value={goalName} onChange={(event) => setGoalName(event.target.value)} placeholder="New goal name" aria-busy={isKindReordering("goal") || isPending("create:goal")} disabled={isKindReordering("goal") || isPending("create:goal")} />
-            <button className={`secondary-button ${isKindReordering("goal") || isPending("create:goal") ? "pending-action" : ""}`} aria-busy={isKindReordering("goal") || isPending("create:goal")} disabled={isKindReordering("goal") || isPending("create:goal")} onClick={() => void create({ payload: { kind: "goal", name: goalName }, reset: () => setGoalName("") })}><Icon name={isPending("create:goal") ? UI_ICONS.sync : UI_ICONS.add} /> {isPending("create:goal") ? "Adding…" : isKindReordering("goal") ? "Reordering…" : "Add goal"}</button>
+            <button className={`secondary-button ${isKindReordering("goal") || isPending("create:goal") ? "pending-action" : ""}`} aria-busy={isKindReordering("goal") || isPending("create:goal")} disabled={isKindReordering("goal") || isPending("create:goal")} onClick={() => void create({ payload: { kind: "goal", name: goalName, startDate: logicalDateFromDate() }, reset: () => setGoalName("") })}><Icon name={isPending("create:goal") ? UI_ICONS.sync : UI_ICONS.add} /> {isPending("create:goal") ? "Adding…" : isKindReordering("goal") ? "Reordering…" : "Add goal"}</button>
           </div>
           <p className="muted small-copy">New goals start with a daily schedule and no associated activity. Use Configure to set their repeat, icon, and activity.</p>
         </section>

@@ -195,7 +195,7 @@ test("goal detail reloads on a new local day and hides another month's results",
 
 test("memory store persists goal icon, repeat settings, and history", () => {
   const store = new DaylioMemoryStore();
-  const goal = store.createGoal({ name: "Custom goal", activityId: null, repeatType: "daily", weekdaysMask: 1, materialIcon: "favorite" });
+  const goal = store.createGoal({ name: "Custom goal", activityId: null, repeatType: "daily", weekdaysMask: 1, materialIcon: "favorite", startDate: "2026-01-01" });
   assert.equal(goal.materialIcon, "favorite");
   assert.equal(goal.repeatType, "daily");
   assert.equal(goal.scheduleType, "weekdays");
@@ -205,6 +205,7 @@ test("memory store persists goal icon, repeat settings, and history", () => {
   assert.equal(updated.targetPerWeek, 2);
   const history = store.getGoalHistory({ goalId: goal.id, startDate: "2026-01-01", endDate: "2026-01-31", asOf: "2026-02-01" });
   assert.equal(history.goal.materialIcon, "star");
+  assert.equal(history.weeks.length, 5);
   assert.equal(history.weeks.every((week) => week.expectedCount === 2), true);
 });
 

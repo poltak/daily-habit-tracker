@@ -51,7 +51,7 @@ test("add activity form uses the icon picker and catalog activity contract", () 
 
 test("setup keeps group and goal forms but removes the old activity form", () => {
   assert.match(setupSource, /payload: \{ kind: "group", name: groupName \}/);
-  assert.match(setupSource, /payload: \{ kind: "goal", name: goalName \}/);
+  assert.match(setupSource, /payload: \{ kind: "goal", name: goalName, startDate: logicalDateFromDate\(\) \}/);
   assert.doesNotMatch(setupSource, /placeholder="New activity name"/);
   assert.doesNotMatch(setupSource, /value=\{activityGroup\}/);
   assert.match(setupSource, /onOpenAddActivity: \(groupId: string\) => void/);
