@@ -67,11 +67,20 @@ async function requireDatabase(): Promise<Database> {
   }
   if (!database || typeof database.prepare !== "function") throw new Error("The D1 binding `DB` is unavailable, so the journal cannot be read or saved.");
   try {
-    await seedDatabase(database);
+    await ensureSeeded(database);
   } catch (error) {
     throw new Error(`D1 is configured but its schema is unavailable. Apply the migration before using the app. ${error instanceof Error ? error.message : ""}`.trim());
   }
   return database;
+}
+
+const seededDatabases = new WeakSet<Database>();
+
+/** Checks the seed catalog once per database binding, so later requests skip the query. */
+export async function ensureSeeded(database: Database) {
+  if (seededDatabases.has(database)) return;
+  await seedDatabase(database);
+  seededDatabases.add(database);
 }
 
 export async function seedDatabase(database: Database) {
