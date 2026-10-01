@@ -71,6 +71,32 @@ export function validateEntryInput(input: unknown): EntryInputCandidate {
   };
 }
 
+export type DayInput = {
+  moodId: string;
+  activityIds: string[];
+  /** Omit to leave goals that have no linked activity as they are. */
+  completedGoalIds?: string[];
+  expectedVersion?: number;
+};
+
+export function validateDayInput(input: unknown): DayInput {
+  if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("Day payload must be an object.");
+  const candidate = input as Record<string, unknown>;
+  for (const key of Object.keys(candidate)) {
+    if (!["moodId", "activityIds", "completedGoalIds", "expectedVersion"].includes(key)) throw new Error(`Unsupported day field: ${key}.`);
+  }
+  if (typeof candidate.moodId !== "string") throw new Error("Choose one of the five moods.");
+  const activityIds = [...new Set(requireStringArray(candidate.activityIds, "Activity IDs"))];
+  const completedGoalIds = candidate.completedGoalIds === undefined ? undefined : [...new Set(requireStringArray(candidate.completedGoalIds, "Goal IDs"))];
+  validateExpectedVersion(candidate.expectedVersion);
+  return {
+    moodId: candidate.moodId,
+    activityIds,
+    ...(completedGoalIds === undefined ? {} : { completedGoalIds }),
+    ...(candidate.expectedVersion === undefined ? {} : { expectedVersion: candidate.expectedVersion as number }),
+  };
+}
+
 export function validateEntryReferences(input: EntryInputCandidate, references: EntryReferenceIndexes) {
   if (!references.moodIds.has(input.moodId)) throw new Error("Choose one of the five moods.");
   if (input.activityIds.some((id) => !references.activityIds.has(id))) throw new Error("One activity is no longer available.");

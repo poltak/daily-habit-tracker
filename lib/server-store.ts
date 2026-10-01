@@ -11,6 +11,7 @@ import {
   type GoalHistory,
   type GoalHistoryRequest,
   type GoalRepeatType,
+  type HistorySpan,
   type ImportPayload,
   type Mood,
   type SelectionMutationResult,
@@ -23,10 +24,11 @@ import {
   isLogicalDate,
   isWeekday,
   normalizeGoalConfig,
+  planDaySave,
   validateSettingsPatch,
 } from "./daylio.ts";
 import { DaylioMemoryStore } from "./memory-store.ts";
-import { validateEntryInput, validateEntryReferences as assertEntryReferences, validateExpectedVersion, versionConflict, type EntryInputCandidate } from "./entry-validation.ts";
+import { validateDayInput, validateEntryInput, validateEntryReferences as assertEntryReferences, validateExpectedVersion, versionConflict, type EntryInputCandidate } from "./entry-validation.ts";
 import { iconForActivity } from "./icons.ts";
 import { validateCatalogPatch, validateCatalogReorder } from "./catalog-validation.ts";
 import { validateImportPayload } from "./import-validation.ts";
@@ -163,14 +165,29 @@ export class D1DaylioStore {
   }
 
   async listEntries(limit = 30, offset = 0) {
-    const page = "WITH page AS (SELECT * FROM entries WHERE deleted_at IS NULL ORDER BY logical_date DESC LIMIT ? OFFSET ?)";
+    return this.readEntries({ selection: "ORDER BY logical_date DESC LIMIT ? OFFSET ?", values: [Math.min(limit, 101), Math.max(offset, 0)], order: "DESC" });
+  }
+
+  /** Saved entries from startDate to endDate inclusive, oldest first, with their current selections and goal completions. */
+  async listEntriesInRange(startDate: string, endDate: string) {
+    if (!isLogicalDate(startDate) || !isLogicalDate(endDate) || startDate > endDate) throw new Error("Choose a valid date range.");
+    return this.readEntries({ selection: "AND logical_date BETWEEN ? AND ? ORDER BY logical_date", values: [startDate, endDate], order: "ASC" });
+  }
+
+  async getHistorySpan(): Promise<HistorySpan> {
+    const row = await this.database.prepare("SELECT MIN(logical_date) AS first_date, MAX(logical_date) AS last_date, COUNT(*) AS recorded_days FROM entries WHERE deleted_at IS NULL").first<{ first_date: string | null; last_date: string | null; recorded_days: number }>();
+    return { firstDate: row?.first_date ?? null, lastDate: row?.last_date ?? null, recordedDays: row?.recorded_days ?? 0 };
+  }
+
+  private async readEntries({ selection, values, order }: { selection: string; values: Array<string | number>; order: "ASC" | "DESC" }) {
+    const page = `WITH page AS (SELECT * FROM entries WHERE deleted_at IS NULL ${selection})`;
     const statements = [
-      `${page} SELECT page.*, COALESCE(selection.mood_id, page.mood_id) AS effective_mood_id FROM page LEFT JOIN day_mood_selections AS selection ON selection.logical_date = page.logical_date ORDER BY page.logical_date DESC`,
+      `${page} SELECT page.*, COALESCE(selection.mood_id, page.mood_id) AS effective_mood_id FROM page LEFT JOIN day_mood_selections AS selection ON selection.logical_date = page.logical_date ORDER BY page.logical_date ${order}`,
       `${page} SELECT link.entry_id, link.activity_id FROM page JOIN entry_activities AS link ON link.entry_id = page.id ORDER BY link.activity_id`,
       `${page} SELECT selection.logical_date, selection.activity_id, selection.selected FROM page JOIN day_activity_selections AS selection ON selection.logical_date = page.logical_date ORDER BY selection.activity_id`,
       // Keep the bounded page on the outer side of the date-index lookup.
       `${page} SELECT completion.logical_date, completion.goal_id FROM page CROSS JOIN goal_completions AS completion ON completion.logical_date = page.logical_date ORDER BY completion.goal_id`,
-    ].map((query) => this.database.prepare(query).bind(Math.min(limit, 101), Math.max(offset, 0)));
+    ].map((query) => this.database.prepare(query).bind(...values));
     // One batch gives the page and its related rows a consistent snapshot.
     const [entryResult, linkResult, selectionResult, completionResult] = await this.database.batch(statements);
     const activityLinks = new Map<string, Set<string>>();
@@ -398,9 +415,8 @@ export class D1DaylioStore {
     assertEntryReferences(input, { moodIds: new Set(mood ? [mood.id] : []), activityIds, goalIds });
   }
 
-  async saveEntry(logicalDate: string, input: unknown) {
-    if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
-    const validated = validateEntryInput(input);
+  // The statements that write an entry and consume the day's pending selections, for one batch.
+  private async entryWriteStatements(logicalDate: string, validated: EntryInputCandidate) {
     const [persisted] = await Promise.all([this.getPersistedEntry(logicalDate), this.validateEntryReferences(validated)]);
     const existing = persisted && !persisted.deleted_at ? persisted : null;
     if (validated.expectedVersion !== undefined && (existing?.version ?? 0) !== validated.expectedVersion) throw versionConflict();
@@ -418,27 +434,67 @@ export class D1DaylioStore {
         version = CASE WHEN entries.version = ? AND entries.deleted_at IS ? THEN entries.version + 1 ELSE NULL END,
         created_at = excluded.created_at, updated_at = excluded.updated_at, deleted_at = NULL
     `).bind(id, logicalDate, validated.localTime ?? existing?.local_time ?? "23:00", validated.timezone ?? existing?.timezone ?? "", validated.timezoneOffsetMinutes ?? existing?.timezone_offset_minutes ?? null, logicalDate, validated.moodId, validated.legacyNoteTitle ?? existing?.legacy_note_title ?? null, validated.legacyNote ?? existing?.legacy_note ?? null, existing?.created_at ?? timestamp, timestamp, persisted?.version ?? 0, persisted?.deleted_at ?? null);
+    return [
+      entryStatement,
+      this.database.prepare("DELETE FROM entry_activities WHERE entry_id = ?").bind(id),
+      // Read overrides inside the transaction so a just-completed toggle is
+      // applied before its selection row is consumed.
+      this.database.prepare(`
+        INSERT INTO entry_activities (entry_id, activity_id)
+        SELECT ?, value FROM json_each(?) WHERE NOT EXISTS (
+          SELECT 1 FROM day_activity_selections WHERE logical_date = ? AND activity_id = value AND selected = 0
+        )
+        UNION SELECT ?, activity_id FROM day_activity_selections WHERE logical_date = ? AND selected = 1
+      `).bind(id, JSON.stringify(validated.activityIds), logicalDate, id, logicalDate),
+      this.database.prepare("UPDATE goal_completions SET entry_id = ?, updated_at = ? WHERE logical_date = ?").bind(id, timestamp, logicalDate),
+      this.database.prepare("DELETE FROM day_mood_selections WHERE logical_date = ?").bind(logicalDate),
+      this.database.prepare("DELETE FROM day_activity_selections WHERE logical_date = ?").bind(logicalDate),
+    ];
+  }
+
+  private async runEntryWrite(statements: D1PreparedStatement[]) {
     try {
-      await this.database.batch([
-        entryStatement,
-        this.database.prepare("DELETE FROM entry_activities WHERE entry_id = ?").bind(id),
-        // Read overrides inside the transaction so a just-completed toggle is
-        // applied before its selection row is consumed.
-        this.database.prepare(`
-          INSERT INTO entry_activities (entry_id, activity_id)
-          SELECT ?, value FROM json_each(?) WHERE NOT EXISTS (
-            SELECT 1 FROM day_activity_selections WHERE logical_date = ? AND activity_id = value AND selected = 0
-          )
-          UNION SELECT ?, activity_id FROM day_activity_selections WHERE logical_date = ? AND selected = 1
-        `).bind(id, JSON.stringify(validated.activityIds), logicalDate, id, logicalDate),
-        this.database.prepare("UPDATE goal_completions SET entry_id = ?, updated_at = ? WHERE logical_date = ?").bind(id, timestamp, logicalDate),
-        this.database.prepare("DELETE FROM day_mood_selections WHERE logical_date = ?").bind(logicalDate),
-        this.database.prepare("DELETE FROM day_activity_selections WHERE logical_date = ?").bind(logicalDate),
-      ]);
+      await this.database.batch(statements);
     } catch (error) {
       if (error instanceof Error && error.message.includes("NOT NULL constraint failed: entries.version")) throw versionConflict();
       throw error;
     }
+  }
+
+  async saveEntry(logicalDate: string, input: unknown) {
+    if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
+    const validated = validateEntryInput(input);
+    await this.runEntryWrite(await this.entryWriteStatements(logicalDate, validated));
+    return this.getEntry(logicalDate);
+  }
+
+  /**
+   * Sets a whole day in one transaction: the mood, exactly these activities, and the goal
+   * completions that go with them. Pending per-tap selections for the day are discarded.
+   */
+  async saveDay(logicalDate: string, input: unknown) {
+    if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
+    const day = validateDayInput(input);
+    const goalRows = await rows<{ id: string; activity_id: string | null; archived_at: string | null }>(this.database.prepare("SELECT id, activity_id, archived_at FROM goals"));
+    const plan = planDaySave({
+      goals: goalRows.map((row) => ({ id: row.id, activityId: row.activity_id, archived: Boolean(row.archived_at) })),
+      activityIds: day.activityIds,
+      completedGoalIds: day.completedGoalIds,
+    });
+    const entryStatements = await this.entryWriteStatements(logicalDate, { moodId: day.moodId, activityIds: plan.activityIds, completedGoalIds: [], expectedVersion: day.expectedVersion });
+    const timestamp = new Date().toISOString();
+    await this.runEntryWrite([
+      // Clear the pending selections first, so the entry statements below write exactly this day.
+      this.database.prepare("DELETE FROM day_mood_selections WHERE logical_date = ?").bind(logicalDate),
+      this.database.prepare("DELETE FROM day_activity_selections WHERE logical_date = ?").bind(logicalDate),
+      this.database.prepare("DELETE FROM goal_completions WHERE logical_date = ? AND goal_id IN (SELECT value FROM json_each(?))").bind(logicalDate, JSON.stringify(plan.clearGoalIds)),
+      this.database.prepare(`
+        INSERT INTO goal_completions (id, goal_id, logical_date, created_at, updated_at)
+        SELECT 'completion-' || value || '-' || ?, value, ?, ?, ? FROM json_each(?) WHERE true
+        ON CONFLICT(goal_id, logical_date) DO UPDATE SET updated_at = excluded.updated_at
+      `).bind(logicalDate, logicalDate, timestamp, timestamp, JSON.stringify(plan.completeGoalIds)),
+      ...entryStatements,
+    ]);
     return this.getEntry(logicalDate);
   }
 

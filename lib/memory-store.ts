@@ -15,6 +15,7 @@ import {
   type GoalHistory,
   type GoalHistoryRequest,
   type GoalRepeatType,
+  type HistorySpan,
   type ImportPayload,
   type SelectionMutationResult,
   ALL_WEEKDAYS_MASK,
@@ -29,10 +30,11 @@ import {
   isLogicalDate,
   logicalDateFromDate,
   normalizeGoalConfig,
+  planDaySave,
   validateSettingsPatch,
 } from "./daylio.ts";
 import { iconForActivity } from "./icons.ts";
-import { validateEntryInput, validateEntryReferences, validateExpectedVersion, versionConflict } from "./entry-validation.ts";
+import { validateDayInput, validateEntryInput, validateEntryReferences, validateExpectedVersion, versionConflict } from "./entry-validation.ts";
 import { validateCatalogPatch, validateCatalogReorder } from "./catalog-validation.ts";
 import { validateImportPayload } from "./import-validation.ts";
 import type { InsightsData } from "./insights.ts";
@@ -157,6 +159,19 @@ export class DaylioMemoryStore {
       .sort((a, b) => b.logicalDate.localeCompare(a.logicalDate))
       .slice(offset, offset + limit)
       .map((entry) => this.getEntry(entry.logicalDate)!);
+  }
+
+  listEntriesInRange(startDate: string, endDate: string) {
+    if (!isLogicalDate(startDate) || !isLogicalDate(endDate) || startDate > endDate) throw new Error("Choose a valid date range.");
+    return [...this.entries.values()]
+      .filter((entry) => !entry.deletedAt && entry.logicalDate >= startDate && entry.logicalDate <= endDate)
+      .sort((a, b) => a.logicalDate.localeCompare(b.logicalDate))
+      .map((entry) => this.getEntry(entry.logicalDate)!);
+  }
+
+  getHistorySpan(): HistorySpan {
+    const dates = [...this.entries.values()].filter((entry) => !entry.deletedAt).map((entry) => entry.logicalDate).sort();
+    return { firstDate: dates[0] ?? null, lastDate: dates[dates.length - 1] ?? null, recordedDays: dates.length };
   }
 
   getInsightsData(): InsightsData {
@@ -357,6 +372,31 @@ export class DaylioMemoryStore {
       this.goalCompletions.set(key, { goalId, logicalDate, entryId: entry.id, createdAt: current?.createdAt ?? timestamp, updatedAt: current?.updatedAt ?? timestamp });
     }
     return this.withGoalCompletions(entry);
+  }
+
+  saveDay(logicalDate: string, input: unknown) {
+    if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
+    const day = validateDayInput(input);
+    const plan = planDaySave({ goals: [...this.goals.values()], activityIds: day.activityIds, completedGoalIds: day.completedGoalIds });
+    const entryInput = { moodId: day.moodId, activityIds: plan.activityIds, completedGoalIds: [], expectedVersion: day.expectedVersion };
+    // Check everything saveEntry would reject before changing any state.
+    validateEntryReferences(entryInput, { moodIds: this.moods, activityIds: this.activities, goalIds: this.goals });
+    const persisted = this.entries.get(logicalDate);
+    const existingVersion = persisted && !persisted.deletedAt ? persisted.version : 0;
+    if (day.expectedVersion !== undefined && existingVersion !== day.expectedVersion) throw versionConflict();
+
+    this.dayMoodSelections.delete(logicalDate);
+    for (const key of [...this.dayActivitySelections.keys()]) {
+      if (key.startsWith(`${logicalDate}:`)) this.dayActivitySelections.delete(key);
+    }
+    const timestamp = nowIso();
+    for (const goalId of plan.clearGoalIds) this.goalCompletions.delete(goalCompletionKey(logicalDate, goalId));
+    for (const goalId of plan.completeGoalIds) {
+      const key = goalCompletionKey(logicalDate, goalId);
+      const current = this.goalCompletions.get(key);
+      this.goalCompletions.set(key, { goalId, logicalDate, entryId: current?.entryId, createdAt: current?.createdAt ?? timestamp, updatedAt: timestamp });
+    }
+    return this.saveEntry(logicalDate, entryInput);
   }
 
   deleteEntry(logicalDate: string, expectedVersion?: number) {

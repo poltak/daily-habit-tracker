@@ -128,6 +128,12 @@ export type DaySelections = {
   activityOverrideIds: string[];
 };
 
+export type HistorySpan = {
+  firstDate: string | null;
+  lastDate: string | null;
+  recordedDays: number;
+};
+
 export type CalendarEntryDay = {
   logicalDate: string;
   moodId: string;
@@ -319,6 +325,32 @@ export function goalStartDate(requested?: string) {
 
 function isGoalDateActive(goal: Pick<Goal, "startDate" | "endDate">, logicalDate: string) {
   return (!goal.startDate || logicalDate >= goal.startDate) && (!goal.endDate || logicalDate <= goal.endDate);
+}
+
+/**
+ * Works out the activities and goal completions for a whole-day save. A goal linked to an
+ * activity is complete exactly when that activity is selected, the rule the Log screen's
+ * toggles keep. Goals without a linked activity change only when `completedGoalIds` is given.
+ */
+export function planDaySave({ goals, activityIds, completedGoalIds }: { goals: readonly Pick<Goal, "id" | "activityId" | "archived">[]; activityIds: readonly string[]; completedGoalIds?: readonly string[] }) {
+  const goalsById = new Map(goals.map((goal) => [goal.id, goal]));
+  const activities = new Set(activityIds);
+  for (const goalId of completedGoalIds ?? []) {
+    const goal = goalsById.get(goalId);
+    if (!goal) throw new Error("One goal is no longer available.");
+    if (goal.archived) throw new Error("An archived goal cannot be marked completed.");
+    if (goal.activityId) activities.add(goal.activityId);
+  }
+  const explicit = completedGoalIds ? new Set(completedGoalIds) : null;
+  const completeGoalIds: string[] = [];
+  const clearGoalIds: string[] = [];
+  for (const goal of goals) {
+    if (goal.archived) continue;
+    const completed = goal.activityId ? activities.has(goal.activityId) : explicit ? explicit.has(goal.id) : null;
+    if (completed === true) completeGoalIds.push(goal.id);
+    else if (completed === false) clearGoalIds.push(goal.id);
+  }
+  return { activityIds: [...activities], completeGoalIds, clearGoalIds };
 }
 
 export function isGoalDateScheduled(goal: Pick<Goal, "repeatType" | "scheduleType" | "weekdaysMask" | "startDate" | "endDate">, logicalDate: string) {
