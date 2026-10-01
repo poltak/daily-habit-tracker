@@ -156,7 +156,6 @@ export type Bootstrap = {
   groups: ActivityGroup[];
   activities: Activity[];
   goals: Goal[];
-  entries: Entry[];
   settings: AppSettings;
   today: string;
   yesterday: string;

@@ -132,18 +132,17 @@ export class D1DaylioStore {
     this.database = database;
   }
 
-  async bootstrap(entryLimit = 30, entryOffset = 0): Promise<Bootstrap> {
-    const [moodRows, groupRows, activityRows, goalRows, entries, settings] = await Promise.all([
+  async bootstrap(): Promise<Bootstrap> {
+    const [moodRows, groupRows, activityRows, goalRows, settings] = await Promise.all([
       rows<MoodRow>(this.database, this.database.prepare("SELECT id, name, score, emoji, color FROM mood_levels ORDER BY score DESC")),
       rows<GroupRow>(this.database, this.database.prepare("SELECT id, name, sort_order, archived_at FROM activity_groups ORDER BY sort_order")),
       rows<ActivityRow>(this.database, this.database.prepare("SELECT id, group_id, name, material_icon, source_icon_id, sort_order, archived_at FROM activities ORDER BY sort_order")),
       rows<GoalRow>(this.database, this.database.prepare("SELECT id, activity_id, name, material_icon, repeat_type, schedule_type, target_per_week, weekdays_mask, start_date, end_date, sort_order, archived_at, reminder_enabled, reminder_time, source_state FROM goals ORDER BY sort_order")),
-      this.listEntries(entryLimit, entryOffset),
       this.getSettings(),
     ]);
     const today = new Date();
     const todayValue = `${today.getFullYear()}-${`${today.getMonth() + 1}`.padStart(2, "0")}-${`${today.getDate()}`.padStart(2, "0")}`;
-    return { moods: moodRows.map(toMood), groups: groupRows.map(toGroup), activities: activityRows.map(toActivity), goals: goalRows.map(toGoal), entries, settings, today: todayValue, yesterday: addDays(todayValue, -1) };
+    return { moods: moodRows.map(toMood), groups: groupRows.map(toGroup), activities: activityRows.map(toActivity), goals: goalRows.map(toGoal), settings, today: todayValue, yesterday: addDays(todayValue, -1) };
   }
 
   async getSettings(): Promise<AppSettings> {

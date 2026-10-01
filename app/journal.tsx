@@ -49,6 +49,8 @@ type ActivityCreationSource = "log" | "settings";
 type ConnectionState = "checking" | "online" | "offline" | "error";
 type Notice = { kind: "success" | "error" | "info"; text: string };
 type Route = { view: View; goalId?: string; groupId?: string; returnView?: ActivityCreationSource };
+/** The catalog from the server plus the saved entries this session has loaded, one day at a time. */
+type JournalData = Bootstrap & { entries: Entry[] };
 
 const HISTORY_STATE_KEY = "daymarkRoute";
 
@@ -299,7 +301,7 @@ export default function Journal() {
   const dateInputRef = useRef<HTMLInputElement>(null);
   const dateLabelRef = useRef<HTMLSpanElement>(null);
   const dateSwipeStartRef = useRef<{ x: number; y: number } | null>(null);
-  const [data, setData] = useState<Bootstrap | null>(null);
+  const [data, setData] = useState<JournalData | null>(null);
   const [view, setView] = useState<View>("log");
   const [selectedDate, setSelectedDate] = useState("");
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
@@ -354,7 +356,7 @@ export default function Journal() {
   const entryMutationRef = useRef(false);
   const selectedDateEpochRef = useRef(0);
   const localMutationEpochRef = useRef(0);
-  const dataRef = useRef<Bootstrap | null>(null);
+  const dataRef = useRef<JournalData | null>(null);
   const viewRef = useRef<View>(view);
   const setupBusyRef = useRef(false);
   const navigationReadyRef = useRef(false);
@@ -562,13 +564,10 @@ export default function Journal() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function applyBootstrap(
-    next: Bootstrap,
-    preferredDate: string,
-  ) {
+  function applyBootstrap(next: Bootstrap) {
     const today = logicalDateFromDate();
-    const nextDate = preferredDate || readActiveStoredDraft()?.logicalDate || today;
-    setData({ ...next, today, yesterday: addDays(today, -1) });
+    const nextDate = selectedDateRef.current || readActiveStoredDraft()?.logicalDate || today;
+    setData((current) => ({ ...next, entries: current?.entries ?? [], today, yesterday: addDays(today, -1) }));
     setCalendarMonth((current) => current || nextDate.slice(0, 7));
     if (viewRef.current === "goal" && selectedGoalIdRef.current) {
       const goal = next.goals.find((candidate) => candidate.id === selectedGoalIdRef.current && !candidate.archived);
@@ -580,9 +579,9 @@ export default function Journal() {
         writeRoute({ view: "log" }, { replace: true });
       }
     }
-    // The bootstrap page is incomplete. Validate a stored draft only after the
-    // selected date has been read, or an older draft can be deleted as stale.
-    void chooseDate(nextDate);
+    // Load the day once. A later catalog refresh leaves the selected day alone,
+    // and its own refresh keeps it current.
+    if (!selectedDateRef.current) void chooseDate(nextDate);
   }
 
   async function loadBootstrap() {
@@ -596,7 +595,7 @@ export default function Journal() {
       if (!response.ok) throw new Error("Could not connect to your journal.");
       const next = (await response.json()) as Bootstrap;
       if (request.isCurrent()) {
-        applyBootstrap(next, selectedDateRef.current);
+        applyBootstrap(next);
         setConnectionState("online");
       }
       return next;
@@ -617,7 +616,7 @@ export default function Journal() {
       })
       .then((next) => {
         if (cancelled || !request.isCurrent()) return;
-        applyBootstrap(next, "");
+        applyBootstrap(next);
         setConnectionState("online");
       })
       .catch((error: Error) => {
@@ -1968,7 +1967,7 @@ function LogView({
   pendingSelectionKeys,
   message,
 }: {
-  data: Bootstrap;
+  data: JournalData;
   selectedDate: string;
   draft: Draft;
   activityQuery: string;

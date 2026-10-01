@@ -140,7 +140,6 @@ export class DaylioMemoryStore {
       groups: [...this.groups.values()].sort((a, b) => a.sortOrder - b.sortOrder),
       activities: [...this.activities.values()].sort((a, b) => a.sortOrder - b.sortOrder),
       goals: [...this.goals.values()].sort((a, b) => a.sortOrder - b.sortOrder),
-      entries: this.listEntries(30),
       settings: { ...this.settings },
       today,
       yesterday,

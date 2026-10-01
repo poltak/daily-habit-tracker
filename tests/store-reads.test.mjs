@@ -19,7 +19,7 @@ for (const kind of ["memory", "D1"]) {
     if (database) database.sqlite.exec("UPDATE goal_completions SET entry_id = NULL");
     const expected = await store.getEntry(date);
     assert.deepEqual((await store.listEntries())[0], expected);
-    assert.deepEqual((await store.bootstrap()).entries[0], expected);
+    assert.equal("entries" in (await store.bootstrap()), false, "bootstrap carries the catalog only; days are loaded one at a time");
     assert.equal(expected.moodId, "mood-rad");
     assert.deepEqual(expected.activityIds, ["activity-gym"]);
     assert.deepEqual(expected.completedGoalIds, ["goal-move"]);
