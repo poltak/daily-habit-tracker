@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { DaylioMemoryStore } from "../lib/daylio.ts";
-import { D1DaylioStore, seedDatabase } from "../lib/server-store.ts";
+import { D1DaylioStore, getServerStore, seedDatabase } from "../lib/server-store.ts";
 import { createTestDatabase } from "./helpers/d1-database.mjs";
 
 test("concurrent first requests share the canonical seed catalog", async (t) => {
@@ -24,4 +24,8 @@ test("an initialized database needs only one seed check and keeps user changes",
   assert.equal(database.queries.length, 1);
   assert.equal(database.batches.length, 0);
   assert.equal(database.sqlite.prepare("SELECT name FROM activities WHERE id = 'activity-walk'").get().name, "My walk");
+});
+
+test("the server refuses to run without the D1 binding instead of keeping data in memory", async () => {
+  await assert.rejects(() => getServerStore(), /D1 binding `DB` is unavailable/);
 });

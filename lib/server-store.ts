@@ -25,7 +25,6 @@ import {
   isWeekday,
   normalizeGoalConfig,
   validateSettingsPatch,
-  store as memoryStore,
 } from "./daylio.ts";
 import { validateEntryInput, validateEntryReferences as assertEntryReferences, validateExpectedVersion, versionConflict, type EntryInputCandidate } from "./entry-validation.ts";
 import { iconForActivity } from "./icons.ts";
@@ -57,19 +56,16 @@ type GoalCompletionRow = { id: string; goal_id: string; logical_date: string; en
 type DayMoodSelectionRow = { logical_date: string; mood_id: string; created_at: string; updated_at: string };
 type DayActivitySelectionRow = { logical_date: string; activity_id: string; selected: number; created_at: string; updated_at: string };
 
-async function currentDatabase(): Promise<Database | null> {
+// Journal data is only ever stored in D1. Without the binding, fail every request
+// instead of accepting writes that would be lost.
+async function requireDatabase(): Promise<Database> {
+  let database: Database | undefined;
   try {
-    const { env } = await import("cloudflare:workers");
-    const candidate = env.DB as Database | undefined;
-    return candidate && typeof candidate.prepare === "function" ? candidate : null;
+    database = (await import("cloudflare:workers")).env.DB as Database | undefined;
   } catch {
-    return null;
+    // Not a Workers runtime.
   }
-}
-
-async function databaseOrNull() {
-  const database = await currentDatabase();
-  if (!database) return null;
+  if (!database || typeof database.prepare !== "function") throw new Error("The D1 binding `DB` is unavailable, so the journal cannot be read or saved.");
   try {
     await seedDatabase(database);
   } catch (error) {
@@ -652,9 +648,6 @@ export class D1DaylioStore {
   }
 }
 
-type AnyStore = DaylioMemoryStore | D1DaylioStore;
-
-export async function getServerStore(): Promise<AnyStore> {
-  const database = await databaseOrNull();
-  return database ? new D1DaylioStore(database) : memoryStore;
+export async function getServerStore() {
+  return new D1DaylioStore(await requireDatabase());
 }

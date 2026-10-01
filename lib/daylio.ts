@@ -925,6 +925,3 @@ export class DaylioMemoryStore {
     return this.bootstrap();
   }
 }
-
-const globalStore = globalThis as typeof globalThis & { __daylioStore?: DaylioMemoryStore };
-export const store = globalStore.__daylioStore ?? (globalStore.__daylioStore = new DaylioMemoryStore());
