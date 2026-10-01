@@ -380,28 +380,34 @@ export function buildGoalHistory({
     const weekEnd = endOfWeek(weekStart);
     const weekDates: string[] = [];
     for (let date = weekStart; date <= weekEnd; date = addDays(date, 1)) weekDates.push(date);
+    const activeDates = weekDates.filter((date) => isGoalDateActive(goal, date));
     const evaluationDates = repeatType === "weekly"
-      ? weekDates.filter((date) => isGoalDateActive(goal, date))
-      : weekDates.filter((date) => isGoalDateScheduled(goal, date));
+      ? activeDates
+      : activeDates.filter((date) => isGoalDateScheduled(goal, date));
     if (evaluationDates.length === 0) continue;
     const completedCount = evaluationDates.filter((date) => completed.has(date)).length;
     const expectedCount = repeatType === "weekly"
       ? Math.min(goal.targetPerWeek ?? 1, evaluationDates.length)
       : evaluationDates.length;
-    const firstEvaluationDate = evaluationDates[0];
-    const lastEvaluationDate = evaluationDates[evaluationDates.length - 1];
-    const future = firstEvaluationDate > asOf;
-    const targetReached = completedCount >= expectedCount;
-    const past = lastEvaluationDate < asOf;
-    const accomplished = future ? null : targetReached ? true : past ? false : null;
+    // Upcoming: the week, or the goal's active period in it, has not begun.
+    // Accomplished: the target is met, even before the week ends.
+    // Not accomplished: the last day that could count has passed.
+    // In progress: otherwise, because today or a later day can still count.
+    const status: GoalHistoryWeek["status"] = activeDates[0] > asOf
+      ? "upcoming"
+      : completedCount >= expectedCount
+        ? "accomplished"
+        : evaluationDates[evaluationDates.length - 1] < asOf
+          ? "not_accomplished"
+          : "in_progress";
     weeks.push({
       weekStart,
       weekEnd,
       completedCount,
       expectedCount,
       repeatType,
-      status: future ? "upcoming" : targetReached ? "accomplished" : past ? "not_accomplished" : "in_progress",
-      accomplished,
+      status,
+      accomplished: status === "accomplished" ? true : status === "not_accomplished" ? false : null,
     });
   }
   return { goal, month: startDate.slice(0, 7), startDate, endDate, asOf, days, weeks };

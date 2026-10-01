@@ -121,6 +121,59 @@ test("Weekly history evaluates only active dates, caps partial weeks, and omits 
   assert.equal(afterEnd.weeks.every((week) => week.status === "not_accomplished"), true);
 });
 
+test("the current week is in progress before a Daily goal's first scheduled weekday", () => {
+  const goal = {
+    id: "goal-saturday",
+    activityId: null,
+    name: "Saturday only",
+    materialIcon: "task_alt",
+    repeatType: "daily",
+    scheduleType: "weekdays",
+    weekdaysMask: 0b1000000,
+    sortOrder: 0,
+    archived: false,
+    reminderEnabled: false,
+  };
+  // 2026-10-01 is a Thursday in the week of Sunday 2026-09-27 to Saturday 2026-10-03.
+  const statuses = (asOf, completedDates = []) => buildGoalHistory({ goal, startDate: "2026-10-01", endDate: "2026-10-31", completedDates, asOf })
+    .weeks.slice(0, 2).map((week) => [week.weekStart, week.status]);
+  assert.deepEqual(statuses("2026-10-01"), [["2026-09-27", "in_progress"], ["2026-10-04", "upcoming"]]);
+  assert.deepEqual(statuses("2026-10-03"), [["2026-09-27", "in_progress"], ["2026-10-04", "upcoming"]]);
+  assert.deepEqual(statuses("2026-10-03", ["2026-10-03"]), [["2026-09-27", "accomplished"], ["2026-10-04", "upcoming"]]);
+  assert.deepEqual(statuses("2026-10-04"), [["2026-09-27", "not_accomplished"], ["2026-10-04", "in_progress"]]);
+});
+
+test("week status follows where today falls: past weeks are final and later weeks are upcoming", () => {
+  const base = { id: "goal", activityId: null, name: "Goal", materialIcon: "task_alt", sortOrder: 0, archived: false, reminderEnabled: false };
+  const goals = [
+    { ...base, repeatType: "weekly", scheduleType: "times_per_week", targetPerWeek: 3 },
+    { ...base, repeatType: "daily", scheduleType: "daily", weekdaysMask: ALL_WEEKDAYS_MASK },
+    { ...base, repeatType: "daily", scheduleType: "weekdays", weekdaysMask: 0b0101010 },
+    { ...base, repeatType: "daily", scheduleType: "weekdays", weekdaysMask: 0b1000000 },
+  ];
+  for (const goal of goals) {
+    for (let day = 20; day <= 30; day += 1) {
+      const asOf = `2026-09-${day}`;
+      for (const [startDate, endDate] of [["2026-09-01", "2026-09-30"], ["2026-10-01", "2026-10-31"]]) {
+        for (const week of buildGoalHistory({ goal, startDate, endDate, completedDates: [], asOf }).weeks) {
+          const context = `${goal.repeatType} mask ${goal.weekdaysMask} week ${week.weekStart} as of ${asOf}`;
+          if (week.weekEnd < asOf) assert.equal(week.status, "not_accomplished", context);
+          else if (week.weekStart > asOf) assert.equal(week.status, "upcoming", context);
+          else assert.notEqual(week.status, "upcoming", context);
+        }
+      }
+    }
+  }
+});
+
+test("goal detail reloads on a new local day and hides another month's results", () => {
+  assert.match(pageSource, /const localToday = data\?\.today;/);
+  assert.match(pageSource, /\[goalHistoryMonth, goalHistoryRevision, localToday, selectedGoalId, view\]/);
+  assert.match(pageSource, /const monthHistory = history\?\.month === resolvedMonth \? history : null;/);
+  assert.match(pageSource, /monthHistory\?\.weeks\.map/);
+  assert.doesNotMatch(pageSource, /history\?\.weeks\.map\(|history\?\.days \?\?/);
+});
+
 test("memory store persists goal icon, repeat settings, and history", () => {
   const store = new DaylioMemoryStore();
   const goal = store.createGoal({ name: "Custom goal", activityId: null, repeatType: "daily", weekdaysMask: 1, materialIcon: "favorite" });

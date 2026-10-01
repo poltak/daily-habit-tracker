@@ -732,6 +732,8 @@ export default function Journal() {
     };
   }, [calendarMonth, view]);
 
+  // Week statuses are judged against today, so reload them when the local day changes while the goal stays open.
+  const localToday = data?.today;
   useEffect(() => {
     if (view !== "goal" || !selectedGoalId || !/^\d{4}-\d{2}$/.test(goalHistoryMonth)) return;
     const gate = goalHistoryRequestGate.current;
@@ -765,7 +767,7 @@ export default function Journal() {
     return () => {
       if (!request.signal.aborted) gate.cancel();
     };
-  }, [goalHistoryMonth, goalHistoryRevision, selectedGoalId, view]);
+  }, [goalHistoryMonth, goalHistoryRevision, localToday, selectedGoalId, view]);
 
   function beginDateSwipe(event: React.TouchEvent) {
     const touch = event.touches.length === 1 ? event.touches[0] : null;
@@ -2508,7 +2510,9 @@ function GoalDetailView({
   const [year, monthNumber] = resolvedMonth.split("-").map(Number);
   const firstDay = new Date(year, monthNumber - 1, 1).getDay();
   const daysInMonth = new Date(year, monthNumber, 0).getDate();
-  const historyDays = new Map((history?.days ?? []).map((day) => [day.logicalDate, day]));
+  // While another month loads, or if that load fails, the previous month's results must not show under the new month.
+  const monthHistory = history?.month === resolvedMonth ? history : null;
+  const historyDays = new Map((monthHistory?.days ?? []).map((day) => [day.logicalDate, day]));
   const cells = [
     ...Array(firstDay).fill(null),
     ...Array.from({ length: daysInMonth }, (_, index) => `${resolvedMonth}-${String(index + 1).padStart(2, "0")}`),
@@ -2642,7 +2646,7 @@ function GoalDetailView({
 
       <section className="goal-week-history" aria-live="polite">
         <div className="section-heading"><div><p className="eyebrow">Weekly result</p><h2>Was the goal accomplished?</h2></div></div>
-        {!history && isLoadingHistory ? <p className="inline-loading">Loading weekly results…</p> : history?.weeks.map((week) => (
+        {!monthHistory && isLoadingHistory ? <p className="inline-loading">Loading weekly results…</p> : monthHistory?.weeks.map((week) => (
           <div className={`goal-week-row ${week.status}`} key={week.weekStart}>
             <span className={`goal-week-status ${week.status}`} aria-label={statusLabel(week.status)}><Icon name={week.status === "accomplished" ? UI_ICONS.check : week.status === "not_accomplished" ? "close" : week.status === "upcoming" ? "event" : "hourglass_top"} /></span>
             <span className="goal-week-copy"><strong>{shortDate(week.weekStart)} – {shortDate(week.weekEnd)}</strong><small>{statusLabel(week.status)} · {week.completedCount}/{week.expectedCount} {week.repeatType === "daily" ? "scheduled days" : "days"}</small></span>
