@@ -4,7 +4,7 @@
 // All API responses use test fixtures; no journal data is read or written.
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import { DaylioMemoryStore } from "../../lib/daylio.ts";
+import { DaylioMemoryStore } from "../../lib/memory-store.ts";
 
 const { chromium } = createRequire(import.meta.url)("playwright");
 const baseURL = process.env.JOURNAL_TEST_URL ?? "http://localhost:3101";

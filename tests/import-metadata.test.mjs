@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DaylioMemoryStore } from "../lib/daylio.ts";
+import { DaylioMemoryStore } from "../lib/memory-store.ts";
 import { D1DaylioStore } from "../lib/server-store.ts";
 import { createTestDatabase } from "./helpers/d1-database.mjs";
 import { importPayload } from "./helpers/import-payload.mjs";

@@ -12,7 +12,7 @@ const {
   rollbackCatalogOverride,
   sortCatalogItems,
 } = await import("../lib/catalog-mutations.ts");
-const { DaylioMemoryStore: MemoryStore } = await import("../lib/daylio.ts");
+const { DaylioMemoryStore: MemoryStore } = await import("../lib/memory-store.ts");
 
 test("pending action acquisition suppresses duplicate same-key work synchronously", () => {
   const pending = new Set();

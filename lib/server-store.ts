@@ -15,7 +15,6 @@ import {
   type Mood,
   type SelectionMutationResult,
   buildGoalHistory,
-  DaylioMemoryStore,
   DEFAULT_SETTINGS,
   MOODS,
   addDays,
@@ -26,6 +25,7 @@ import {
   normalizeGoalConfig,
   validateSettingsPatch,
 } from "./daylio.ts";
+import { DaylioMemoryStore } from "./memory-store.ts";
 import { validateEntryInput, validateEntryReferences as assertEntryReferences, validateExpectedVersion, versionConflict, type EntryInputCandidate } from "./entry-validation.ts";
 import { iconForActivity } from "./icons.ts";
 import { validateCatalogPatch, validateCatalogReorder } from "./catalog-validation.ts";

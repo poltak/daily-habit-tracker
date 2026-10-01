@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
-import { DaylioMemoryStore } from "../../lib/daylio.ts";
+import { DaylioMemoryStore } from "../../lib/memory-store.ts";
 
 // Execute the store's real SQL, including transaction rollback, without a server.
 export function createTestDatabase() {

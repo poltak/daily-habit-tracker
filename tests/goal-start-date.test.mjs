@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { DaylioMemoryStore, buildGoalHistory, logicalDateFromDate } from "../lib/daylio.ts";
+import { buildGoalHistory, logicalDateFromDate } from "../lib/daylio.ts";
+import { DaylioMemoryStore } from "../lib/memory-store.ts";
 import { D1DaylioStore, GOAL_START_DATE_BACKFILL } from "../lib/server-store.ts";
 import { createTestDatabase } from "./helpers/d1-database.mjs";
 import { importPayload } from "./helpers/import-payload.mjs";

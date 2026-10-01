@@ -49,3 +49,14 @@ test("insights is a directly loadable route in the journal shell", async () => {
 test("does not keep the temporary starter preview", async () => {
   await assert.rejects(access(new URL("public/_sites-preview", templateRoot)));
 });
+
+test("the in-memory test store and seed catalog stay out of the browser bundle", async () => {
+  const { readdir, readFile } = await import("node:fs/promises");
+  const assets = new URL("../dist/client/assets/", import.meta.url);
+  const scripts = (await readdir(assets)).filter((file) => file.endsWith(".js"));
+  assert.ok(scripts.length > 0);
+  for (const file of scripts) {
+    const source = await readFile(new URL(file, assets), "utf8");
+    assert.doesNotMatch(source, /Import would replace an entry|Move your body/, file);
+  }
+});

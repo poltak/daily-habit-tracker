@@ -2,7 +2,8 @@
 // JOURNAL_TEST_BROWSER=chrome uses installed Chrome. All API data is synthetic.
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import { DaylioMemoryStore, addDays } from "../../lib/daylio.ts";
+import { addDays } from "../../lib/daylio.ts";
+import { DaylioMemoryStore } from "../../lib/memory-store.ts";
 
 const { chromium } = createRequire(import.meta.url)("playwright");
 const baseURL = process.env.JOURNAL_TEST_URL ?? "http://localhost:3101";

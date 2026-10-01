@@ -8,10 +8,10 @@ const stylesSource = await readFile(new URL("../app/globals.css", import.meta.ur
 
 const {
   ALL_WEEKDAYS_MASK,
-  DaylioMemoryStore,
   buildGoalHistory,
   normalizeGoalConfig,
 } = await import("../lib/daylio.ts");
+const { DaylioMemoryStore } = await import("../lib/memory-store.ts");
 
 test("goal configuration normalizes Daily weekdays and Weekly targets", () => {
   assert.deepEqual(normalizeGoalConfig({ repeatType: "daily", weekdaysMask: 0b00111110 }), {

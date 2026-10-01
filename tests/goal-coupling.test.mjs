@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const schemaSource = await readFile(new URL("../db/schema.ts", import.meta.url), "utf8");
-const daylioSource = await readFile(new URL("../lib/daylio.ts", import.meta.url), "utf8");
+const daylioSource = await readFile(new URL("../lib/memory-store.ts", import.meta.url), "utf8");
 const serverStoreSource = await readFile(new URL("../lib/server-store.ts", import.meta.url), "utf8");
 const pageSource = await readFile(new URL("../app/journal.tsx", import.meta.url), "utf8");
 const migrationSource = await readFile(new URL("../drizzle/0003_stormy_cammi.sql", import.meta.url), "utf8");

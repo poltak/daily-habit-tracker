@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { DaylioMemoryStore, buildGoalHistory, endOfWeek, startOfWeek, validateSettingsPatch, weekRangeLabel, weekdayOrder } from "../lib/daylio.ts";
+import { buildGoalHistory, endOfWeek, startOfWeek, validateSettingsPatch, weekRangeLabel, weekdayOrder } from "../lib/daylio.ts";
+import { DaylioMemoryStore } from "../lib/memory-store.ts";
 import { D1DaylioStore } from "../lib/server-store.ts";
 import { buildBestWeeksAnalysis } from "../lib/insights-rhythms.ts";
 import { createTestDatabase } from "./helpers/d1-database.mjs";
