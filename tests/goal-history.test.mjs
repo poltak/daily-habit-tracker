@@ -168,6 +168,23 @@ test("week status follows where today falls: past weeks are final and later week
   }
 });
 
+test("a week becomes not accomplished as soon as its target is out of reach", () => {
+  const base = { id: "goal", activityId: null, name: "Goal", materialIcon: "task_alt", sortOrder: 0, archived: false, reminderEnabled: false };
+  // The week of Monday 2026-09-28 to Sunday 2026-10-04.
+  const status = ({ goal, asOf, completedDates }) => buildGoalHistory({ goal, startDate: "2026-10-01", endDate: "2026-10-31", completedDates, asOf }).weeks[0].status;
+
+  const everyDay = { ...base, repeatType: "daily", scheduleType: "daily", weekdaysMask: ALL_WEEKDAYS_MASK };
+  assert.equal(status({ goal: everyDay, asOf: "2026-09-30", completedDates: ["2026-09-28", "2026-09-29"] }), "in_progress");
+  assert.equal(status({ goal: everyDay, asOf: "2026-09-30", completedDates: ["2026-09-28"] }), "not_accomplished", "Tuesday was missed");
+
+  const weekly = { ...base, repeatType: "weekly", scheduleType: "times_per_week", targetPerWeek: 3 };
+  assert.equal(status({ goal: weekly, asOf: "2026-10-02", completedDates: [] }), "in_progress", "Friday, Saturday, and Sunday are still open");
+  assert.equal(status({ goal: weekly, asOf: "2026-10-03", completedDates: [] }), "not_accomplished", "only two days are left");
+  assert.equal(status({ goal: weekly, asOf: "2026-10-03", completedDates: ["2026-09-29"] }), "in_progress");
+  assert.equal(status({ goal: weekly, asOf: "2026-10-04", completedDates: ["2026-09-29", "2026-10-04"] }), "not_accomplished", "today is done and no day is left");
+  assert.equal(status({ goal: weekly, asOf: "2026-10-04", completedDates: ["2026-09-29", "2026-10-03"] }), "in_progress", "today can still be the third day");
+});
+
 test("goal detail reloads on a new local day and hides another month's results", () => {
   assert.match(pageSource, /const localToday = data\?\.today;/);
   assert.match(pageSource, /\[goalHistoryMonth, goalHistoryRevision, localToday, selectedGoalId, view\]/);

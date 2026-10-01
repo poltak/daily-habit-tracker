@@ -429,15 +429,17 @@ export function buildGoalHistory({
     const expectedCount = repeatType === "weekly"
       ? Math.min(goal.targetPerWeek ?? 1, evaluationDates.length)
       : evaluationDates.length;
+    // Days from today onward that are not completed yet can still count toward the target.
+    const openCount = evaluationDates.filter((date) => date >= asOf && !completed.has(date)).length;
     // Upcoming: the week, or the goal's active period in it, has not begun.
     // Accomplished: the target is met, even before the week ends.
-    // Not accomplished: the last day that could count has passed.
-    // In progress: otherwise, because today or a later day can still count.
+    // Not accomplished: the target is out of reach, even if every open day gets completed.
+    // In progress: otherwise.
     const status: GoalHistoryWeek["status"] = activeDates[0] > asOf
       ? "upcoming"
       : completedCount >= expectedCount
         ? "accomplished"
-        : evaluationDates[evaluationDates.length - 1] < asOf
+        : completedCount + openCount < expectedCount
           ? "not_accomplished"
           : "in_progress";
     weeks.push({
