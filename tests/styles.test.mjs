@@ -56,3 +56,12 @@ test("moods are drawn faces in the picker and the calendar", () => {
   assert.match(pageSource, /<MoodFace className="calendar-mood-emoji" score=\{mood\.score\} color=\{mood\.color\} \/>/);
   assert.doesNotMatch(pageSource, /\{mood\.emoji\}/);
 });
+
+test("selected activity chips stop at three rows and scroll, so the groups below stay put", () => {
+  const rule = (selector) => styles.match(new RegExp(`^\\.${selector} \\{([^}]*)\\}`, "m"))[1];
+  const px = (css, property) => Number(css.match(new RegExp(`(?:^|[ ;])${property}: (\\d+)px`))[1]);
+  const row = rule("selection-row");
+  const threeRows = 3 * px(rule("selection-chip"), "height") + 2 * px(row, "gap") + 2 * px(row, "padding");
+  assert.equal(px(row, "max-height"), threeRows);
+  assert.match(row, /overflow-y: auto/);
+});
