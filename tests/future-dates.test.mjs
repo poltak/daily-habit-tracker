@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { latestStartedDate, requireStartedDate } from "../lib/daylio.ts";
 import { DaylioMemoryStore } from "../lib/memory-store.ts";
@@ -74,4 +75,19 @@ test("the MCP save_day tool reports a day that has not started", async (t) => {
   assert.equal(store.getEntry("2026-10-04"), null);
   const accepted = (await call("2026-10-03")).result;
   assert.equal(Boolean(accepted.isError), false, accepted.content[0].text);
+});
+
+test("the journal view stops at today", async () => {
+  const pageSource = await readFile(new URL("../app/journal.tsx", import.meta.url), "utf8");
+  const stylesSource = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  // Every way to change the day goes through chooseDate.
+  assert.match(pageSource, /async function chooseDate\(nextDate: string\) \{\s+if \(!isLogicalDate\(nextDate\)\) return;\s+[^\n]*\n\s+if \(nextDate > logicalDateFromDate\(\)\) return;/);
+  assert.match(pageSource, /aria-label="Next day"[^>]*disabled=\{isLoadingDate \|\| isLatestDay\}/);
+  assert.match(pageSource, /type="date"[^>]*max=\{data\.today\}/);
+  assert.match(pageSource, /const notStarted = date > today;/);
+  assert.match(pageSource, /disabled=\{notStarted\}/);
+  assert.match(pageSource, /disabled=\{isLoading \|\| resolvedMonth >= today\.slice\(0, 7\)\}/);
+  // A draft kept for a later day must not become the day that opens first.
+  assert.match(pageSource, /storedDate && storedDate <= today \? storedDate : today/);
+  assert.match(stylesSource, /\.calendar-day\.not-started\s*\{[^}]*cursor:\s*not-allowed;/);
 });

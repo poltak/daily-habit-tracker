@@ -263,6 +263,7 @@ button:disabled { cursor: wait; opacity: .6; }
 .view-log .topbar-date.is-log { display: block; }
 .topbar-date-switcher { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; touch-action: pan-y; -webkit-user-select: none; user-select: none; }
 .topbar-date-switcher button { display: grid; place-items: center; flex: 0 0 auto; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--ink); }
+.topbar-date-switcher .at-latest-day:disabled { background: transparent; cursor: not-allowed; opacity: .35; }
 .topbar-date-label { min-width: 0; flex: 1; text-align: center; white-space: nowrap; color: var(--ink); font-family: var(--font-display); font-size: clamp(16px, 4.6vw, 19px); font-weight: 500; letter-spacing: -.01em; transition: transform .12s ease-out; }
 .connection-pill { display: none; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; color: var(--positive-muted); font-size: 12px; font-weight: 600; white-space: nowrap; }
 .connection-pill.checking { color: var(--muted); }
@@ -485,6 +486,7 @@ details:not([open]) > summary .add-activity-button { display: none; }
 .calendar-day { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; aspect-ratio: 1; min-height: 42px; padding: 0; border: 1px solid transparent; border-radius: 14px; background: var(--surface-subtle); color: var(--muted); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .calendar-day.filled { background: color-mix(in srgb, var(--calendar-mood-color, var(--positive)) 20%, var(--card)); color: var(--ink); }
 .calendar-day.today { box-shadow: inset 0 0 0 2px var(--ink); color: var(--ink); }
+.calendar-day.not-started { cursor: not-allowed; opacity: .4; }
 .calendar-mood-emoji { display: block; width: clamp(18px, 5.4vw, 28px); height: auto; aspect-ratio: 1; }
 .calendar-blank { aspect-ratio: 1; min-height: 42px; }
 .calendar-loading { margin: 13px 0 0; color: var(--muted); font-size: 12px; text-align: center; }
@@ -623,7 +625,7 @@ details:not([open]) > summary .add-activity-button { display: none; }
   .bottom-nav button:hover:not(.active):not(:disabled) { background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink); }
   .mood-option:hover:not(:disabled) .mood-emoji { transform: translateY(-3px) scale(1.06); opacity: 1; filter: none; }
   .activity-button:hover:not(:disabled):not(.selected), .goal-row:hover:not(.checked), .management-row:hover, .icon-choice:hover { border-color: var(--line-strong); background: var(--surface-muted); }
-  .calendar-page .calendar-day:hover { border-color: var(--line-strong); color: var(--ink); }
+  .calendar-page .calendar-day:hover:not(:disabled) { border-color: var(--line-strong); color: var(--ink); }
   .theme-option:hover { border-color: var(--line-strong); }
   .add-activity-button:hover { background: var(--mint); }
 }

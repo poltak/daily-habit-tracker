@@ -598,7 +598,9 @@ export default function Journal() {
 
   function applyBootstrap(next: Bootstrap) {
     const today = logicalDateFromDate();
-    const nextDate = selectedDateRef.current || readActiveStoredDraft()?.logicalDate || today;
+    const storedDate = readActiveStoredDraft()?.logicalDate;
+    // A draft kept for a day after today stays in storage, because that day cannot be opened yet.
+    const nextDate = selectedDateRef.current || (storedDate && storedDate <= today ? storedDate : today);
     setData((current) => ({ ...next, entries: current?.entries ?? [], today, yesterday: addDays(today, -1) }));
     setCalendarMonth((current) => current || nextDate.slice(0, 7));
     if (viewRef.current === "goal" && selectedGoalIdRef.current) {
@@ -780,6 +782,9 @@ export default function Journal() {
     };
   }, [goalHistoryMonth, goalHistoryRevision, localToday, selectedGoalId, view]);
 
+  // The journal stops at today. This is true while today, or a later day left over from a clock change, is open.
+  const isLatestDay = Boolean(data && selectedDate >= data.today);
+
   function beginDateSwipe(event: React.TouchEvent) {
     const touch = event.touches.length === 1 ? event.touches[0] : null;
     dateSwipeStartRef.current = touch ? { x: touch.clientX, y: touch.clientY } : null;
@@ -790,7 +795,8 @@ export default function Journal() {
     const start = dateSwipeStartRef.current;
     const touch = event.touches[0];
     if (!start || !touch || !dateLabelRef.current) return;
-    const pull = Math.max(-28, Math.min(28, (touch.clientX - start.x) / 3));
+    // The label does not move toward a day that cannot be opened.
+    const pull = Math.max(isLatestDay ? 0 : -28, Math.min(28, (touch.clientX - start.x) / 3));
     dateLabelRef.current.style.transform = `translateX(${pull}px)`;
   }
 
@@ -806,6 +812,8 @@ export default function Journal() {
 
   async function chooseDate(nextDate: string) {
     if (!isLogicalDate(nextDate)) return;
+    // A day that has not started has nothing to record.
+    if (nextDate > logicalDateFromDate()) return;
     if (entryMutationRef.current) {
       setMessage({ kind: "info", text: "Wait for the entry update to finish before changing the day." });
       return;
@@ -1626,7 +1634,7 @@ export default function Journal() {
             <div className="topbar-date-switcher" aria-label="Choose the journal day" aria-live="polite" onTouchStart={beginDateSwipe} onTouchMove={trackDateSwipe} onTouchEnd={endDateSwipe} onTouchCancel={() => endDateSwipe(null)}>
               <button aria-label="Previous day" disabled={isLoadingDate} onClick={() => void chooseDate(addDays(selectedDate, -1))}><Icon name="chevron_left" /></button>
               <span className="topbar-date-label" ref={dateLabelRef}>{friendlyDate(selectedDate)}</span>
-              <button aria-label="Next day" disabled={isLoadingDate} onClick={() => void chooseDate(addDays(selectedDate, 1))}><Icon name="chevron_right" /></button>
+              <button aria-label="Next day" className={isLatestDay ? "at-latest-day" : undefined} disabled={isLoadingDate || isLatestDay} onClick={() => void chooseDate(addDays(selectedDate, 1))}><Icon name="chevron_right" /></button>
             </div>
           ) : view === "log"
             ? "Your journal"
@@ -1664,7 +1672,7 @@ export default function Journal() {
             <button className="topbar-calendar" type="button" aria-label="Choose a date" disabled={isLoadingDate} onClick={openDatePicker}>
               <Icon name="calendar_month" />
             </button>
-            <input ref={dateInputRef} className="topbar-calendar-input" type="date" value={selectedDate} onChange={(event) => void chooseDate(event.target.value)} disabled={isLoadingDate} tabIndex={-1} aria-label="Journal date" />
+            <input ref={dateInputRef} className="topbar-calendar-input" type="date" value={selectedDate} max={data.today} onChange={(event) => void chooseDate(event.target.value)} disabled={isLoadingDate} tabIndex={-1} aria-label="Journal date" />
           </div>
         )}
       </header>
@@ -2535,7 +2543,7 @@ function CalendarView({
         <p className="eyebrow">Your history</p>
         <h1>Calendar</h1>
         <p className="muted">
-          Each entry day shows its mood. Select any day to open or add its check-in.
+          Each entry day shows its mood. Select today or an earlier day to open or add its check-in.
         </p>
       </div>
       <section className="calendar-card">
@@ -2554,7 +2562,7 @@ function CalendarView({
             className={`icon-button ${isLoading ? "pending-action" : ""}`}
             aria-label={isLoading ? "Loading month" : "Next month"}
             aria-busy={isLoading}
-            disabled={isLoading}
+            disabled={isLoading || resolvedMonth >= today.slice(0, 7)}
             onClick={() => onMonth(shifted(1))}
           >
             <Icon name={isLoading ? UI_ICONS.sync : "chevron_right"} />
@@ -2570,13 +2578,15 @@ function CalendarView({
             if (!date) return <span className="calendar-blank" key={`blank-${index}`} />;
             const entry = entriesByDate.get(date);
             const mood = entry ? moodFor(moods, entry.moodId) : undefined;
+            const notStarted = date > today;
             return (
               <button
                 key={date}
-                className={`calendar-day ${entry ? "filled" : ""} ${date === today ? "today" : ""}`}
+                className={`calendar-day ${entry ? "filled" : ""} ${date === today ? "today" : ""} ${notStarted ? "not-started" : ""}`}
                 style={mood ? ({ "--calendar-mood-color": mood.color } as React.CSSProperties) : undefined}
+                disabled={notStarted}
                 onClick={() => onOpenDate(date)}
-                aria-label={`${friendlyDate(date)}${mood ? `, ${mood.name} mood, entry exists` : entry ? ", entry exists" : ", empty"}`}
+                aria-label={`${friendlyDate(date)}${mood ? `, ${mood.name} mood, entry exists` : entry ? ", entry exists" : notStarted ? ", not started" : ", empty"}`}
               >
                 <span>{Number(date.slice(-2))}</span>
                 {mood && <MoodFace className="calendar-mood-emoji" score={mood.score} color={mood.color} />}
