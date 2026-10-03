@@ -12,7 +12,7 @@ const INSTRUCTIONS = [
   "Call get_overview first to learn the moods, activities, goals and how much history exists.",
   "To analyse long periods, use summarize_mood and summarize_activities, which cover any span in one call. Use get_days for day-level detail, at most 366 days per call.",
   "Dates are calendar dates in the journal owner's local time, written YYYY-MM-DD. The server does not know the owner's time zone, so pass explicit dates.",
-  "save_day adds an entry. It refuses to overwrite an existing day unless replace_existing is true.",
+  "save_day adds an entry for today or an earlier day. It refuses to overwrite an existing day unless replace_existing is true.",
 ].join(" ");
 
 const PARSE_ERROR = -32700;

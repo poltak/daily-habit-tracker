@@ -31,6 +31,7 @@ import {
   logicalDateFromDate,
   normalizeGoalConfig,
   planDaySave,
+  requireStartedDate,
   validateSettingsPatch,
 } from "./daylio.ts";
 import { iconForActivity } from "./icons.ts";
@@ -245,7 +246,7 @@ export class DaylioMemoryStore {
   }
 
   setMoodSelection(logicalDate: string, moodId: string): DayMoodSelection {
-    if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
+    requireStartedDate(logicalDate);
     if (typeof moodId !== "string" || !this.moods.has(moodId)) throw new Error("Choose one of the five moods.");
     const timestamp = nowIso();
     const current = this.dayMoodSelections.get(logicalDate);
@@ -262,7 +263,7 @@ export class DaylioMemoryStore {
   }
 
   setActivitySelection(logicalDate: string, activityId: string, selected: boolean): SelectionMutationResult {
-    if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
+    requireStartedDate(logicalDate);
     if (typeof activityId !== "string" || !this.activities.has(activityId)) throw new Error("One activity is no longer available.");
     if (typeof selected !== "boolean") throw new Error("Activity selection must be a boolean.");
     const selection = this.storeActivitySelection(logicalDate, activityId, selected);
@@ -293,7 +294,7 @@ export class DaylioMemoryStore {
   }
 
   setGoalCompletion(logicalDate: string, goalId: string, completed: boolean): SelectionMutationResult {
-    if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
+    requireStartedDate(logicalDate);
     if (typeof goalId !== "string" || !goalId.trim() || !this.goals.has(goalId)) throw new Error("One goal is no longer available.");
     if (typeof completed !== "boolean") throw new Error("Goal completion must be a boolean.");
 
@@ -331,7 +332,7 @@ export class DaylioMemoryStore {
   }
 
   saveEntry(logicalDate: string, input: unknown) {
-    if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
+    requireStartedDate(logicalDate);
     const validated = validateEntryInput(input);
     validateEntryReferences(validated, { moodIds: this.moods, activityIds: this.activities, goalIds: this.goals });
 
@@ -375,7 +376,7 @@ export class DaylioMemoryStore {
   }
 
   saveDay(logicalDate: string, input: unknown) {
-    if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
+    requireStartedDate(logicalDate);
     const day = validateDayInput(input);
     const plan = planDaySave({ goals: [...this.goals.values()], activityIds: day.activityIds, completedGoalIds: day.completedGoalIds });
     const entryInput = { moodId: day.moodId, activityIds: plan.activityIds, completedGoalIds: [], expectedVersion: day.expectedVersion };

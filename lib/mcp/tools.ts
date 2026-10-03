@@ -407,11 +407,11 @@ export const MCP_TOOLS: McpTool[] = [
   {
     name: "save_day",
     title: "Add or replace a day's entry",
-    description: "Saves the entry for one day: its mood and the full list of activities done. The journal holds one entry per day, so this fails if the day already has an entry unless replace_existing is true, and replacing overwrites that day's mood, activities and goal completions. Goals linked to an activity are completed automatically when that activity is listed, and completing a linked goal adds its activity. Activities, goals and moods can be given by name or by id from get_overview.",
+    description: "Saves the entry for one day: its mood and the full list of activities done. A day that has not started is refused. The journal holds one entry per day, so this also fails if the day already has an entry unless replace_existing is true, and replacing overwrites that day's mood, activities and goal completions. Goals linked to an activity are completed automatically when that activity is listed, and completing a linked goal adds its activity. Activities, goals and moods can be given by name or by id from get_overview.",
     inputSchema: {
       type: "object",
       properties: {
-        date: { ...DATE_PROPERTY, description: "The day the entry describes, YYYY-MM-DD, in the journal owner's local time." },
+        date: { ...DATE_PROPERTY, description: "The day the entry describes, YYYY-MM-DD, in the journal owner's local time. It must be today or an earlier day." },
         mood: { type: ["string", "integer"], description: "A mood name such as \"Good\", a mood id, or a score from 1 (worst) to 5 (best)." },
         activities: { type: "array", items: { type: "string" }, description: "Every activity done that day, by name or id. Pass an empty list for none." },
         completed_goals: { type: "array", items: { type: "string" }, description: "Goals to mark completed that day, by name or id. Only needed for goals with no linked activity. When given, unlinked goals not listed are marked not completed. When omitted, they are left as they are." },

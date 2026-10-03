@@ -99,7 +99,7 @@ reply. It uses the same D1 database and the same access check as the rest of
 | `summarize_mood` | Recorded days, mean mood, share of good days and the mood distribution, for any span, grouped by month, year, week or weekday. |
 | `summarize_activities` | For each activity: days recorded, mean mood with and without it, and the difference. Uses the same calculation as the Insights screen. |
 | `get_goal_history` | One goal's completed dates and weekly results in a date range. |
-| `save_day` | Adds the entry for one day. It refuses to overwrite an existing day unless `replace_existing` is true. |
+| `save_day` | Adds the entry for one day. It refuses a day that has not started, and it refuses to overwrite an existing day unless `replace_existing` is true. |
 
 Reads return names, not IDs, to keep responses small. Two activities with the
 same name are told apart by their group, for example `Walk (Health)`. `save_day`

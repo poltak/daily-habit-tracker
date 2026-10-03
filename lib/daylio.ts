@@ -228,6 +228,23 @@ export function isLogicalDate(value: string) {
   return !Number.isNaN(parsed.valueOf()) && logicalDateFromDate(parsed) === value;
 }
 
+// No time zone is more than 14 hours ahead of UTC.
+const FURTHEST_ZONE_AHEAD_MS = 14 * 60 * 60 * 1000;
+
+/**
+ * The latest calendar date that has started somewhere in the world. The server does not know
+ * the owner's time zone, so this is the last day it accepts a record for.
+ */
+export function latestStartedDate(now = new Date()) {
+  return new Date(now.getTime() + FURTHEST_ZONE_AHEAD_MS).toISOString().slice(0, 10);
+}
+
+/** Rejects a date that is not real, and a day that has not started anywhere yet. */
+export function requireStartedDate(logicalDate: string) {
+  if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
+  if (logicalDate > latestStartedDate()) throw new Error("That day has not started yet. Choose today or an earlier day.");
+}
+
 /** First and last logical dates of a "YYYY-MM" month. */
 export function monthDateRange(month: string) {
   if (!/^\d{4}-\d{2}$/.test(month)) throw new Error("Choose a valid month.");

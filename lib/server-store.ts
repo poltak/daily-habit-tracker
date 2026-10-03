@@ -25,6 +25,7 @@ import {
   isWeekday,
   normalizeGoalConfig,
   planDaySave,
+  requireStartedDate,
   validateSettingsPatch,
 } from "./daylio.ts";
 import { DaylioMemoryStore } from "./memory-store.ts";
@@ -315,7 +316,7 @@ export class D1DaylioStore {
   }
 
   async setMoodSelection(logicalDate: string, moodId: string): Promise<DayMoodSelection> {
-    if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
+    requireStartedDate(logicalDate);
     if (typeof moodId !== "string" || !moodId.trim()) throw new Error("Choose one of the five moods.");
     const mood = await this.database.prepare("SELECT id FROM mood_levels WHERE id = ? LIMIT 1").bind(moodId).first<{ id: string }>();
     if (!mood) throw new Error("Choose one of the five moods.");
@@ -325,7 +326,7 @@ export class D1DaylioStore {
   }
 
   async setActivitySelection(logicalDate: string, activityId: string, selected: boolean): Promise<SelectionMutationResult> {
-    if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
+    requireStartedDate(logicalDate);
     if (typeof activityId !== "string" || !activityId.trim()) throw new Error("One activity is no longer available.");
     if (typeof selected !== "boolean") throw new Error("Activity selection must be a boolean.");
     // One round trip for the three lookups the write depends on.
@@ -360,7 +361,7 @@ export class D1DaylioStore {
   }
 
   async setGoalCompletion(logicalDate: string, goalId: string, completed: boolean): Promise<SelectionMutationResult> {
-    if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
+    requireStartedDate(logicalDate);
     if (typeof goalId !== "string" || !goalId.trim()) throw new Error("One goal is no longer available.");
     if (typeof completed !== "boolean") throw new Error("Goal completion must be a boolean.");
     // One round trip for the three lookups the write depends on.
@@ -462,7 +463,7 @@ export class D1DaylioStore {
   }
 
   async saveEntry(logicalDate: string, input: unknown) {
-    if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
+    requireStartedDate(logicalDate);
     const validated = validateEntryInput(input);
     await this.runEntryWrite(await this.entryWriteStatements(logicalDate, validated));
     return this.getEntry(logicalDate);
@@ -473,7 +474,7 @@ export class D1DaylioStore {
    * completions that go with them. Pending per-tap selections for the day are discarded.
    */
   async saveDay(logicalDate: string, input: unknown) {
-    if (!isLogicalDate(logicalDate)) throw new Error("Choose a valid date.");
+    requireStartedDate(logicalDate);
     const day = validateDayInput(input);
     const goalRows = await rows<{ id: string; activity_id: string | null; archived_at: string | null }>(this.database.prepare("SELECT id, activity_id, archived_at FROM goals"));
     const plan = planDaySave({
