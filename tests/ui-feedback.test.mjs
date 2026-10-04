@@ -44,6 +44,11 @@ test("goals and groups are deleted only after the confirmation alert", () => {
   assert.match(setupSource, /`Delete \$\{group\.name\}`/);
   assert.match(setupSource, /`Delete \$\{activity\.name\}`/);
   assert.match(setupSource, /`Delete \$\{goal\.name\}`/);
+  const retireHandler = pageSource.slice(pageSource.indexOf("async function retireGoal"), pageSource.indexOf("async function saveEntry"));
+  assert.ok(retireHandler.indexOf("window.confirm(deleteWarning(") > 0);
+  assert.ok(retireHandler.indexOf("window.confirm") < retireHandler.indexOf('method: "DELETE"'));
+  assert.match(pageSource, /onArchive=\{\(\) => void retireGoal\("archive"\)\}/);
+  assert.match(pageSource, /onDelete=\{\(\) => void retireGoal\("delete"\)\}/);
   assert.match(pageSource, /dropDeletedFromDraft\(next\)/);
   assert.match(pageSource, /recovered\.draft = withKnownCatalog\(\{ record: recovered\.draft, catalog: dataRef\.current \}\)/);
 });

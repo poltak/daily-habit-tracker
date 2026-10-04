@@ -31,6 +31,7 @@ import {
   type Draft,
   writeStoredDraft,
 } from "../lib/draft-storage";
+import { deleteWarning } from "../lib/catalog-mutations";
 import { draftFromDayRefreshState } from "../lib/day-refresh";
 import { dayOffsetFromSwipe } from "../lib/day-swipe";
 import { UI_ICONS } from "../lib/icons";
@@ -371,6 +372,7 @@ export default function Journal() {
   const [isLoadingGoalHistory, setIsLoadingGoalHistory] = useState(false);
   const [goalConfigDraft, setGoalConfigDraft] = useState<GoalConfigDraft | null>(null);
   const [isSavingGoalConfig, setIsSavingGoalConfig] = useState(false);
+  const [goalAction, setGoalAction] = useState<"archive" | "delete" | null>(null);
   const [goalIconPickerOpen, setGoalIconPickerOpen] = useState(false);
   const [activityGroupId, setActivityGroupId] = useState<string | undefined>();
   const [activityReturnView, setActivityReturnView] = useState<ActivityCreationSource>("log");
@@ -544,18 +546,17 @@ export default function Journal() {
     changeView("goal", { goalId });
   }
 
-  function closeGoal() {
+  function closeGoal(notice?: Notice) {
     if (pendingGoalConfigRef.current) {
       setMessage({ kind: "info", text: "Wait for the goal update to finish before leaving this goal." });
       return;
     }
+    pendingRouteNoticeRef.current = notice ?? null;
     if (navigationReadyRef.current && routeDepthRef.current > 0) {
       window.history.back();
       return;
     }
-    updateGoalRoute(null);
-    setView("log");
-    writeRoute({ view: "log" }, { replace: true });
+    applyRoute({ view: "log" }, { replace: true });
   }
 
   function closeAddActivity(notice?: Notice) {
@@ -1495,6 +1496,49 @@ export default function Journal() {
     }
   }
 
+  // Archive and delete both take the open goal out of the active goals, so its view closes afterward.
+  async function retireGoal(action: "archive" | "delete") {
+    const goalId = selectedGoalId;
+    const goal = data?.goals.find((candidate) => candidate.id === goalId);
+    if (!goalId || !goal || isSavingGoalConfig || pendingGoalConfigRef.current) return;
+    if (action === "delete" && !window.confirm(deleteWarning({ kind: "goal", name: goal.name }))) return;
+    if (!navigator.onLine) {
+      setMessage({ kind: "error", text: "You’re offline. Reconnect before updating a goal." });
+      setConnectionState("offline");
+      return;
+    }
+    pendingGoalConfigRef.current = true;
+    setIsSavingGoalConfig(true);
+    setGoalAction(action);
+    setMessage(null);
+    try {
+      const response = await fetch(`/api/catalog/goal/${goalId}`, action === "delete"
+        ? { method: "DELETE" }
+        : { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ archived: true }) });
+      const result = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(result.error ?? `Could not ${action} the goal.`);
+      if (action === "delete") {
+        const catalog = { activities: dataRef.current?.activities ?? [], goals: (dataRef.current?.goals ?? []).filter((candidate) => candidate.id !== goalId) };
+        setData((current) => current ? { ...current, goals: catalog.goals, entries: current.entries.map((entry) => withKnownCatalog({ record: entry, catalog })) } : current);
+        dropDeletedFromDraft(catalog);
+        // The goal is gone, so nothing of its view stays on screen while the route changes.
+        updateGoalRoute(null);
+      } else {
+        setData((current) => current ? { ...current, goals: current.goals.map((candidate) => candidate.id === goalId ? { ...candidate, archived: true } : candidate) } : current);
+      }
+      setConnectionState("online");
+      pendingGoalConfigRef.current = false;
+      closeGoal({ kind: "success", text: action === "delete" ? `Deleted “${goal.name}”.` : `Archived “${goal.name}”. You can restore it in Setup.` });
+    } catch (error) {
+      setConnectionState(navigator.onLine ? "error" : "offline");
+      setMessage({ kind: "error", text: (error as Error).message });
+    } finally {
+      pendingGoalConfigRef.current = false;
+      setIsSavingGoalConfig(false);
+      setGoalAction(null);
+    }
+  }
+
   async function saveEntry() {
     if (isSaving || isDeleting || entryMutationRef.current || loadedDateRef.current !== selectedDate || !selectedDate) return;
     if (hasPendingGoalToggle(selectedDate) || hasPendingSelectionToggle(selectedDate)) {
@@ -1760,11 +1804,14 @@ export default function Journal() {
             config={goalConfigDraft}
             isLoadingHistory={isLoadingGoalHistory}
             isSavingConfig={isSavingGoalConfig}
+            pendingAction={goalAction}
             iconPickerOpen={goalIconPickerOpen}
-            onBack={closeGoal}
+            onBack={() => closeGoal()}
             onMonth={setGoalHistoryMonth}
             onConfig={setGoalConfigDraft}
             onSaveConfig={() => void saveGoalConfig()}
+            onArchive={() => void retireGoal("archive")}
+            onDelete={() => void retireGoal("delete")}
             onOpenIconPicker={() => setGoalIconPickerOpen(true)}
             onCloseIconPicker={() => setGoalIconPickerOpen(false)}
           />
@@ -2362,11 +2409,14 @@ function GoalDetailView({
   config,
   isLoadingHistory,
   isSavingConfig,
+  pendingAction,
   iconPickerOpen,
   onBack,
   onMonth,
   onConfig,
   onSaveConfig,
+  onArchive,
+  onDelete,
   onOpenIconPicker,
   onCloseIconPicker,
 }: {
@@ -2377,12 +2427,16 @@ function GoalDetailView({
   weekEndsOn: number;
   config: GoalConfigDraft;
   isLoadingHistory: boolean;
+  /** True while a save, an archive, or a delete of this goal is in progress. */
   isSavingConfig: boolean;
+  pendingAction: "archive" | "delete" | null;
   iconPickerOpen: boolean;
   onBack: () => void;
   onMonth: (month: string) => void;
   onConfig: (config: GoalConfigDraft) => void;
   onSaveConfig: () => void;
+  onArchive: () => void;
+  onDelete: () => void;
   onOpenIconPicker: () => void;
   onCloseIconPicker: () => void;
 }) {
@@ -2492,8 +2546,13 @@ function GoalDetailView({
           </fieldset>
         )}
         <div className="goal-config-actions">
-          <button className="primary-button" onClick={onSaveConfig} disabled={isSavingConfig || !isDirty} aria-busy={isSavingConfig}>{isSavingConfig ? "Saving…" : "Save goal"}</button>
+          <button className="primary-button" onClick={onSaveConfig} disabled={isSavingConfig || !isDirty} aria-busy={isSavingConfig && !pendingAction}>{isSavingConfig && !pendingAction ? "Saving…" : "Save goal"}</button>
           {isDirty && !isSavingConfig && <span className="muted small-copy">Unsaved goal changes</span>}
+        </div>
+        <div className="goal-config-actions goal-manage-actions">
+          <button className="secondary-button compact-button" onClick={onArchive} disabled={isSavingConfig} aria-busy={pendingAction === "archive"}><ActionIcon name={UI_ICONS.archive} pending={pendingAction === "archive"} /> {pendingAction === "archive" ? "Archiving…" : "Archive goal"}</button>
+          <button className="ghost-button danger compact-button" onClick={onDelete} disabled={isSavingConfig} aria-busy={pendingAction === "delete"}><ActionIcon name={UI_ICONS.delete} pending={pendingAction === "delete"} /> {pendingAction === "delete" ? "Deleting…" : "Delete goal"}</button>
+          <span className="muted small-copy">Archive hides the goal and keeps its history. Delete removes the goal and its history for good.</span>
         </div>
       </section>
 

@@ -520,6 +520,7 @@ details:not([open]) > summary .add-activity-button { display: none; }
 .weekday-option:focus-within, .weekly-target-option:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
 .weekday-option.selected, .weekly-target-option.selected { border-color: var(--positive); background: var(--positive); color: var(--ink-inverse); }
 .goal-config-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.goal-manage-actions { padding-top: 16px; border-top: 1px solid var(--line); }
 .activity-create-actions { justify-content: flex-start; }
 
 .goal-history-explainer { margin: -6px 0 14px; font-size: 12.5px; }
