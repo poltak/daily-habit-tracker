@@ -5,6 +5,7 @@ import test from "node:test";
 const pageSource = await readFile(new URL("../app/journal.tsx", import.meta.url), "utf8");
 const setupSource = await readFile(new URL("../app/components/setup-view.tsx", import.meta.url), "utf8");
 const stylesSource = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+const iconSource = await readFile(new URL("../app/components/icon.tsx", import.meta.url), "utf8");
 
 test("the save panel is a static section of the recording form", () => {
   const saveRule = stylesSource.match(/\.save-bar\s*\{[^}]+\}/)?.[0] ?? "";
@@ -34,6 +35,14 @@ test("catalog mutations expose pending state and optimistic archive rollback", (
   assert.match(setupSource, /Created, but refresh failed; refresh the page before retrying/);
   assert.match(setupSource, /aria-busy=\{pending\}/);
   assert.match(setupSource, /disabled=\{pending\}/);
+});
+
+test("a button in progress shows a circle spinner in place of its icon", () => {
+  assert.match(iconSource, /pending \? <span className="spinner" aria-hidden="true" \/> : <Icon name=\{name\} \/>/);
+  assert.match(stylesSource, /\.spinner \{[^}]*border-radius: 50%;[^}]*animation: spin/);
+  assert.doesNotMatch(stylesSource, /\.pending-action \.material-symbols-rounded/);
+  assert.doesNotMatch(setupSource, /UI_ICONS\.sync/);
+  assert.equal((pageSource.match(/UI_ICONS\.sync/g) ?? []).length, 1, "only the connection status keeps the cloud icon");
 });
 
 test("entry deletion has a duplicate-request guard and loading feedback", () => {

@@ -6,7 +6,7 @@ import { filterActivityGroups } from "../../lib/activity-groups";
 import { ACTIVITY_ICON_CHOICES, UI_ICONS } from "../../lib/icons";
 import { type ThemePreference } from "../../lib/theme";
 import { acquirePendingAction, applyCatalogOverride, catalogKey, commitCatalogOverride, getReorderPlan, mergeCatalogOverride, releasePendingAction, rollbackCatalogOverride, sortCatalogItems, type CatalogKind, type CatalogOverride, type CatalogOverrides } from "../../lib/catalog-mutations";
-import { Icon } from "./icon";
+import { ActionIcon, Icon } from "./icon";
 
 type SetupMessage = { kind: "success" | "error"; text: string };
 type PatchResult = { status: "duplicate" | "patch-failed" | "saved" | "refresh-failed" };
@@ -527,17 +527,17 @@ export function SetupView({ data, themePreference, onThemeChange, onRefresh, onM
                   <small>{effectiveActivities.filter((activity) => activity.groupId === group.id && !activity.archived).length} active activities{archived ? " · archived" : ""}</small>
                 </span>
                 <span className="management-actions">
-                  <button className={`tiny-button ${pending ? "pending-action" : ""}`} aria-label={pending ? `Updating ${group.name}…` : `Rename ${group.name}`} aria-busy={pending} disabled={pending} onClick={() => void rename({ kind: "group", id: group.id, current: group.name })}><Icon name={pending ? UI_ICONS.sync : UI_ICONS.edit} /></button>
-                  <button className={`tiny-button ${reordering ? "pending-action" : ""}`} aria-label={reordering ? `Updating ${group.name}…` : `Move ${group.name} up`} aria-busy={reordering} disabled={index === 0 || reordering || pending} onClick={() => void move({ kind: "group", item: group, items: all, direction: -1 })}><Icon name={reordering ? UI_ICONS.sync : UI_ICONS.moveUp} /></button>
-                  <button className={`tiny-button ${reordering ? "pending-action" : ""}`} aria-label={reordering ? `Updating ${group.name}…` : `Move ${group.name} down`} aria-busy={reordering} disabled={index === all.length - 1 || reordering || pending} onClick={() => void move({ kind: "group", item: group, items: all, direction: 1 })}><Icon name={reordering ? UI_ICONS.sync : UI_ICONS.moveDown} /></button>
-                  <button className={`tiny-button ${pending ? "pending-action" : ""}`} aria-label={pending ? `Updating ${group.name}…` : archived ? `Restore ${group.name}` : `Archive ${group.name}`} aria-busy={pending} disabled={pending} onClick={() => void archive({ kind: "group", id: group.id, archived })}><Icon name={pending ? UI_ICONS.sync : archived ? UI_ICONS.restore : UI_ICONS.archive} /></button>
+                  <button className="tiny-button" aria-label={pending ? `Updating ${group.name}…` : `Rename ${group.name}`} aria-busy={pending} disabled={pending} onClick={() => void rename({ kind: "group", id: group.id, current: group.name })}><ActionIcon name={UI_ICONS.edit} pending={pending} /></button>
+                  <button className="tiny-button" aria-label={reordering ? `Updating ${group.name}…` : `Move ${group.name} up`} aria-busy={reordering} disabled={index === 0 || reordering || pending} onClick={() => void move({ kind: "group", item: group, items: all, direction: -1 })}><ActionIcon name={UI_ICONS.moveUp} pending={reordering} /></button>
+                  <button className="tiny-button" aria-label={reordering ? `Updating ${group.name}…` : `Move ${group.name} down`} aria-busy={reordering} disabled={index === all.length - 1 || reordering || pending} onClick={() => void move({ kind: "group", item: group, items: all, direction: 1 })}><ActionIcon name={UI_ICONS.moveDown} pending={reordering} /></button>
+                  <button className="tiny-button" aria-label={pending ? `Updating ${group.name}…` : archived ? `Restore ${group.name}` : `Archive ${group.name}`} aria-busy={pending} disabled={pending} onClick={() => void archive({ kind: "group", id: group.id, archived })}><ActionIcon name={archived ? UI_ICONS.restore : UI_ICONS.archive} pending={pending} /></button>
                 </span>
               </div>;
             })}
           </div>
           <div className="inline-form">
             <input value={groupName} onChange={(event) => setGroupName(event.target.value)} placeholder="New group name" aria-busy={isKindReordering("group") || isPending("create:group")} disabled={isKindReordering("group") || isPending("create:group")} />
-            <button className={`secondary-button ${isKindReordering("group") || isPending("create:group") ? "pending-action" : ""}`} aria-busy={isKindReordering("group") || isPending("create:group")} disabled={isKindReordering("group") || isPending("create:group")} onClick={() => void create({ payload: { kind: "group", name: groupName }, reset: () => setGroupName("") })}><Icon name={isPending("create:group") ? UI_ICONS.sync : UI_ICONS.add} /> {isPending("create:group") ? "Adding…" : isKindReordering("group") ? "Reordering…" : "Add group"}</button>
+            <button className="secondary-button" aria-busy={isKindReordering("group") || isPending("create:group")} disabled={isKindReordering("group") || isPending("create:group")} onClick={() => void create({ payload: { kind: "group", name: groupName }, reset: () => setGroupName("") })}><ActionIcon name={UI_ICONS.add} pending={isKindReordering("group") || isPending("create:group")} /> {isPending("create:group") ? "Adding…" : isKindReordering("group") ? "Reordering…" : "Add group"}</button>
           </div>
         </section>
 
@@ -592,14 +592,14 @@ export function SetupView({ data, themePreference, onThemeChange, onRefresh, onM
                           <small>{activity.icon}{archived ? " · archived" : ""}</small>
                         </span>
                         <span className="management-actions">
-                          <button className={`tiny-button ${pending ? "pending-action" : ""}`} aria-label={pending ? `Updating ${activity.name}…` : `Rename ${activity.name}`} aria-busy={pending} disabled={pending} onClick={() => void rename({ kind: "activity", id: activity.id, current: activity.name })}><Icon name={pending ? UI_ICONS.sync : UI_ICONS.edit} /></button>
-                          <button className={`tiny-button ${pending ? "pending-action" : ""}`} aria-label={pending ? `Updating ${activity.name}…` : `Choose icon for ${activity.name}`} aria-busy={pending} disabled={pending} onClick={() => setIconPickerActivity({ id: activity.id, name: activity.name, icon: activity.icon })}><Icon name={pending ? UI_ICONS.sync : "palette"} /></button>
+                          <button className="tiny-button" aria-label={pending ? `Updating ${activity.name}…` : `Rename ${activity.name}`} aria-busy={pending} disabled={pending} onClick={() => void rename({ kind: "activity", id: activity.id, current: activity.name })}><ActionIcon name={UI_ICONS.edit} pending={pending} /></button>
+                          <button className="tiny-button" aria-label={pending ? `Updating ${activity.name}…` : `Choose icon for ${activity.name}`} aria-busy={pending} disabled={pending} onClick={() => setIconPickerActivity({ id: activity.id, name: activity.name, icon: activity.icon })}><ActionIcon name={"palette"} pending={pending} /></button>
                           <select className={`tiny-select ${pending ? "pending-action" : ""}`} aria-label={`Move ${activity.name} to group`} aria-busy={pending} disabled={pending} value={activity.groupId} onChange={(event) => void patchCatalog({ kind: "activity", id: activity.id, patch: { groupId: event.target.value }, optimistic: { groupId: event.target.value } })}>
                             {activeGroups.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}
                           </select>
-                          <button className={`tiny-button ${reordering ? "pending-action" : ""}`} aria-label={reordering ? `Updating ${activity.name}…` : `Move ${activity.name} up`} aria-busy={reordering} disabled={index === 0 || reordering || pending} onClick={() => void move({ kind: "activity", item: activity, items: groupActivities, direction: -1 })}><Icon name={reordering ? UI_ICONS.sync : UI_ICONS.moveUp} /></button>
-                          <button className={`tiny-button ${reordering ? "pending-action" : ""}`} aria-label={reordering ? `Updating ${activity.name}…` : `Move ${activity.name} down`} aria-busy={reordering} disabled={index === groupActivities.length - 1 || reordering || pending} onClick={() => void move({ kind: "activity", item: activity, items: groupActivities, direction: 1 })}><Icon name={reordering ? UI_ICONS.sync : UI_ICONS.moveDown} /></button>
-                          <button className={`tiny-button ${pending ? "pending-action" : ""}`} aria-label={pending ? `Updating ${activity.name}…` : archived ? `Restore ${activity.name}` : `Archive ${activity.name}`} aria-busy={pending} disabled={pending} onClick={() => void archive({ kind: "activity", id: activity.id, archived })}><Icon name={pending ? UI_ICONS.sync : archived ? UI_ICONS.restore : UI_ICONS.archive} /></button>
+                          <button className="tiny-button" aria-label={reordering ? `Updating ${activity.name}…` : `Move ${activity.name} up`} aria-busy={reordering} disabled={index === 0 || reordering || pending} onClick={() => void move({ kind: "activity", item: activity, items: groupActivities, direction: -1 })}><ActionIcon name={UI_ICONS.moveUp} pending={reordering} /></button>
+                          <button className="tiny-button" aria-label={reordering ? `Updating ${activity.name}…` : `Move ${activity.name} down`} aria-busy={reordering} disabled={index === groupActivities.length - 1 || reordering || pending} onClick={() => void move({ kind: "activity", item: activity, items: groupActivities, direction: 1 })}><ActionIcon name={UI_ICONS.moveDown} pending={reordering} /></button>
+                          <button className="tiny-button" aria-label={pending ? `Updating ${activity.name}…` : archived ? `Restore ${activity.name}` : `Archive ${activity.name}`} aria-busy={pending} disabled={pending} onClick={() => void archive({ kind: "activity", id: activity.id, archived })}><ActionIcon name={archived ? UI_ICONS.restore : UI_ICONS.archive} pending={pending} /></button>
                         </span>
                         </div>;
                       })()
@@ -631,17 +631,17 @@ export function SetupView({ data, themePreference, onThemeChange, onRefresh, onM
                   <small>{goal.repeatType === "weekly" || goal.scheduleType === "times_per_week" ? `${goal.targetPerWeek ?? 1} ${goal.targetPerWeek === 1 ? "day" : "days"} per week` : goal.weekdaysMask && goal.weekdaysMask !== 127 ? "Selected weekdays" : "Every day"} · {effectiveActivities.find((activity) => activity.id === goal.activityId)?.name ?? "No associated activity"}{archived ? " · archived" : ""}</small>
                 </span>
                 <span className="management-actions">
-                  <button className={`tiny-button ${pending ? "pending-action" : ""}`} aria-label={pending ? `Updating ${goal.name}…` : `Configure ${goal.name}`} aria-busy={pending} disabled={pending} onClick={() => onOpenGoal(goal.id)}><Icon name={pending ? UI_ICONS.sync : UI_ICONS.edit} /></button>
-                  <button className={`tiny-button ${reordering ? "pending-action" : ""}`} aria-label={reordering ? `Updating ${goal.name}…` : `Move ${goal.name} up`} aria-busy={reordering} disabled={index === 0 || reordering || pending} onClick={() => void move({ kind: "goal", item: goal, items: all, direction: -1 })}><Icon name={reordering ? UI_ICONS.sync : UI_ICONS.moveUp} /></button>
-                  <button className={`tiny-button ${reordering ? "pending-action" : ""}`} aria-label={reordering ? `Updating ${goal.name}…` : `Move ${goal.name} down`} aria-busy={reordering} disabled={index === all.length - 1 || reordering || pending} onClick={() => void move({ kind: "goal", item: goal, items: all, direction: 1 })}><Icon name={reordering ? UI_ICONS.sync : UI_ICONS.moveDown} /></button>
-                  <button className={`tiny-button ${pending ? "pending-action" : ""}`} aria-label={pending ? `Updating ${goal.name}…` : archived ? `Restore ${goal.name}` : `Archive ${goal.name}`} aria-busy={pending} disabled={pending} onClick={() => void archive({ kind: "goal", id: goal.id, archived })}><Icon name={pending ? UI_ICONS.sync : archived ? UI_ICONS.restore : UI_ICONS.archive} /></button>
+                  <button className="tiny-button" aria-label={pending ? `Updating ${goal.name}…` : `Configure ${goal.name}`} aria-busy={pending} disabled={pending} onClick={() => onOpenGoal(goal.id)}><ActionIcon name={UI_ICONS.edit} pending={pending} /></button>
+                  <button className="tiny-button" aria-label={reordering ? `Updating ${goal.name}…` : `Move ${goal.name} up`} aria-busy={reordering} disabled={index === 0 || reordering || pending} onClick={() => void move({ kind: "goal", item: goal, items: all, direction: -1 })}><ActionIcon name={UI_ICONS.moveUp} pending={reordering} /></button>
+                  <button className="tiny-button" aria-label={reordering ? `Updating ${goal.name}…` : `Move ${goal.name} down`} aria-busy={reordering} disabled={index === all.length - 1 || reordering || pending} onClick={() => void move({ kind: "goal", item: goal, items: all, direction: 1 })}><ActionIcon name={UI_ICONS.moveDown} pending={reordering} /></button>
+                  <button className="tiny-button" aria-label={pending ? `Updating ${goal.name}…` : archived ? `Restore ${goal.name}` : `Archive ${goal.name}`} aria-busy={pending} disabled={pending} onClick={() => void archive({ kind: "goal", id: goal.id, archived })}><ActionIcon name={archived ? UI_ICONS.restore : UI_ICONS.archive} pending={pending} /></button>
                 </span>
               </div>;
             })}
           </div>
           <div className="inline-form stacked-mobile">
             <input value={goalName} onChange={(event) => setGoalName(event.target.value)} placeholder="New goal name" aria-busy={isKindReordering("goal") || isPending("create:goal")} disabled={isKindReordering("goal") || isPending("create:goal")} />
-            <button className={`secondary-button ${isKindReordering("goal") || isPending("create:goal") ? "pending-action" : ""}`} aria-busy={isKindReordering("goal") || isPending("create:goal")} disabled={isKindReordering("goal") || isPending("create:goal")} onClick={() => void create({ payload: { kind: "goal", name: goalName, startDate: logicalDateFromDate() }, reset: () => setGoalName("") })}><Icon name={isPending("create:goal") ? UI_ICONS.sync : UI_ICONS.add} /> {isPending("create:goal") ? "Adding…" : isKindReordering("goal") ? "Reordering…" : "Add goal"}</button>
+            <button className="secondary-button" aria-busy={isKindReordering("goal") || isPending("create:goal")} disabled={isKindReordering("goal") || isPending("create:goal")} onClick={() => void create({ payload: { kind: "goal", name: goalName, startDate: logicalDateFromDate() }, reset: () => setGoalName("") })}><ActionIcon name={UI_ICONS.add} pending={isKindReordering("goal") || isPending("create:goal")} /> {isPending("create:goal") ? "Adding…" : isKindReordering("goal") ? "Reordering…" : "Add goal"}</button>
           </div>
           <p className="muted small-copy">New goals start with a daily schedule and no associated activity. Use Configure to set their repeat, icon, and activity.</p>
         </section>
@@ -661,7 +661,7 @@ export function SetupView({ data, themePreference, onThemeChange, onRefresh, onM
               const pending = isCatalogPending({ kind: "goal", id: goal.id });
               return <div className="review-row" key={goal.id}>
                 <span><strong>{goal.name}</strong><small>Daylio raw state: {goal.sourceState}</small></span>
-                <button className={`secondary-button compact-button ${pending ? "pending-action" : ""}`} aria-busy={pending} disabled={pending} onClick={() => void archive({ kind: "goal", id: goal.id, archived })}>{pending ? "Updating…" : archived ? "Show goal" : "Archive"}</button>
+                <button className="secondary-button compact-button" aria-busy={pending} disabled={pending} onClick={() => void archive({ kind: "goal", id: goal.id, archived })}>{pending ? "Updating…" : archived ? "Show goal" : "Archive"}</button>
               </div>;
             })}
           </div>
@@ -673,7 +673,7 @@ export function SetupView({ data, themePreference, onThemeChange, onRefresh, onM
             <h2>Keep a copy of your data</h2>
             <p className="muted">Download a versioned JSON export whenever you want.</p>
           </div>
-          <button className={`secondary-button ${isPending("export") ? "pending-action" : ""}`} aria-busy={isPending("export")} disabled={isPending("export")} onClick={() => void exportData()}><Icon name={isPending("export") ? UI_ICONS.sync : UI_ICONS.export} /> {isPending("export") ? "Exporting…" : "Export JSON"}</button>
+          <button className="secondary-button" aria-busy={isPending("export")} disabled={isPending("export")} onClick={() => void exportData()}><ActionIcon name={UI_ICONS.export} pending={isPending("export")} /> {isPending("export") ? "Exporting…" : "Export JSON"}</button>
         </section>
       </section>
       {iconPickerActivity && (

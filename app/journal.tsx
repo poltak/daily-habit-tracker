@@ -39,7 +39,7 @@ import {
   summarizeActivityGroup,
 } from "../lib/activity-groups";
 import { createLatestRequestGate } from "../lib/latest-request-gate";
-import { Icon } from "./components/icon";
+import { ActionIcon, Icon } from "./components/icon";
 import { MoodFace } from "./components/mood-face";
 import { IconPicker, SetupView } from "./components/setup-view";
 import { useJournalTheme } from "./components/theme-control";
@@ -2478,9 +2478,9 @@ function GoalDetailView({
 
       <section className="calendar-card goal-history-card" aria-busy={isLoadingHistory}>
         <div className="calendar-heading">
-          <button className={`icon-button ${isLoadingHistory ? "pending-action" : ""}`} aria-label="Previous month" aria-busy={isLoadingHistory} disabled={isLoadingHistory} onClick={() => onMonth(shifted(-1))}><Icon name={isLoadingHistory ? UI_ICONS.sync : "chevron_left"} /></button>
+          <button className="icon-button" aria-label="Previous month" aria-busy={isLoadingHistory} disabled={isLoadingHistory} onClick={() => onMonth(shifted(-1))}><ActionIcon name="chevron_left" pending={isLoadingHistory} /></button>
           <h2>{label}</h2>
-          <button className={`icon-button ${isLoadingHistory ? "pending-action" : ""}`} aria-label="Next month" aria-busy={isLoadingHistory} disabled={isLoadingHistory} onClick={() => onMonth(shifted(1))}><Icon name={isLoadingHistory ? UI_ICONS.sync : "chevron_right"} /></button>
+          <button className="icon-button" aria-label="Next month" aria-busy={isLoadingHistory} disabled={isLoadingHistory} onClick={() => onMonth(shifted(1))}><ActionIcon name="chevron_right" pending={isLoadingHistory} /></button>
         </div>
         <p className="muted goal-history-explainer">{goalRepeatType(goal) === "daily" ? "Green days are completed; pale days are not completed. A dash marks an expected day." : `Green days are completed. Each week needs ${goal.targetPerWeek ?? 1} completed ${(goal.targetPerWeek ?? 1) === 1 ? "day" : "days"}.`}</p>
         <div className="calendar-weekdays">{calendarWeekdays.map((weekday) => <span key={weekday}>{weekday}</span>)}</div>
@@ -2549,23 +2549,23 @@ function CalendarView({
       <section className="calendar-card">
         <div className="calendar-heading">
           <button
-            className={`icon-button ${isLoading ? "pending-action" : ""}`}
+            className="icon-button"
             aria-label={isLoading ? "Loading month" : "Previous month"}
             aria-busy={isLoading}
             disabled={isLoading}
             onClick={() => onMonth(shifted(-1))}
           >
-            <Icon name={isLoading ? UI_ICONS.sync : "chevron_left"} />
+            <ActionIcon name="chevron_left" pending={isLoading} />
           </button>
           <h2>{label}</h2>
           <button
-            className={`icon-button ${isLoading ? "pending-action" : ""}`}
+            className="icon-button"
             aria-label={isLoading ? "Loading month" : "Next month"}
             aria-busy={isLoading}
             disabled={isLoading || resolvedMonth >= today.slice(0, 7)}
             onClick={() => onMonth(shifted(1))}
           >
-            <Icon name={isLoading ? UI_ICONS.sync : "chevron_right"} />
+            <ActionIcon name="chevron_right" pending={isLoading} />
           </button>
         </div>
         <div className="calendar-weekdays">
