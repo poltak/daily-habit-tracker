@@ -17,11 +17,14 @@ export function filterActivityGroups({
   activities,
   query = "",
   includeArchived = false,
+  includeEmpty = false,
 }: {
   groups: readonly ActivityGroup[];
   activities: readonly Activity[];
   query?: string;
   includeArchived?: boolean;
+  /** Keep the groups that have no matching activity. */
+  includeEmpty?: boolean;
 }): ActivityGroupResult[] {
   const normalizedQuery = query.trim().toLowerCase();
   const results = new Map<string, ActivityGroupResult>();
@@ -39,7 +42,7 @@ export function filterActivityGroups({
     else result.activeCount += 1;
   }
   return [...results.values()]
-    .filter((result) => result.activities.length > 0)
+    .filter((result) => includeEmpty || result.activities.length > 0)
     .sort((a, b) => a.group.sortOrder - b.group.sortOrder)
     .map((result) => {
       result.activities.sort((a, b) => a.sortOrder - b.sortOrder);

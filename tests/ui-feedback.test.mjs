@@ -37,6 +37,17 @@ test("catalog mutations expose pending state and optimistic archive rollback", (
   assert.match(setupSource, /disabled=\{pending\}/);
 });
 
+test("setup manages the groups inside the activities panel", () => {
+  assert.doesNotMatch(setupSource, /Activity groups/);
+  assert.doesNotMatch(setupSource, /Goal-state review|importedGoals/);
+  const activitiesPanel = setupSource.slice(setupSource.indexOf('<p className="eyebrow">Activities</p>'), setupSource.indexOf('<p className="eyebrow">Goals</p>'));
+  for (const label of ["Rename", "Archive"]) assert.match(activitiesPanel, new RegExp(`\`${label} \\$\\{group\\.name\\}\``));
+  assert.match(activitiesPanel, /`Move \$\{group\.name\} up`/);
+  assert.match(activitiesPanel, /`Move \$\{group\.name\} down`/);
+  assert.match(activitiesPanel, /placeholder="New group name"/);
+  assert.match(setupSource, /includeEmpty: !query/);
+});
+
 test("a button in progress shows a circle spinner in place of its icon", () => {
   assert.match(iconSource, /pending \? <span className="spinner" aria-hidden="true" \/> : <Icon name=\{name\} \/>/);
   assert.match(stylesSource, /\.spinner \{[^}]*border-radius: 50%;[^}]*animation: spin/);

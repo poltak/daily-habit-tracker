@@ -444,7 +444,7 @@ export function SetupView({ data, themePreference, onThemeChange, onRefresh, onM
   const activeActivities = effectiveActivities.filter((activity) => !activity.archived);
   const query = activityQuery.trim();
   const groupedActivities = useMemo(
-    () => filterActivityGroups({ groups: effectiveGroups, activities: effectiveActivities, query, includeArchived: true }),
+    () => filterActivityGroups({ groups: effectiveGroups, activities: effectiveActivities, query, includeArchived: true, includeEmpty: !query }),
     [effectiveActivities, effectiveGroups, query],
   );
 
@@ -505,42 +505,8 @@ export function SetupView({ data, themePreference, onThemeChange, onRefresh, onM
         <section className="settings-card">
           <div className="section-heading">
             <div>
-              <p className="eyebrow">Activity groups</p>
-              <h2>{activeGroups.length} active · {data.groups.length} total</h2>
-            </div>
-          </div>
-          <div className="management-list">
-            {effectiveGroups.map((group, index, all) => {
-              const archived = group.archived;
-              const actionKey = catalogActionKey({ kind: "group", id: group.id });
-              const reordering = isKindReordering("group");
-              const pending = isPending(actionKey) || reordering;
-              return <div className={`management-row ${archived ? "archived" : ""}`} key={group.id}>
-                <span className="management-icon"><Icon name="folder" /></span>
-                <span className="management-copy">
-                  <strong>{group.name}</strong>
-                  <small>{effectiveActivities.filter((activity) => activity.groupId === group.id && !activity.archived).length} active activities{archived ? " · archived" : ""}</small>
-                </span>
-                <span className="management-actions">
-                  <button className="tiny-button" aria-label={pending ? `Updating ${group.name}…` : `Rename ${group.name}`} aria-busy={pending} disabled={pending} onClick={() => void rename({ kind: "group", id: group.id, current: group.name })}><ActionIcon name={UI_ICONS.edit} pending={pending} /></button>
-                  <button className="tiny-button" aria-label={reordering ? `Updating ${group.name}…` : `Move ${group.name} up`} aria-busy={reordering} disabled={index === 0 || reordering || pending} onClick={() => void move({ kind: "group", item: group, items: all, direction: -1 })}><ActionIcon name={UI_ICONS.moveUp} pending={reordering} /></button>
-                  <button className="tiny-button" aria-label={reordering ? `Updating ${group.name}…` : `Move ${group.name} down`} aria-busy={reordering} disabled={index === all.length - 1 || reordering || pending} onClick={() => void move({ kind: "group", item: group, items: all, direction: 1 })}><ActionIcon name={UI_ICONS.moveDown} pending={reordering} /></button>
-                  <button className="tiny-button" aria-label={pending ? `Updating ${group.name}…` : archived ? `Restore ${group.name}` : `Archive ${group.name}`} aria-busy={pending} disabled={pending} onClick={() => void archive({ kind: "group", id: group.id, archived })}><ActionIcon name={archived ? UI_ICONS.restore : UI_ICONS.archive} pending={pending} /></button>
-                </span>
-              </div>;
-            })}
-          </div>
-          <div className="inline-form">
-            <input value={groupName} onChange={(event) => setGroupName(event.target.value)} placeholder="New group name" aria-busy={isKindReordering("group") || isPending("create:group")} disabled={isKindReordering("group") || isPending("create:group")} />
-            <button className="secondary-button" aria-busy={isKindReordering("group") || isPending("create:group")} disabled={isKindReordering("group") || isPending("create:group")} onClick={() => void create({ payload: { kind: "group", name: groupName }, reset: () => setGroupName("") })}><ActionIcon name={UI_ICONS.add} pending={isKindReordering("group") || isPending("create:group")} /> {isPending("create:group") ? "Adding…" : isKindReordering("group") ? "Reordering…" : "Add group"}</button>
-          </div>
-        </section>
-
-        <section className="settings-card">
-          <div className="section-heading">
-            <div>
               <p className="eyebrow">Activities</p>
-              <h2>{activeActivities.length} active activities</h2>
+              <h2>{activeActivities.length} active activities in {activeGroups.length} {activeGroups.length === 1 ? "group" : "groups"}</h2>
             </div>
           </div>
           <label className="search-field">
@@ -548,14 +514,24 @@ export function SetupView({ data, themePreference, onThemeChange, onRefresh, onM
             <input value={activityQuery} onChange={(event) => setActivityQuery(event.target.value)} placeholder="Filter activities to manage" aria-label="Filter activities to manage" />
           </label>
           <div className="management-groups">
-            {groupedActivities.map(({ group, activities, activeCount, archivedCount }) => {
-              const totalLabel = `${activeCount} active${archivedCount ? ` · ${archivedCount} archived` : ""}`;
+            {groupedActivities.map(({ group, activities, activeCount, archivedCount }, groupIndex, visibleGroups) => {
+              const groupReordering = isKindReordering("group");
+              const groupPending = isPending(catalogActionKey({ kind: "group", id: group.id })) || groupReordering;
               return (
-                <details key={group.id} open={Boolean(query) || undefined}>
+                <details key={group.id} className={group.archived ? "archived" : undefined} open={Boolean(query) || undefined}>
                   <summary>
-                    <span>{group.name}{group.archived ? " · archived" : ""}</span>
+                    <span className="management-copy">
+                      <strong>{group.name}</strong>
+                      <small>{activeCount} active{archivedCount ? ` · ${archivedCount} archived` : ""}{group.archived ? " · group archived" : ""}</small>
+                    </span>
                     <span className="management-group-meta">
-                      <span>{totalLabel}</span>
+                      {/* A click on a group action must not open or close the group. */}
+                      <span className="management-actions" onClick={(event) => event.preventDefault()}>
+                        <button type="button" className="tiny-button" aria-label={groupPending ? `Updating ${group.name}…` : `Rename ${group.name}`} aria-busy={groupPending} disabled={groupPending} onClick={() => void rename({ kind: "group", id: group.id, current: group.name })}><ActionIcon name={UI_ICONS.edit} pending={groupPending} /></button>
+                        <button type="button" className="tiny-button" aria-label={groupReordering ? `Updating ${group.name}…` : `Move ${group.name} up`} aria-busy={groupReordering} disabled={groupIndex === 0 || groupPending} onClick={() => void move({ kind: "group", item: group, items: visibleGroups.map((visible) => visible.group), direction: -1 })}><ActionIcon name={UI_ICONS.moveUp} pending={groupReordering} /></button>
+                        <button type="button" className="tiny-button" aria-label={groupReordering ? `Updating ${group.name}…` : `Move ${group.name} down`} aria-busy={groupReordering} disabled={groupIndex === visibleGroups.length - 1 || groupPending} onClick={() => void move({ kind: "group", item: group, items: visibleGroups.map((visible) => visible.group), direction: 1 })}><ActionIcon name={UI_ICONS.moveDown} pending={groupReordering} /></button>
+                        <button type="button" className="tiny-button" aria-label={groupPending ? `Updating ${group.name}…` : group.archived ? `Restore ${group.name}` : `Archive ${group.name}`} aria-busy={groupPending} disabled={groupPending} onClick={() => void archive({ kind: "group", id: group.id, archived: group.archived })}><ActionIcon name={group.archived ? UI_ICONS.restore : UI_ICONS.archive} pending={groupPending} /></button>
+                      </span>
                       {!group.archived && (
                         <button
                           type="button"
@@ -570,10 +546,11 @@ export function SetupView({ data, themePreference, onThemeChange, onRefresh, onM
                           + Add new
                         </button>
                       )}
-                      <Icon name="expand_more" className="group-expand-icon" />
                     </span>
+                    <Icon name="expand_more" className="group-expand-icon" />
                   </summary>
                   <div className="management-list">
+                    {!activities.length && <p className="empty-inline">No activities in this group.</p>}
                     {activities.map((activity, index, groupActivities) => (
                       (() => {
                         const archived = activity.archived;
@@ -603,6 +580,11 @@ export function SetupView({ data, themePreference, onThemeChange, onRefresh, onM
                 </details>
               );
             })}
+          </div>
+          {Boolean(query) && !groupedActivities.length && <p className="empty-inline">No activities match that filter.</p>}
+          <div className="inline-form">
+            <input value={groupName} onChange={(event) => setGroupName(event.target.value)} placeholder="New group name" aria-busy={isKindReordering("group") || isPending("create:group")} disabled={isKindReordering("group") || isPending("create:group")} />
+            <button className="secondary-button" aria-busy={isKindReordering("group") || isPending("create:group")} disabled={isKindReordering("group") || isPending("create:group")} onClick={() => void create({ payload: { kind: "group", name: groupName }, reset: () => setGroupName("") })}><ActionIcon name={UI_ICONS.add} pending={isKindReordering("group") || isPending("create:group")} /> {isPending("create:group") ? "Adding…" : isKindReordering("group") ? "Reordering…" : "Add group"}</button>
           </div>
         </section>
 

@@ -573,9 +573,10 @@ details:not([open]) > summary .add-activity-button { display: none; }
 .management-groups details { border-top: 1px solid var(--line); }
 .management-groups details:first-child { border-top: 0; }
 .management-groups details[open] { padding-bottom: 12px; }
-.management-groups summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 54px; cursor: pointer; font-weight: 650; list-style: none; }
+.management-groups summary { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 0 10px; min-height: 54px; padding: 6px 0; cursor: pointer; list-style: none; }
 .management-groups summary::-webkit-details-marker, .management-groups summary::marker { display: none; content: ""; }
-.management-group-meta { text-align: right; }
+.management-groups summary .management-copy strong { font-size: 15px; }
+.management-groups details.archived > summary .management-copy { opacity: .55; }
 .export-card { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
 .export-card .muted { margin-top: 6px; }
 .settings-card > .muted.small-copy { margin-top: 12px; }
@@ -701,6 +702,10 @@ details:not([open]) > summary .add-activity-button { display: none; }
   .inline-form.stacked-mobile { flex-direction: column; }
   .management-row { flex-wrap: wrap; }
   .management-actions { margin-left: auto; }
+  /* The group name and the arrow stay on the first line; the group actions go below. */
+  .management-groups summary { grid-template-columns: minmax(0, 1fr) auto; }
+  .management-groups summary .management-group-meta { grid-column: 1 / -1; grid-row: 2; justify-content: space-between; margin-left: -9px; }
+  .management-groups summary .management-actions { width: auto; margin-left: 0; }
   .export-card .secondary-button { width: 100%; }
 }
 

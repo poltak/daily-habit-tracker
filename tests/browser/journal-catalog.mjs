@@ -43,7 +43,7 @@ try {
   await page.getByRole("button", { name: "Move Health up", exact: true }).waitFor();
   assert.equal(reorders, 1);
   assert.deepEqual(store.bootstrap().groups.slice(0, 2).map((group) => group.name), ["Work", "Health"]);
-  const groupRows = page.locator(".settings-card").filter({ has: page.getByText("Activity groups", { exact: true }) }).locator(".management-copy strong");
+  const groupRows = page.locator(".management-groups summary .management-copy strong");
   assert.deepEqual((await groupRows.allTextContents()).slice(0, 2), ["Work", "Health"]);
   failReorder = true;
   await page.getByRole("button", { name: "Move Health up", exact: true }).click();
