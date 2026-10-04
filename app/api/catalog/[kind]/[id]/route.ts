@@ -16,3 +16,17 @@ export async function PATCH(request: Request, context: { params: Promise<{ kind:
     return jsonError(error);
   }
 }
+
+export async function DELETE(_request: Request, context: { params: Promise<{ kind: string; id: string }> }) {
+  try {
+    const { kind, id } = await context.params;
+    const store = await getServerStore();
+    if (kind === "group") await store.deleteGroup(id);
+    else if (kind === "activity") await store.deleteActivity(id);
+    else if (kind === "goal") await store.deleteGoal(id);
+    else throw new Error("Unsupported catalog item.");
+    return Response.json({ success: true });
+  } catch (error) {
+    return jsonError(error);
+  }
+}

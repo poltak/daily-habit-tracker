@@ -347,6 +347,7 @@ button:disabled { cursor: wait; opacity: .6; }
 .back-button { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 14px 0 8px; margin-left: -8px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font-size: 13px; font-weight: 650; }
 .icon-button, .tiny-button { display: inline-grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: var(--surface-subtle); color: var(--ink); }
 .tiny-button { width: 38px; height: 38px; border-color: transparent; background: transparent; color: var(--muted); font-size: 17px; }
+.tiny-button.danger { color: var(--danger-soft); }
 .icon-button:disabled, .tiny-button:disabled { opacity: .35; cursor: not-allowed; }
 .icon-button[aria-busy="true"]:disabled, .tiny-button[aria-busy="true"]:disabled { opacity: .8; cursor: wait; }
 .loading-retry { margin-top: 10px; padding: 8px 18px; border: 1px solid currentColor; border-radius: 999px; background: transparent; color: inherit; }
@@ -619,6 +620,7 @@ details:not([open]) > summary .add-activity-button { display: none; }
   .save-bar .primary-button:hover:not(:disabled) { background: var(--brand-strong); }
   .secondary-button:hover:not(:disabled) { background: var(--surface-raised); }
   .back-button:hover, .tiny-button:hover:not(:disabled), .topbar-date-switcher button:hover, .topbar-actions button:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink); }
+  .tiny-button.danger:hover:not(:disabled) { background: var(--surface-error); color: var(--danger); }
   .icon-button:hover:not(:disabled) { border-color: var(--line-strong); background: var(--surface-muted); }
   .bottom-nav button:hover:not(.active):not(:disabled) { background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink); }
   .mood-option:hover:not(:disabled) .mood-emoji { transform: translateY(-3px) scale(1.06); opacity: 1; filter: none; }
@@ -701,6 +703,7 @@ details:not([open]) > summary .add-activity-button { display: none; }
   .save-actions .primary-button { flex: 1; }
   .inline-form.stacked-mobile { flex-direction: column; }
   .management-row { flex-wrap: wrap; }
+  .management-row:has(> .tiny-select) .management-copy { flex-basis: 96px; }
   .management-actions { margin-left: auto; }
   /* The group name and the arrow stay on the first line; the group actions go below. */
   .management-groups summary { grid-template-columns: minmax(0, 1fr) auto; }

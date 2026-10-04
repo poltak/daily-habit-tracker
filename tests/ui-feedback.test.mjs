@@ -37,11 +37,22 @@ test("catalog mutations expose pending state and optimistic archive rollback", (
   assert.match(setupSource, /disabled=\{pending\}/);
 });
 
+test("goals and groups are deleted only after the confirmation alert", () => {
+  const removeHandler = setupSource.slice(setupSource.indexOf("async function remove("), setupSource.indexOf("async function exportData"));
+  assert.ok(removeHandler.indexOf("window.confirm(deleteWarning({ kind, name, activityCount }))") > 0);
+  assert.ok(removeHandler.indexOf("window.confirm") < removeHandler.indexOf('method: "DELETE"'));
+  assert.match(setupSource, /`Delete \$\{group\.name\}`/);
+  assert.match(setupSource, /`Delete \$\{activity\.name\}`/);
+  assert.match(setupSource, /`Delete \$\{goal\.name\}`/);
+  assert.match(pageSource, /dropDeletedFromDraft\(next\)/);
+  assert.match(pageSource, /recovered\.draft = withKnownCatalog\(\{ record: recovered\.draft, catalog: dataRef\.current \}\)/);
+});
+
 test("setup manages the groups inside the activities panel", () => {
   assert.doesNotMatch(setupSource, /Activity groups/);
   assert.doesNotMatch(setupSource, /Goal-state review|importedGoals/);
   const activitiesPanel = setupSource.slice(setupSource.indexOf('<p className="eyebrow">Activities</p>'), setupSource.indexOf('<p className="eyebrow">Goals</p>'));
-  for (const label of ["Rename", "Archive"]) assert.match(activitiesPanel, new RegExp(`\`${label} \\$\\{group\\.name\\}\``));
+  for (const label of ["Rename", "Archive", "Delete"]) assert.match(activitiesPanel, new RegExp(`\`${label} \\$\\{group\\.name\\}\``));
   assert.match(activitiesPanel, /`Move \$\{group\.name\} up`/);
   assert.match(activitiesPanel, /`Move \$\{group\.name\} down`/);
   assert.match(activitiesPanel, /placeholder="New group name"/);

@@ -429,6 +429,14 @@ export class DaylioMemoryStore {
     return next;
   }
 
+  deleteGroup(id: string) {
+    if (!this.groups.has(id)) throw new Error("Group not found.");
+    for (const activity of [...this.activities.values()]) {
+      if (activity.groupId === id) this.deleteActivity(activity.id);
+    }
+    this.groups.delete(id);
+  }
+
   createActivity(name: string, groupId: string, icon = "category") {
     validateCatalogPatch({ kind: "activity", patch: { name, groupId, icon } });
     const clean = name.trim();
@@ -449,6 +457,20 @@ export class DaylioMemoryStore {
     const next = { ...activity, ...patch, icon, name };
     this.activities.set(id, next);
     return next;
+  }
+
+  deleteActivity(id: string) {
+    if (!this.activities.has(id)) throw new Error("Activity not found.");
+    for (const [logicalDate, entry] of this.entries) {
+      if (entry.activityIds.includes(id)) this.entries.set(logicalDate, { ...entry, activityIds: entry.activityIds.filter((activityId) => activityId !== id) });
+    }
+    for (const [key, selection] of this.dayActivitySelections) {
+      if (selection.activityId === id) this.dayActivitySelections.delete(key);
+    }
+    for (const goal of this.goals.values()) {
+      if (goal.activityId === id) this.goals.set(goal.id, { ...goal, activityId: null });
+    }
+    this.activities.delete(id);
   }
 
   createGoal(input: { name: string; activityId?: string | null; repeatType?: GoalRepeatType; scheduleType?: Goal["scheduleType"]; targetPerWeek?: number | null; weekdaysMask?: number | null; materialIcon?: string; reminderEnabled?: boolean; reminderTime?: string; startDate?: string }) {
@@ -486,6 +508,14 @@ export class DaylioMemoryStore {
     const next = { ...goal, ...patch, ...config, name: patch.name?.trim() || goal.name, materialIcon: isGoalIcon(patch.materialIcon) ? patch.materialIcon : patch.materialIcon === undefined ? goal.materialIcon : "task_alt" };
     this.goals.set(id, next);
     return next;
+  }
+
+  deleteGoal(id: string) {
+    if (!this.goals.has(id)) throw new Error("Goal not found.");
+    for (const [key, completion] of this.goalCompletions) {
+      if (completion.goalId === id) this.goalCompletions.delete(key);
+    }
+    this.goals.delete(id);
   }
 
   getGoalHistory({ goalId, startDate, endDate, asOf }: GoalHistoryRequest): GoalHistory {

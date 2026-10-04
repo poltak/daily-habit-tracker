@@ -63,9 +63,12 @@ links, because Daylio permits goals without an activity.
 
 The Setup screen manages groups, activities, and goals: rename, regroup,
 reorder, archive/restore, change Material Symbols Rounded icons, and cycle goal
-schedules. Groups and their activities are in one panel. The Calendar screen
-loads filled days directly from D1, and selecting a day opens its entry. The
-Log screen
+schedules. Groups and their activities are in one panel. Groups, activities,
+and goals can also be deleted, and a delete cannot be undone. A deleted goal
+takes its completion history with it. A deleted activity is removed from each
+recorded day, and a goal linked to it stays without an activity. A deleted
+group takes its activities with it. The Calendar screen loads filled
+days directly from D1, and selecting a day opens its entry. The Log screen
 keeps unsaved drafts per logical date in device-local storage and reports
 online, offline, and failed-save states. A successful save clears that local
 draft.

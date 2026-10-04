@@ -237,6 +237,17 @@ function draftForDate({
   };
 }
 
+type Catalog = Pick<Bootstrap, "activities" | "goals">;
+
+/** Returns `record` without the activities and goals that no longer exist. The server refuses a save that names a deleted one. */
+function withKnownCatalog<T extends { activityIds: string[]; completedGoalIds: string[] }>({ record, catalog }: { record: T; catalog: Catalog }): T {
+  const activityIds = record.activityIds.filter((id) => catalog.activities.some((activity) => activity.id === id));
+  const completedGoalIds = record.completedGoalIds.filter((id) => catalog.goals.some((goal) => goal.id === id));
+  return activityIds.length === record.activityIds.length && completedGoalIds.length === record.completedGoalIds.length
+    ? record
+    : { ...record, activityIds, completedGoalIds };
+}
+
 function moodFor(moods: Mood[], id: string) {
   return moods.find((mood) => mood.id === id);
 }
@@ -596,12 +607,20 @@ export default function Journal() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  function dropDeletedFromDraft(catalog: Catalog) {
+    const nextDraft = withKnownCatalog({ record: draftRef.current, catalog });
+    if (nextDraft === draftRef.current) return;
+    draftRef.current = nextDraft;
+    setDraft(nextDraft);
+  }
+
   function applyBootstrap(next: Bootstrap) {
     const today = logicalDateFromDate();
     const storedDate = readActiveStoredDraft()?.logicalDate;
     // A draft kept for a day after today stays in storage, because that day cannot be opened yet.
     const nextDate = selectedDateRef.current || (storedDate && storedDate <= today ? storedDate : today);
-    setData((current) => ({ ...next, entries: current?.entries ?? [], today, yesterday: addDays(today, -1) }));
+    setData((current) => ({ ...next, entries: (current?.entries ?? []).map((entry) => withKnownCatalog({ record: entry, catalog: next })), today, yesterday: addDays(today, -1) }));
+    dropDeletedFromDraft(next);
     setCalendarMonth((current) => current || nextDate.slice(0, 7));
     if (viewRef.current === "goal" && selectedGoalIdRef.current) {
       const goal = next.goals.find((candidate) => candidate.id === selectedGoalIdRef.current && !candidate.archived);
@@ -859,6 +878,8 @@ export default function Journal() {
         serverCompletedGoalIds,
         serverSelections,
       });
+      // A draft kept on this device can name an activity that was deleted after the draft was written.
+      if (dataRef.current) recovered.draft = withKnownCatalog({ record: recovered.draft, catalog: dataRef.current });
       let resolvedEntry = serverEntry;
       let resolvedDraft = recovered.draft;
       let recoveryError: string | null = null;

@@ -528,6 +528,16 @@ export class D1DaylioStore {
     return toGroup(result);
   }
 
+  /** Deletes a group and all of its activities for good, as `deleteActivity` does for one activity. */
+  async deleteGroup(id: string) {
+    const group = await this.database.prepare("SELECT id FROM activity_groups WHERE id = ?").bind(id).first<{ id: string }>();
+    if (!group) throw new Error("Group not found.");
+    await this.database.batch([
+      ...this.activityDeleteStatements({ column: "group_id", value: id }),
+      this.database.prepare("DELETE FROM activity_groups WHERE id = ?").bind(id),
+    ]);
+  }
+
   async createActivity(name: string, groupId: string, icon = "category") {
     validateCatalogPatch({ kind: "activity", patch: { name, groupId, icon } });
     const group = await this.database.prepare("SELECT id FROM activity_groups WHERE id = ?").bind(groupId).first();
@@ -550,6 +560,24 @@ export class D1DaylioStore {
     const result = await this.database.prepare(`UPDATE activities SET name = ?, group_id = ?, material_icon = ?, sort_order = ?, archived_at = ? WHERE id = ? RETURNING ${ACTIVITY_COLUMNS}`).bind(patch.name?.trim() || current.name, patch.groupId ?? current.group_id, iconForActivity(patch.name?.trim() || current.name, patch.icon ?? current.material_icon), patch.sortOrder ?? current.sort_order, patch.archived ? new Date().toISOString() : patch.archived === false ? null : current.archived_at, id).first<ActivityRow>();
     if (!result) throw new Error("Could not update the activity.");
     return toActivity(result);
+  }
+
+  // The statements that delete the selected activities and each record of them on a day, for one batch.
+  private activityDeleteStatements({ column, value }: { column: "id" | "group_id"; value: string }) {
+    const selected = `SELECT id FROM activities WHERE ${column} = ?`;
+    return [
+      this.database.prepare(`DELETE FROM entry_activities WHERE activity_id IN (${selected})`).bind(value),
+      this.database.prepare(`DELETE FROM day_activity_selections WHERE activity_id IN (${selected})`).bind(value),
+      this.database.prepare(`UPDATE goals SET activity_id = NULL WHERE activity_id IN (${selected})`).bind(value),
+      this.database.prepare(`DELETE FROM activities WHERE ${column} = ?`).bind(value),
+    ];
+  }
+
+  /** Deletes an activity for good and removes it from each day. A goal linked to it stays, with its completions and without an activity. */
+  async deleteActivity(id: string) {
+    const activity = await this.database.prepare("SELECT id FROM activities WHERE id = ?").bind(id).first<{ id: string }>();
+    if (!activity) throw new Error("Activity not found.");
+    await this.database.batch(this.activityDeleteStatements({ column: "id", value: id }));
   }
 
   async createGoal(input: { name: string; activityId?: string | null; repeatType?: GoalRepeatType; scheduleType?: Goal["scheduleType"]; targetPerWeek?: number | null; weekdaysMask?: number | null; materialIcon?: string; reminderEnabled?: boolean; reminderTime?: string; startDate?: string }) {
@@ -583,6 +611,16 @@ export class D1DaylioStore {
     const result = await this.database.prepare(`UPDATE goals SET name = ?, activity_id = ?, material_icon = ?, repeat_type = ?, schedule_type = ?, target_per_week = ?, weekdays_mask = ?, sort_order = ?, reminder_enabled = ?, reminder_time = ?, archived_at = ? WHERE id = ? RETURNING ${GOAL_COLUMNS}`).bind(patch.name?.trim() || current.name, patch.activityId === undefined ? current.activity_id : patch.activityId, isGoalIcon(patch.materialIcon) ? patch.materialIcon : patch.materialIcon === undefined ? current.material_icon ?? "task_alt" : "task_alt", config.repeatType, config.scheduleType, config.targetPerWeek, config.weekdaysMask, patch.sortOrder ?? current.sort_order, patch.reminderEnabled === undefined ? current.reminder_enabled : patch.reminderEnabled ? 1 : 0, patch.reminderTime ?? current.reminder_time, patch.archived === undefined ? current.archived_at : patch.archived ? new Date().toISOString() : null, id).first<GoalRow>();
     if (!result) throw new Error("Could not update the goal.");
     return toGoal(result);
+  }
+
+  /** Deletes a goal and its completion history for good. Its linked activity and the saved days stay. */
+  async deleteGoal(id: string) {
+    const goal = await this.database.prepare("SELECT id FROM goals WHERE id = ?").bind(id).first<{ id: string }>();
+    if (!goal) throw new Error("Goal not found.");
+    await this.database.batch([
+      this.database.prepare("DELETE FROM goal_completions WHERE goal_id = ?").bind(id),
+      this.database.prepare("DELETE FROM goals WHERE id = ?").bind(id),
+    ]);
   }
 
   async getGoalHistory({ goalId, startDate, endDate, asOf }: GoalHistoryRequest): Promise<GoalHistory> {
