@@ -322,7 +322,7 @@ button:disabled { cursor: wait; opacity: .6; }
   box-shadow: var(--shadow);
 }
 .section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 16px; }
-.section-heading h2, .disclosure-summary h2, .export-card h2 { margin: 4px 0 0; font-size: 22px; line-height: 1.2; letter-spacing: -.015em; }
+.section-heading h2, .export-card h2 { margin: 4px 0 0; font-size: 22px; line-height: 1.2; letter-spacing: -.015em; }
 .section-heading > h2 { margin-top: 0; }
 .section-heading .muted { margin-top: 6px; }
 .required-label, .selection-count { flex: 0 0 auto; padding-top: 6px; color: var(--muted); font-size: 12px; }
@@ -573,14 +573,9 @@ details:not([open]) > summary .add-activity-button { display: none; }
 .management-groups details { border-top: 1px solid var(--line); }
 .management-groups details:first-child { border-top: 0; }
 .management-groups details[open] { padding-bottom: 12px; }
-.management-groups summary, .disclosure-summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 54px; cursor: pointer; font-weight: 650; list-style: none; }
-.management-groups summary::-webkit-details-marker, .management-groups summary::marker, .disclosure-summary::-webkit-details-marker, .disclosure-summary::marker { display: none; content: ""; }
+.management-groups summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 54px; cursor: pointer; font-weight: 650; list-style: none; }
+.management-groups summary::-webkit-details-marker, .management-groups summary::marker { display: none; content: ""; }
 .management-group-meta { text-align: right; }
-.review-list { display: grid; gap: 4px; margin-top: 14px; }
-.review-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
-.review-row > span { display: grid; gap: 2px; min-width: 0; }
-.review-row strong { overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
-.review-row small { color: var(--muted); font-size: 11.5px; }
 .export-card { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
 .export-card .muted { margin-top: 6px; }
 .settings-card > .muted.small-copy { margin-top: 12px; }

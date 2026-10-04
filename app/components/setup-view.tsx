@@ -228,10 +228,6 @@ export function SetupView({ data, themePreference, onThemeChange, onRefresh, onM
     return isPending(reorderActionKey(kind));
   }
 
-  function isCatalogPending({ kind, id }: { kind: CatalogKind; id: string }) {
-    return isPending(catalogActionKey({ kind, id })) || isKindReordering(kind);
-  }
-
   async function saveWeekEnd(weekEndsOn: number) {
     await runPending({
       key: "settings",
@@ -446,7 +442,6 @@ export function SetupView({ data, themePreference, onThemeChange, onRefresh, onM
   );
   const activeGroups = effectiveGroups.filter((group) => !group.archived);
   const activeActivities = effectiveActivities.filter((activity) => !activity.archived);
-  const importedGoals = effectiveGoals.filter((goal) => goal.sourceState !== undefined);
   const query = activityQuery.trim();
   const groupedActivities = useMemo(
     () => filterActivityGroups({ groups: effectiveGroups, activities: effectiveActivities, query, includeArchived: true }),
@@ -645,27 +640,6 @@ export function SetupView({ data, themePreference, onThemeChange, onRefresh, onM
           </div>
           <p className="muted small-copy">New goals start with a daily schedule and no associated activity. Use Configure to set their repeat, icon, and activity.</p>
         </section>
-
-        <details className="settings-card disclosure-card">
-          <summary className="disclosure-summary">
-            <span>
-              <p className="eyebrow">Goal-state review</p>
-              <h2>{importedGoals.length} imported goals</h2>
-            </span>
-            <span className="management-group-meta"><span>{importedGoals.length} records</span><Icon name="expand_more" className="group-expand-icon" /></span>
-          </summary>
-          <p className="muted small-copy">Raw Daylio state codes are preserved. Review visibility here; the app does not silently reinterpret historical goal state.</p>
-          <div className="review-list">
-            {importedGoals.map((goal) => {
-              const archived = goal.archived;
-              const pending = isCatalogPending({ kind: "goal", id: goal.id });
-              return <div className="review-row" key={goal.id}>
-                <span><strong>{goal.name}</strong><small>Daylio raw state: {goal.sourceState}</small></span>
-                <button className="secondary-button compact-button" aria-busy={pending} disabled={pending} onClick={() => void archive({ kind: "goal", id: goal.id, archived })}>{pending ? "Updating…" : archived ? "Show goal" : "Archive"}</button>
-              </div>;
-            })}
-          </div>
-        </details>
 
         <section className="settings-card export-card">
           <div>
