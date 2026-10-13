@@ -39,6 +39,7 @@ yarn-error.log*
 next-env.d.ts
 /dist/
 /vanilla/dist/
+/vanilla/dist-bundled/
 /vanilla/.wrangler/
 /.wrangler/
 /outputs/

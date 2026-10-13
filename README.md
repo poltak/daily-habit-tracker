@@ -180,3 +180,23 @@ are, erases the type annotations from the `lib/` modules that the scripts import
 and writes the result to `vanilla/dist/b/<build>/`. The build name in the path
 lets the browser cache each file for one year. The Worker has the name
 `daylio-clone-vanilla`, so a deploy of it cannot replace the production Worker.
+
+To compare the two runtimes, start each one on its own port with its own copy of
+the local D1 state. Then give the two URLs to the scripts in `vanilla/bench/`.
+The scripts that open a browser need Playwright on `NODE_PATH`, as the browser
+tests do.
+
+| Script | What it does |
+| --- | --- |
+| `seed.mjs` | Writes the same synthetic journal to a local server. |
+| `compare-dom.mjs` | Checks that both servers show the same elements, text, and boxes in each view. |
+| `size.mjs` | Reports the bytes for the browser and for the Worker, and the source lines. |
+| `load.mjs` | Measures a first visit and a repeat visit, with and without CPU and network throttling. |
+| `interact.mjs` | Measures the main-thread time of 14 interactions. |
+| `lighthouse.mjs` | Runs Lighthouse on each server. Set `LIGHTHOUSE_BIN` to the Lighthouse command. |
+| `bundle.mjs` | Makes a bundled copy of the plain site in `vanilla/dist-bundled/`. This copy shows the effect of the request count. |
+
+```bash
+node vanilla/bench/seed.mjs http://localhost:3101
+node vanilla/bench/load.mjs react=http://localhost:3101 plain=http://localhost:3102
+```
