@@ -51,8 +51,8 @@ try {
   await period.selectOption("90d");
   assert.match(await page.locator(".insights-summary").innerText(), /90\s+recorded days/);
   await period.selectOption("custom");
-  await page.getByLabel("From").fill("2020-01-01");
-  await page.getByLabel("To").fill("2020-01-01");
+  await page.getByLabel("From", { exact: true }).fill("2020-01-01");
+  await page.getByLabel("To", { exact: true }).fill("2020-01-01");
   await page.getByRole("heading", { name: "No entries in this period" }).waitFor();
   await period.selectOption("all");
 

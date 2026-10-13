@@ -91,12 +91,15 @@ try {
     assert.equal(await page.locator(".skip-link").evaluate((element) => element === document.activeElement), true);
     await page.keyboard.press("Enter");
     assert.equal(await page.locator("main").evaluate((element) => element === document.activeElement), true);
-    const theme = page.getByRole("button", { name: "Choose color theme" });
-    async function chooseTheme(mode) {
-      await theme.click();
-      await page.getByRole("menuitemradio", { name: mode[0].toUpperCase() + mode.slice(1) }).click();
-    }
     const nav = page.getByRole("navigation", { name: "Primary navigation" });
+    const themeRadio = (mode) => page.locator(`input[name="theme-preference"][value="${mode}"]`);
+    // The theme is set in Setup. Each call ends on the Log view.
+    async function chooseTheme(mode) {
+      await nav.getByRole("button", { name: "Setup", exact: true }).click();
+      await page.locator(".theme-option").filter({ has: themeRadio(mode) }).click();
+      await nav.getByRole("button", { name: "Log", exact: true }).click();
+      await page.locator(".mood-option:not(:disabled)").first().waitFor();
+    }
 
     for (const mode of ["light", "dark"]) {
       await chooseTheme(mode);
@@ -109,20 +112,19 @@ try {
       await assertFits(page);
       await capture({ page, path: `/tmp/daymark-redesign-${device}-${mode}-calendar.png` });
       await nav.getByRole("button", { name: "Setup", exact: true }).click();
-      const radio = page.locator(`input[name="theme-preference"][value="${mode}"]`);
-      assert.equal(await radio.isChecked(), true);
+      assert.equal(await themeRadio(mode).isChecked(), true);
       await assertFits(page);
       await capture({ page, path: `/tmp/daymark-redesign-${device}-${mode}-setup.png` });
       await nav.getByRole("button", { name: "Log", exact: true }).click();
     }
 
-    // Both controls share state; explicit choices survive a full reload.
+    // An explicit choice survives a full reload.
     await nav.getByRole("button", { name: "Setup", exact: true }).click();
-    await page.locator(".theme-option").filter({ has: page.locator('input[value="light"]') }).click();
-    assert.equal(await theme.getAttribute("data-preference"), "light");
+    await page.locator(".theme-option").filter({ has: themeRadio("light") }).click();
+    assert.equal(await themeRadio("light").isChecked(), true);
     await page.reload();
     await page.getByRole("heading", { name: "Make it yours" }).waitFor();
-    assert.equal(await theme.getAttribute("data-preference"), "light");
+    assert.equal(await themeRadio("light").isChecked(), true);
     await chooseTheme("system");
     await page.emulateMedia({ colorScheme: "dark" });
     await page.waitForFunction(() => document.documentElement.dataset.theme === "dark");
@@ -181,7 +183,7 @@ try {
     await assertFits(page);
     await capture({ page, path: `/tmp/daymark-redesign-${device}-add-activity.png` });
     await page.getByRole("button", { name: "Add activity", exact: true }).click();
-    await page.getByRole("heading", { name: "How did your day feel?" }).waitFor();
+    await page.getByRole("heading", { name: "How was your day?" }).waitFor();
     assert.ok(store.bootstrap().activities.some((activity) => activity.name === "Test afternoon walk"));
     assert.deepEqual(errors, []);
     console.log(`PASS ${device}: themes, persistence, system changes, screen sizes, calendar, save, goals, icon picker, activity creation.`);

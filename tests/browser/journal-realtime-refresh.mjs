@@ -76,7 +76,7 @@ try {
   await refreshStarted;
 
   await page.getByRole("button", { name: /Rad/ }).click();
-  await page.locator('.mood-option[aria-busy="true"]').waitFor();
+  await page.locator('.mood-option[aria-busy="true"]').first().waitFor();
   const warnsBeforeUnload = () => page.evaluate(() => {
     const event = new Event("beforeunload", { cancelable: true });
     window.dispatchEvent(event);

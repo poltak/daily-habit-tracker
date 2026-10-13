@@ -35,7 +35,7 @@ try {
   await page.goto(baseURL);
   await page.locator(".journal-loading").waitFor();
   assert.equal(await page.getByRole("navigation", { name: "Primary navigation" }).isVisible(), true);
-  assert.equal(await page.getByRole("heading", { name: "How did your day feel?" }).isVisible(), true);
+  assert.equal(await page.getByRole("heading", { name: "How was your day?" }).isVisible(), true);
   assert.equal(await page.getByText("Opening your journal…").count(), 0);
   assert.equal(await page.locator(".mood-option").count(), 0);
   await page.screenshot({ path: "/tmp/daymark-loading-mobile.png", fullPage: true });
