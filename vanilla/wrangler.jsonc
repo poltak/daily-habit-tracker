@@ -1,0 +1,19 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  // An experiment. The name is different from the production Worker so that a deploy cannot replace it.
+  "name": "daylio-clone-vanilla",
+  "main": "./worker.ts",
+  "compatibility_date": "2026-05-22",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "daylio-clone",
+      "database_id": "ae34a2d3-c377-41fc-8cf0-893104abfef8",
+      "migrations_dir": "../drizzle"
+    }
+  ]
+}

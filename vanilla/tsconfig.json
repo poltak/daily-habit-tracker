@@ -1,0 +1,16 @@
+{
+  // Type-checks the plain scripts of the site against the shared modules in lib/.
+  // The scripts import "../lib/name.js", which is where the build puts each module. `rootDirs` lets the compiler find lib/name.ts.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "checkJs": true,
+    "strict": true,
+    "noImplicitAny": false,
+    "types": [],
+    "incremental": false,
+    "plugins": [],
+    "rootDirs": ["./site", ".."]
+  },
+  "include": ["site/js/**/*.js"],
+  "exclude": []
+}

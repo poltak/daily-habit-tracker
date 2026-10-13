@@ -161,3 +161,22 @@ Worker with:
 
 If all three variables are absent, the Worker accepts API requests only from
 local development hosts.
+
+## Framework-free build (experiment)
+
+The `vanilla/` directory is a second runtime for the same app. It has no React,
+no Next.js layer, and no Tailwind. The browser gets the page in
+`vanilla/site/index.html`, the scripts in `vanilla/site/js`, and the stylesheets
+of the React app. The Worker in `vanilla/worker.ts` sends each `/api` request to
+the route handlers that the React app uses.
+
+```bash
+pnpm run build:vanilla
+pnpm run dev:vanilla
+```
+
+`pnpm run build:vanilla` does not use a bundler. It copies the scripts as they
+are, erases the type annotations from the `lib/` modules that the scripts import,
+and writes the result to `vanilla/dist/b/<build>/`. The build name in the path
+lets the browser cache each file for one year. The Worker has the name
+`daylio-clone-vanilla`, so a deploy of it cannot replace the production Worker.

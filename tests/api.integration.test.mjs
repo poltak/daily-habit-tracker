@@ -9,6 +9,8 @@ import test from "node:test";
 const root = fileURLToPath(new URL("../", import.meta.url));
 const wrangler = join(root, "node_modules/wrangler/bin/wrangler.js");
 const port = 8799;
+// The Worker under test. Set DAYMARK_WRANGLER_CONFIG to vanilla/wrangler.jsonc to run the same checks against the framework-free Worker.
+const serverConfig = process.env.DAYMARK_WRANGLER_CONFIG ?? "dist/server/wrangler.json";
 const baseUrl = `http://localhost:${port}`;
 
 function run(command, args, cwd = root) {
@@ -63,7 +65,7 @@ test("Wrangler-backed API covers persistence, catalog, calendar, pagination, imp
   });
 
   await run(wrangler, ["d1", "migrations", "apply", "daylio-clone", "--local", "--config", "wrangler.jsonc", "--persist-to", persistence]);
-  server = spawn(process.execPath, [wrangler, "dev", "--config", "dist/server/wrangler.json", "--local", "--persist-to", persistence, "--port", String(port)], { cwd: root, env: { ...process.env, CI: "1", NO_COLOR: "1" }, stdio: ["ignore", "pipe", "pipe"] });
+  server = spawn(process.execPath, [wrangler, "dev", "--config", serverConfig, "--local", "--persist-to", persistence, "--port", String(port)], { cwd: root, env: { ...process.env, CI: "1", NO_COLOR: "1" }, stdio: ["ignore", "pipe", "pipe"] });
   // Wrangler emits request and inspector logs while the test runs. Drain both
   // pipes so the child cannot block and restart its worker on a full buffer.
   server.stdout.on("data", () => {});

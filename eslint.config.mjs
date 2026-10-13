@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Build output and Wrangler work files of the framework-free site:
+    "vanilla/dist/**",
+    "vanilla/.wrangler/**",
   ]),
 ]);
 

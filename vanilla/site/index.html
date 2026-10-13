@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>daymark — your daily journal</title>
+    <meta name="description" content="A quiet, personal daily mood and activity journal.">
+    <link rel="shortcut icon" href="/favicon.svg">
+    <link rel="icon" href="/favicon.svg">
+    <meta name="theme-color" content="#f7f3ec" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0f0e17" media="(prefers-color-scheme: dark)">
+    <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials">
+    <!-- Sets the theme before the first paint. Keep this script the same as THEME_BOOTSTRAP_SCRIPT in lib/theme.ts. -->
+    <script>(function () {
+  var root = document.documentElement;
+  var media = typeof window.matchMedia === "function"
+    ? window.matchMedia("(prefers-color-scheme: dark)")
+    : { matches: false };
+  function readPreference() {
+    try {
+      var value = window.localStorage.getItem("daymark-theme");
+      return value === "light" || value === "dark" || value === "system" ? value : "system";
+    } catch (_) {
+      return "system";
+    }
+  }
+  function apply() {
+    var preference = readPreference();
+    root.dataset.theme = preference === "system" ? (media.matches ? "dark" : "light") : preference;
+  }
+  try {
+    apply();
+    if (typeof media.addEventListener === "function") media.addEventListener("change", apply);
+    else if (typeof media.addListener === "function") media.addListener(apply);
+  } catch (_) {
+    root.dataset.theme = media.matches ? "dark" : "light";
+  }
+})();</script>
+    <link rel="stylesheet" href="/assets/css/app.css">
+    <link rel="stylesheet" href="/assets/css/insights.css">
+    <!-- modulepreload -->
+    <script type="module" src="/assets/js/app.js"></script>
+  </head>
+  <body>
+    <!-- The shell that shows while the scripts and the journal data load. js/app.js takes over these elements. -->
+    <div class="app-shell view-log">
+      <a class="skip-link" href="#journal-content">Skip to content</a>
+      <header class="topbar">
+        <button class="brand" aria-label="Go to log"><span class="brand-mark" aria-hidden="true"></span><span>daymark</span></button>
+        <div class="topbar-date is-log">Your journal</div>
+        <div class="connection-pill checking" role="status" aria-label="Connection: checking"><span class="material-symbols-rounded" aria-hidden="true">cloud_done</span> checking</div>
+      </header>
+      <main class="content-shell" id="journal-content" tabindex="-1">
+        <div class="journal-loading" aria-busy="true">
+          <p class="sr-only" role="status">Loading journal data…</p>
+          <section class="hero-card">
+            <div>
+              <p class="eyebrow">Daily journal</p>
+              <h1>How was your day?</h1>
+              <div class="loading-placeholder loading-line" aria-hidden="true"></div>
+            </div>
+          </section>
+          <div class="loading-panels" aria-hidden="true">
+            <section class="panel">
+              <div class="loading-placeholder loading-heading"></div>
+              <div class="loading-placeholder loading-row"></div>
+              <div class="loading-placeholder loading-row"></div>
+            </section>
+            <section class="panel">
+              <div class="loading-placeholder loading-heading"></div>
+              <div class="mood-grid">
+                <div class="loading-placeholder loading-mood"></div>
+                <div class="loading-placeholder loading-mood"></div>
+                <div class="loading-placeholder loading-mood"></div>
+                <div class="loading-placeholder loading-mood"></div>
+                <div class="loading-placeholder loading-mood"></div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </main>
+      <nav class="bottom-nav" aria-label="Primary navigation" aria-busy="false">
+        <span class="nav-heading" aria-hidden="true">Your journal</span>
+        <button class="active" aria-current="page" data-view="log"><span class="nav-icon"><span class="material-symbols-rounded" aria-hidden="true">add_circle</span></span><span>Log</span></button>
+        <button data-view="calendar"><span class="nav-icon"><span class="material-symbols-rounded" aria-hidden="true">calendar_month</span></span><span>Calendar</span></button>
+        <button data-view="insights"><span class="nav-icon"><span class="material-symbols-rounded" aria-hidden="true">insights</span></span><span>Insights</span></button>
+        <button data-view="settings"><span class="nav-icon"><span class="material-symbols-rounded" aria-hidden="true">tune</span></span><span>Setup</span></button>
+        <span class="nav-footer"><span class="material-symbols-rounded" aria-hidden="true">spa</span><span>A more intentional<br>you, one day at a time.</span></span>
+      </nav>
+    </div>
+  </body>
+</html>
