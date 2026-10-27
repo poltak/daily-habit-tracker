@@ -17,8 +17,8 @@ pnpm run dev
 `pnpm run dev` builds the plain site, applies the checked-in D1 migrations, and
 starts the production Worker with Wrangler on `http://localhost:3000`. It has no
 hot reload. Run it again after a change. The backend is not mocked or
-memory-only. Wrangler provides the local D1 binding. When no Cloudflare Access
-variables are set, the Worker allows local API requests.
+memory-only. Wrangler provides the local D1 binding. Requests to `localhost`
+skip sign-in. To try passkeys locally, see [docs/sign-in.md](docs/sign-in.md).
 
 The earlier React app is still in the repository. `pnpm run dev:react` starts it
 with hot reload, and `pnpm run dev:react:wrangler` runs its compiled Worker.
@@ -98,8 +98,8 @@ causes.
 The Worker serves a Model Context Protocol endpoint at `/api/mcp`, so an AI
 agent can read the journal's history and add entries. It is a stateless
 Streamable HTTP server: each `POST` carries one JSON-RPC message and gets a JSON
-reply. It uses the same D1 database and the same access check as the rest of
-`/api`.
+reply. It uses the same D1 database as the rest of `/api`, but it signs in
+with an OAuth access token, not with the session cookie of the app.
 
 | Tool | What it does |
 | --- | --- |
@@ -121,16 +121,17 @@ Connect Claude Code to a local dev server, which needs no authentication:
 claude mcp add --transport http daymark http://localhost:3000/api/mcp
 ```
 
-In production the endpoint sits behind Cloudflare Access like every `/api`
-route. Fetch an Access token for your own identity with `cloudflared` and send
-it in the `cf-access-token` header:
+In production the endpoint needs an OAuth access token. Add the server, then
+run `/mcp` in Claude Code and choose to authenticate:
 
 ```bash
-claude mcp add --transport http daymark https://<your-host>/api/mcp \
-  --header "cf-access-token: $(cloudflared access token -app=https://<your-host>)"
+claude mcp add --transport http daymark https://<your-host>/api/mcp
 ```
 
-The token expires with your Access session. Run the command again to renew it.
+The browser opens daymark. Sign in with your passkey if you have no session,
+then allow Claude Code. Claude Code refreshes its token, and a refresh token
+lasts 180 days after its last use. **Setup > Sign-in** lists the connected
+apps and disconnects them. The details are in [docs/sign-in.md](docs/sign-in.md).
 
 ## Cloudflare deployment
 
@@ -157,15 +158,17 @@ Keep the token in GitHub Secrets. Do not commit it or print it in workflow logs.
 To retry after a failure, fix the reported issue and push a new commit to
 `main` or `master`.
 
-For the single-user lock, configure Cloudflare Access JWT verification on the
-Worker with:
+The owner signs in with a passkey. Before the first sign-in, add a setup code
+with at least 12 characters as a secret of the Worker:
 
-- `ACCESS_TEAM_DOMAIN`: the `https://<team>.cloudflareaccess.com` domain
-- `ACCESS_AUD`: the Access application audience tag
-- `ALLOWED_EMAIL`: the only permitted email address
+```bash
+pnpm exec wrangler secret put DAYMARK_SETUP_CODE --config vanilla/wrangler.jsonc
+```
 
-If all three variables are absent, the Worker accepts API requests only from
-local development hosts.
+Then open the app, type the setup code, and save a passkey. The setup code
+also adds a passkey after you lose all your devices. Sign-in, the OAuth server
+for MCP clients, and the move from Cloudflare Access are in
+[docs/sign-in.md](docs/sign-in.md).
 
 ## Framework-free build
 
