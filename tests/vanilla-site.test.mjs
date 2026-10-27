@@ -65,3 +65,14 @@ test("the build publishes plain modules only, and each page preloads the modules
   assert.deepEqual(signInModules, ["js/dom.js", "js/sign-in.js", "lib/passkey-client.js"]);
   assert.match(await readFile(new URL("_headers", dist), "utf8"), /\/sign-in\n {2}X-Frame-Options: DENY/);
 });
+
+test("no published file has a name that tracker blockers refuse", async () => {
+  // Tracker filter lists block paths such as /log-view.js, and a blocked module stops the whole app.
+  // Each pattern matches the start of a file name or a folder name.
+  const blocked = /(^|\/)(log|logs|logger|logging|track|tracker|tracking|analytics|stats|beacon|pixel|ads?|advert)[-_./]/i;
+  const dist = new URL("vanilla/dist/", root);
+  for (const file of await readdir(dist, { recursive: true })) {
+    assert.doesNotMatch(file.split("\\").join("/"), blocked, file);
+  }
+});
+

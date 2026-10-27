@@ -12,7 +12,7 @@ import { createCalendarView } from "./calendar-view.js";
 import { create, html, place, set } from "./dom.js";
 import { createGoalView } from "./goal-view.js";
 import { createInsightsView } from "./insights-view.js";
-import { createLogView } from "./log-view.js";
+import { createLogView } from "./day-view.js";
 import { watchSession } from "./session.js";
 import { createSetupView } from "./setup-view.js";
 import { startTheme } from "./theme.js";
