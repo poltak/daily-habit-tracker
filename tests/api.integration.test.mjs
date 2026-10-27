@@ -9,8 +9,8 @@ import test from "node:test";
 const root = fileURLToPath(new URL("../", import.meta.url));
 const wrangler = join(root, "node_modules/wrangler/bin/wrangler.js");
 const port = 8799;
-// The Worker under test. Set DAYMARK_WRANGLER_CONFIG to vanilla/wrangler.jsonc to run the same checks against the framework-free Worker.
-const serverConfig = process.env.DAYMARK_WRANGLER_CONFIG ?? "dist/server/wrangler.json";
+// The Worker under test. Set DAYMARK_WRANGLER_CONFIG to dist/server/wrangler.json to run the same checks against the React Worker.
+const serverConfig = process.env.DAYMARK_WRANGLER_CONFIG ?? "vanilla/wrangler.jsonc";
 const baseUrl = `http://localhost:${port}`;
 
 function run(command, args, cwd = root) {

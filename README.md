@@ -2,8 +2,8 @@
 
 Daymark is a small, server-backed Daylio-style journal for a single-user deployment. It stores
 one mood, selected activities, and goal completions per logical calendar date.
-The frontend is a mobile-first React PWA; the production storage target is
-Cloudflare D1.
+The frontend is a mobile-first PWA with plain DOM code and no framework. The
+data is in Cloudflare D1.
 
 ## Local development
 
@@ -14,12 +14,17 @@ pnpm install
 pnpm run dev
 ```
 
-`pnpm run dev` applies the checked-in D1 migrations and starts the vinext/Vite
-development server with hot module replacement on `http://localhost:3000`.
-The backend is not mocked or memory-only. The Cloudflare Vite plugin provides
-the configured local D1 binding. When no Cloudflare Access variables are set,
-the Worker allows local API requests. Use `pnpm run dev:wrangler` only when you
-need to build first and run the compiled Worker without hot reload.
+`pnpm run dev` builds the plain site, applies the checked-in D1 migrations, and
+starts the production Worker with Wrangler on `http://localhost:3000`. It has no
+hot reload. Run it again after a change. The backend is not mocked or
+memory-only. Wrangler provides the local D1 binding. When no Cloudflare Access
+variables are set, the Worker allows local API requests.
+
+The earlier React app is still in the repository. `pnpm run dev:react` starts it
+with hot reload, and `pnpm run dev:react:wrangler` runs its compiled Worker.
+
+If `pnpm install` fails while it builds `sharp` from source, a system copy of
+libvips is installed. Run `SHARP_IGNORE_GLOBAL_LIBVIPS=1 pnpm install`.
 
 Useful checks:
 
@@ -162,24 +167,27 @@ Worker with:
 If all three variables are absent, the Worker accepts API requests only from
 local development hosts.
 
-## Framework-free build (experiment)
+## Framework-free build
 
-The `vanilla/` directory is a second runtime for the same app. It has no React,
-no Next.js layer, and no Tailwind. The browser gets the page in
-`vanilla/site/index.html`, the scripts in `vanilla/site/js`, and the stylesheets
-of the React app. The Worker in `vanilla/worker.ts` sends each `/api` request to
-the route handlers that the React app uses.
+The `vanilla/` directory is the production runtime. It has no React, no Next.js
+layer, and no Tailwind. The browser gets the page in `vanilla/site/index.html`,
+the scripts in `vanilla/site/js`, and the stylesheets in `app/`. The Worker in
+`vanilla/worker.ts` sends each `/api` request to the route handlers in
+`app/api/`.
 
 ```bash
 pnpm run build:vanilla
-pnpm run dev:vanilla
+pnpm run dev
 ```
 
 `pnpm run build:vanilla` does not use a bundler. It copies the scripts as they
 are, erases the type annotations from the `lib/` modules that the scripts import,
 and writes the result to `vanilla/dist/b/<build>/`. The build name in the path
-lets the browser cache each file for one year. The Worker has the name
-`daylio-clone-vanilla`, so a deploy of it cannot replace the production Worker.
+lets the browser cache each file for one year. `pnpm run deploy` deploys
+`vanilla/wrangler.jsonc` as the `daylio-clone` Worker.
+
+`tests/api.integration.test.mjs` runs against the vanilla Worker. To run it
+against the React Worker, set `DAYMARK_WRANGLER_CONFIG=dist/server/wrangler.json`.
 
 To compare the two runtimes, start each one on its own port with its own copy of
 the local D1 state. Then give the two URLs to the scripts in `vanilla/bench/`.

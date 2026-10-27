@@ -17,7 +17,7 @@ function worker() {
   runInNewContext(source, {
     URL, Response,
     self: { location: { origin: "https://journal.example" }, addEventListener: (name, handler) => listeners.set(name, handler), clients: { claim() {} }, skipWaiting() {} },
-    caches: { open: async () => cache, keys: async () => ["daymark-shell-v3", "daymark-shell-v4", "other-app"], delete: async (key) => deletedCaches.push(key) },
+    caches: { open: async () => cache, keys: async () => ["daymark-shell-v4", "daymark-shell-v5", "other-app"], delete: async (key) => deletedCaches.push(key) },
     fetch: (...args) => network(...args),
   });
   return {
@@ -70,5 +70,5 @@ test("service worker caches only successful assets and skips API and RSC request
 test("service worker activation removes only its own old caches", async () => {
   const runtime = worker();
   await runtime.dispatch("activate");
-  assert.deepEqual(runtime.deletedCaches, ["daymark-shell-v3"]);
+  assert.deepEqual(runtime.deletedCaches, ["daymark-shell-v4"]);
 });

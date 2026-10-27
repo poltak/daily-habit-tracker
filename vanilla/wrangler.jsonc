@@ -1,9 +1,11 @@
 {
   "$schema": "../node_modules/wrangler/config-schema.json",
-  // An experiment. The name is different from the production Worker so that a deploy cannot replace it.
-  "name": "daylio-clone-vanilla",
+  "account_id": "bc5b269de681a5c094ecc01bfafe21cb",
+  // The production Worker.
+  "name": "daylio-clone",
   "main": "./worker.ts",
   "compatibility_date": "2026-05-22",
+  "compatibility_flags": ["nodejs_compat"],
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS"
