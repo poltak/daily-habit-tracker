@@ -185,8 +185,11 @@ test("two parallel removals cannot remove the last passkey", async () => {
     user.call({ path: `/api/auth/passkeys/${laptop.id}`, method: "DELETE" }),
     user.call({ path: `/api/auth/passkeys/${phone.id}`, method: "DELETE" }),
   ]);
-  assert.deepEqual([first.status, second.status].sort(), [200, 409]);
-  assert.equal((await worker.request({ path: "/api/auth/status" })).body.hasPasskeys, true);
+  // At most one removal works. The other gets 409, or 401 when the removal of the phone ended this session first.
+  const statuses = [first.status, second.status];
+  assert.equal(statuses.filter((status) => status === 200).length, 1, statuses.join(","));
+  assert.ok(statuses.every((status) => [200, 401, 409].includes(status)), statuses.join(","));
+  assert.equal(worker.db.sqlite.prepare("SELECT count(*) AS value FROM passkeys").get().value, 1);
 });
 
 test("local development skips sign-in unless DAYMARK_LOCAL_PASSKEYS turns it on", async () => {
@@ -326,6 +329,8 @@ test("Claude Code connects to the MCP endpoint with OAuth after the owner allows
   assert.match(consentHtml, /<strong>localhost:54212<\/strong>/);
   assert.equal(consent.headers.get("x-frame-options"), "DENY");
   assert.match(consent.headers.get("content-security-policy"), /frame-ancestors 'none'/);
+  // Browsers apply form-action to the redirect after Allow, which goes to the app. With it, Allow does nothing.
+  assert.doesNotMatch(consent.headers.get("content-security-policy"), /form-action/);
   // With no-referrer, a browser sends Origin: null with the form, and the owner's own answer fails.
   assert.equal(consent.headers.get("referrer-policy"), "same-origin");
 

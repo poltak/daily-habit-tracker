@@ -82,6 +82,28 @@ try {
   await page.getByRole("heading", { name: "How was your day?" }).waitFor();
   assert.equal(await page.evaluate(() => fetch("/api/bootstrap").then((response) => response.status)), 200);
 
+  // Allow on the consent page sends the browser to the app's callback on another origin.
+  const client = await (await fetch(`${baseURL}/oauth/register`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ client_name: "Claude Code", redirect_uris: ["http://127.0.0.1:3199/callback"], token_endpoint_auth_method: "none" }),
+  })).json();
+  const authorize = new URLSearchParams({
+    response_type: "code",
+    client_id: client.client_id,
+    redirect_uri: "http://127.0.0.1:3199/callback",
+    code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+    code_challenge_method: "S256",
+    state: "state-1",
+  });
+  await page.goto(`/oauth/authorize?${authorize}`);
+  await page.getByRole("heading", { name: "Connect Claude Code to daymark?" }).waitFor();
+  const callback = page.waitForRequest((request) => request.url().startsWith("http://127.0.0.1:3199/callback"), { timeout: 10_000 });
+  await page.getByRole("button", { name: "Allow" }).click();
+  const callbackUrl = new URL((await callback).url());
+  assert.equal(callbackUrl.searchParams.get("state"), "state-1");
+  assert.ok(callbackUrl.searchParams.get("code"));
+
   // An OAuth request without a session goes to sign-in first, with a fixed notice.
   const other = await browser.newContext({ baseURL, serviceWorkers: "block" });
   const otherPage = await other.newPage();
@@ -93,7 +115,7 @@ try {
   await other.close();
 
   assert.deepEqual(errors, []);
-  console.log("PASS: setup code, passkey sign-up, Setup passkey list, sign out, passkey sign-in, OAuth notice.");
+  console.log("PASS: setup code, passkey sign-up, Setup passkey list, sign out, passkey sign-in, OAuth consent redirect, OAuth notice.");
 } finally {
   await browser.close();
   server.kill("SIGTERM");
