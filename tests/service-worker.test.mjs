@@ -72,3 +72,17 @@ test("service worker activation removes only its own old caches", async () => {
   await runtime.dispatch("activate");
   assert.deepEqual(runtime.deletedCaches, ["daymark-shell-v4"]);
 });
+
+test("service worker keeps the sign-in and OAuth pages out of the offline shell", async () => {
+  const runtime = worker();
+  runtime.network(async () => new Response("good shell", { headers: { "content-type": "text/html" } }));
+  await runtime.dispatch("fetch", navigation);
+  for (const url of ["https://journal.example/sign-in?returnTo=%2F", "https://journal.example/oauth/authorize?client_id=x"]) {
+    runtime.network(async () => new Response("not the shell", { headers: { "content-type": "text/html" } }));
+    const result = await runtime.dispatch("fetch", { ...navigation, url });
+    assert.equal(await result.response.text(), "not the shell");
+    assert.equal(result.backgroundWrites, 0);
+  }
+  runtime.network(async () => { throw new Error("offline"); });
+  assert.equal(await (await runtime.dispatch("fetch", navigation)).response.text(), "good shell");
+});

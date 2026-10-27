@@ -1,6 +1,7 @@
 import { WEEKDAY_NAMES, logicalDateFromDate, weekRangeLabel } from "../lib/daylio.js";
 import { filterActivityGroups } from "../lib/activity-groups.js";
 import { UI_ICONS } from "../lib/icons.js";
+import { addPasskey, fetchAuthStatus, signInUrl, signOut } from "../lib/passkey-client.js";
 import { acquirePendingAction, applyCatalogOverride, catalogKey, commitCatalogOverride, deleteWarning, getReorderPlan, mergeCatalogOverride, releasePendingAction, rollbackCatalogOverride, sortCatalogItems } from "../lib/catalog-mutations.js";
 import { create, html, place, set, syncChildren } from "./dom.js";
 import { createIconPickerSlot } from "./icon-picker.js";
@@ -52,7 +53,21 @@ function syncActionButton(button, { label, busy, disabled, iconName }) {
   set(button, { "aria-label": label, "aria-busy": busy, disabled, html: actionIcon(iconName, busy) });
 }
 
-/** The theme, the week setting, the activity and goal catalog, and the export. @param {App} app */
+/** @typedef {{ id: string; name: string; createdAt: number; lastUsedAt: number | null; synced: boolean; current: boolean }} Passkey */
+/** @typedef {{ id: string; name: string; createdAt: number; lastUsedAt: number | null }} Connection */
+
+/** @param {number} value */
+function formatAccountDate(value) {
+  return new Date(value).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
+
+/** @param {string} path @param {RequestInit} [init] @returns {Promise<{ ok: boolean; body: any }>} */
+async function accountRequest(path, init = {}) {
+  const response = await fetch(path, { cache: "no-store", ...init });
+  return { ok: response.ok, body: await response.json().catch(() => null) };
+}
+
+/** The theme, the week setting, the activity and goal catalog, the export, and the sign-in. @param {App} app */
 export function createSetupView(app) {
   const { state } = app;
   const data = () => /** @type {NonNullable<typeof state.data>} */ (state.data);
@@ -67,6 +82,11 @@ export function createSetupView(app) {
   const pendingActions = new Set();
   /** For each group, whether a filter was in use when the view last set its open state. @type {WeakMap<Element, boolean>} */
   const filterOpened = new WeakMap();
+  /**
+   * The passkeys and connected apps. The section shows only when passkeys protect this daymark, and not on a local server.
+   * @type {{ passkeyMode: boolean; passkeys: Passkey[]; connections: Connection[] }}
+   */
+  const account = { passkeyMode: false, passkeys: [], connections: [] };
 
   /** @param {string} key */
   const isPending = (key) => pendingActions.has(key);
@@ -302,6 +322,85 @@ export function createSetupView(app) {
     });
   }
 
+  async function refreshAccount() {
+    try {
+      const status = await fetchAuthStatus();
+      if (status.mode !== "passkey") return;
+      const [passkeys, connections] = await Promise.all([accountRequest("/api/auth/passkeys"), accountRequest("/api/auth/connections")]);
+      if (!passkeys.ok || !connections.ok) throw new Error("The sign-in settings could not be loaded.");
+      Object.assign(account, { passkeyMode: true, passkeys: passkeys.body.passkeys, connections: connections.body.connections });
+    } catch (error) {
+      showMessage({ kind: "error", text: /** @type {Error} */ (error).message });
+    }
+    app.invalidate();
+  }
+
+  async function addAccountPasskey() {
+    await runPending({
+      key: "account",
+      action: async () => {
+        const result = await addPasskey();
+        if (!result.ok) {
+          showMessage({ kind: "error", text: result.message });
+          return;
+        }
+        showMessage({ kind: "success", text: "Passkey added." });
+        await refreshAccount();
+      },
+    });
+  }
+
+  /** @param {Passkey} passkey */
+  async function removePasskey(passkey) {
+    const warning = passkey.current
+      ? `Remove the passkey "${passkey.name}"? You signed in with it, so this device signs out.`
+      : `Remove the passkey "${passkey.name}"? Devices that signed in with it sign out.`;
+    if (!window.confirm(warning)) return;
+    await runPending({
+      key: "account",
+      action: async () => {
+        const result = await accountRequest(`/api/auth/passkeys/${encodeURIComponent(passkey.id)}`, { method: "DELETE" }).catch(() => null);
+        if (!result?.ok) {
+          showMessage({ kind: "error", text: result?.body?.error ?? "The passkey could not be removed." });
+          return;
+        }
+        if (result.body.signedOut) {
+          window.location.replace(signInUrl("/?view=settings"));
+          return;
+        }
+        showMessage({ kind: "success", text: "Passkey removed." });
+        await refreshAccount();
+      },
+    });
+  }
+
+  /** @param {Connection} connection */
+  async function disconnect(connection) {
+    if (!window.confirm(`Disconnect ${connection.name}? It stops working until you connect it again.`)) return;
+    await runPending({
+      key: "account",
+      action: async () => {
+        const result = await accountRequest(`/api/auth/connections/${encodeURIComponent(connection.id)}`, { method: "DELETE" }).catch(() => null);
+        if (!result?.ok) {
+          showMessage({ kind: "error", text: result?.body?.error ?? "The app could not be disconnected." });
+          return;
+        }
+        showMessage({ kind: "success", text: `${connection.name} disconnected.` });
+        await refreshAccount();
+      },
+    });
+  }
+
+  async function signOutHere() {
+    await runPending({
+      key: "account",
+      action: async () => {
+        await signOut();
+        window.location.replace(signInUrl("/"));
+      },
+    });
+  }
+
   const page = create(html`
     <section class="page-section settings-page">
       <div class="page-intro">
@@ -387,6 +486,25 @@ export function createSetupView(app) {
         </div>
         <button class="secondary-button" data-action="export"></button>
       </section>
+
+      <section class="settings-card account-card" hidden>
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Sign-in</p>
+            <h2>Passkeys and connected apps</h2>
+            <p class="muted small-copy">A passkey signs you in with your face, fingerprint or screen lock. Add one on each device that you use.</p>
+          </div>
+        </div>
+        <h3 class="account-subheading">Passkeys</h3>
+        <ul class="account-list passkey-list"></ul>
+        <div class="account-actions">
+          <button class="secondary-button" data-action="add-passkey"></button>
+          <button class="secondary-button" data-action="sign-out">${icon("logout")} Sign out</button>
+        </div>
+        <h3 class="account-subheading">Connected apps</h3>
+        <p class="muted small-copy account-empty">No apps are connected. An MCP client such as Claude Code shows here after you allow it.</p>
+        <ul class="account-list connection-list"></ul>
+      </section>
     </section>`);
   /** @param {string} selector @returns {any} */
   const find = (selector) => page.querySelector(selector);
@@ -404,6 +522,12 @@ export function createSetupView(app) {
   const goalList = find(".goals-card .management-list");
   const [goalNameInput, createGoalButton] = find(".goals-card .inline-form").children;
   const exportButton = find('[data-action="export"]');
+  const accountCard = find(".account-card");
+  const passkeyList = find(".passkey-list");
+  const connectionList = find(".connection-list");
+  const connectionsEmpty = find(".account-empty");
+  const addPasskeyButton = find('[data-action="add-passkey"]');
+  const signOutButton = find('[data-action="sign-out"]');
   const noMatches = create(html`<p class="empty-inline">No activities match that filter.</p>`);
   // The React app gives these two cards the settings-card class only. The extra names above are for the queries.
   activitiesCard.className = "settings-card";
@@ -578,6 +702,42 @@ export function createSetupView(app) {
 
     set(exportButton, { "aria-busy": isPending("export"), disabled: isPending("export"), html: html`${actionIcon(UI_ICONS.export, isPending("export"))} ${isPending("export") ? "Exporting…" : "Export JSON"}` });
 
+    const accountBusy = isPending("account");
+    set(accountCard, { hidden: !account.passkeyMode });
+    const onlyPasskey = account.passkeys.length <= 1;
+    syncChildren({
+      parent: passkeyList,
+      items: account.passkeys,
+      key: (passkey) => passkey.id,
+      create: () => create(html`<li><span class="management-copy"><strong></strong><small></small></span><button class="secondary-button" data-action="remove-passkey">Remove</button></li>`),
+      update: (row, passkey) => {
+        set(row, { "data-id": passkey.id });
+        set(row.querySelector("strong"), { text: passkey.current ? `${passkey.name} · this device` : passkey.name });
+        const used = passkey.lastUsedAt ? `Last used ${formatAccountDate(passkey.lastUsedAt)}` : "Not used to sign in yet";
+        set(row.querySelector("small"), { text: `Added ${formatAccountDate(passkey.createdAt)} · ${used}${passkey.synced ? " · Synced" : ""}` });
+        set(row.querySelector("button"), {
+          disabled: accountBusy || onlyPasskey,
+          title: onlyPasskey ? "Add another passkey before you remove this one." : null,
+          "aria-label": `Remove passkey ${passkey.name}`,
+        });
+      },
+    });
+    syncChildren({
+      parent: connectionList,
+      items: account.connections,
+      key: (connection) => connection.id,
+      create: () => create(html`<li><span class="management-copy"><strong></strong><small></small></span><button class="secondary-button" data-action="disconnect">Disconnect</button></li>`),
+      update: (row, connection) => {
+        set(row, { "data-id": connection.id });
+        set(row.querySelector("strong"), { text: connection.name });
+        set(row.querySelector("small"), { text: `Connected ${formatAccountDate(connection.createdAt)} · ${connection.lastUsedAt ? `Last used ${formatAccountDate(connection.lastUsedAt)}` : "Not used yet"}` });
+        set(row.querySelector("button"), { disabled: accountBusy, "aria-label": `Disconnect ${connection.name}` });
+      },
+    });
+    set(connectionsEmpty, { hidden: account.connections.length > 0 });
+    set(addPasskeyButton, { "aria-busy": accountBusy, disabled: accountBusy, html: html`${actionIcon("passkey", accountBusy)} Add a passkey on this device` });
+    set(signOutButton, { disabled: accountBusy });
+
     iconPicker.update(iconPickerActivity ? {
       activityName: iconPickerActivity.name,
       currentIcon: iconPickerActivity.icon,
@@ -612,6 +772,8 @@ export function createSetupView(app) {
     if (element.closest("summary")) event.preventDefault();
     handler(element, event);
   };
+
+  void refreshAccount();
 
   return {
     nodes: [page],
@@ -673,6 +835,16 @@ export function createSetupView(app) {
           },
         }),
         export: () => void exportData(),
+        "add-passkey": () => void addAccountPasskey(),
+        "sign-out": () => void signOutHere(),
+        "remove-passkey": (/** @type {HTMLElement} */ button) => {
+          const passkey = account.passkeys.find((candidate) => candidate.id === button.closest("li")?.dataset.id);
+          if (passkey) void removePasskey(passkey);
+        },
+        disconnect: (/** @type {HTMLElement} */ button) => {
+          const connection = account.connections.find((candidate) => candidate.id === button.closest("li")?.dataset.id);
+          if (connection) void disconnect(connection);
+        },
       },
       input: {
         "activity-filter": (/** @type {HTMLInputElement} */ input) => {

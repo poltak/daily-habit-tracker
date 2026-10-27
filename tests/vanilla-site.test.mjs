@@ -29,14 +29,16 @@ test("attributes follow the boolean rules of HTML and of ARIA", () => {
   assert.equal(String(attrs({ disabled: true, hidden: false, title: null, "aria-busy": false, "aria-pressed": true, "data-id": `a"b` })), ` disabled="" aria-busy="false" aria-pressed="true" data-id="a&quot;b"`);
 });
 
-test("the page sets the theme with the same script as the React layout", async () => {
+test("the pages set the theme with the same script as the React layout", async () => {
+  const signIn = await readFile(new URL("vanilla/site/sign-in.html", root), "utf8");
+  assert.ok(signIn.includes(`<script>${THEME_BOOTSTRAP_SCRIPT}</script>`));
   const page = await readFile(new URL("vanilla/site/index.html", root), "utf8");
   assert.ok(page.includes(`<script>${THEME_BOOTSTRAP_SCRIPT}</script>`));
   assert.match(page, /class="journal-loading" aria-busy="true"/);
   assert.match(page, /aria-label="Primary navigation"/);
 });
 
-test("the build publishes plain modules only, and each page preloads all of them", async () => {
+test("the build publishes plain modules only, and each page preloads the modules of its entry script", async () => {
   execFileSync(process.execPath, ["--no-warnings", fileURLToPath(new URL("vanilla/build.mjs", root))], { stdio: "ignore" });
   const dist = new URL("vanilla/dist/", root);
   const [build] = await readdir(new URL("b/", dist));
@@ -54,6 +56,12 @@ test("the build publishes plain modules only, and each page preloads all of them
     assert.doesNotMatch(source, /from\s+["'][^"']+\.ts["']/, file);
     // The in-memory test store, the seed catalog and the framework stay out of the browser.
     assert.doesNotMatch(source, /Import would replace an entry|Move your body|from\s+["']react/, file);
-    assert.ok(page.includes(`<link rel="modulepreload" href="/b/${build}/${file}">`), file);
+    // Only the sign-in page needs its own script.
+    assert.equal(page.includes(`<link rel="modulepreload" href="/b/${build}/${file}">`), file !== "js/sign-in.js", file);
   }
+  // The sign-in page loads only what it needs: no journal code.
+  const signIn = await readFile(new URL("sign-in.html", dist), "utf8");
+  const signInModules = [...signIn.matchAll(/rel="modulepreload" href="\/b\/[^/]+\/([^"]+)"/g)].map((match) => match[1]).sort();
+  assert.deepEqual(signInModules, ["js/dom.js", "js/sign-in.js", "lib/passkey-client.js"]);
+  assert.match(await readFile(new URL("_headers", dist), "utf8"), /\/sign-in\n {2}X-Frame-Options: DENY/);
 });

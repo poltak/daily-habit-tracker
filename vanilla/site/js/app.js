@@ -13,6 +13,7 @@ import { create, html, place, set } from "./dom.js";
 import { createGoalView } from "./goal-view.js";
 import { createInsightsView } from "./insights-view.js";
 import { createLogView } from "./log-view.js";
+import { watchSession } from "./session.js";
 import { createSetupView } from "./setup-view.js";
 import { startTheme } from "./theme.js";
 import { friendlyDate, getEntryForDate, icon, noticeText, resolveActiveActivityGroupId, shortDate } from "./ui.js";
@@ -1480,6 +1481,7 @@ function render() {
 }
 
 // Start. The order is the order in which the React app ran its effects.
+watchSession();
 const initialRoute = routeFromLocation(window.location);
 const initialHistoryState = /** @type {{ daymarkRoute?: boolean; daymarkDepth?: number } | null} */ (window.history.state);
 routeDepth = initialHistoryState?.[HISTORY_STATE_KEY] && Number.isInteger(initialHistoryState.daymarkDepth) ? /** @type {number} */ (initialHistoryState.daymarkDepth) : 0;

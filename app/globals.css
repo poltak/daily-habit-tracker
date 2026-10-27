@@ -357,7 +357,7 @@ button:disabled { cursor: wait; opacity: .6; }
 .search-field:focus-within { border-color: var(--focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 26%, transparent); }
 .goal-config-field, .goal-icon-setting { display: grid; gap: 7px; min-width: 0; }
 .goal-config-field > span, .goal-icon-setting > span, .weekday-picker legend, .weekly-target-picker legend { color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .02em; }
-.goal-config-field input, .goal-config-field select, .inline-form input, .inline-form select, .tiny-select {
+.goal-config-field input, .goal-config-field select, .inline-form input, .inline-form select, .auth-form input, .tiny-select {
   min-width: 0;
   min-height: 46px;
   padding: 10px 13px;
@@ -367,7 +367,7 @@ button:disabled { cursor: wait; opacity: .6; }
   color: var(--ink);
   outline: 0;
 }
-.goal-config-field input:focus, .goal-config-field select:focus, .inline-form input:focus, .inline-form select:focus { border-color: var(--focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 26%, transparent); }
+.goal-config-field input:focus, .goal-config-field select:focus, .inline-form input:focus, .inline-form select:focus, .auth-form input:focus { border-color: var(--focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 26%, transparent); }
 .inline-form { display: flex; gap: 8px; margin-top: 12px; }
 .inline-form input, .inline-form select { flex: 1; }
 .tiny-select { max-width: 124px; min-height: 38px; padding: 5px 9px; border-radius: 10px; font-size: 12px; }
@@ -584,6 +584,28 @@ details:not([open]) > summary .add-activity-button { display: none; }
 .export-card { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
 .export-card .muted { margin-top: 6px; }
 .settings-card > .muted.small-copy { margin-top: 12px; }
+.account-subheading { margin: 20px 0 8px; color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.account-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.account-list li { display: flex; align-items: center; gap: 11px; padding: 9px 8px 9px 12px; border-radius: 16px; background: var(--surface-subtle); }
+.account-list .secondary-button { min-height: 38px; padding: 7px 14px; }
+.account-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.account-card .account-empty { margin-top: 0; }
+
+/* ---------- Sign-in page ---------- */
+
+.auth-shell { display: grid; min-height: 100vh; min-height: 100dvh; place-items: center; padding: 24px 16px; }
+.auth-panel { width: min(100%, 440px); padding: 28px; border: 1px solid var(--line); border-radius: 28px; background: var(--card); }
+.auth-panel h1 { margin: 0 0 10px; font-size: 28px; line-height: 1.15; letter-spacing: -.02em; }
+.auth-panel > .muted { margin-bottom: 4px; }
+.auth-brand { display: flex; align-items: center; gap: 10px; margin: 0 0 22px; font-family: var(--font-display); font-size: 20px; font-weight: 600; letter-spacing: -.02em; }
+.auth-notice { margin: 0 0 12px; padding: 12px 14px; border-radius: var(--radius-sm); background: var(--surface-info); color: var(--info); font-size: 14px; font-weight: 600; }
+.auth-error { margin: 14px 0 0; padding: 12px 14px; border-radius: var(--radius-sm); background: var(--surface-error); color: var(--danger); font-size: 14px; font-weight: 600; }
+.auth-error[hidden] { display: none; }
+.auth-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.auth-actions .primary-button, .auth-form .primary-button { flex: 1 1 auto; }
+.auth-form { display: grid; gap: 12px; margin-top: 18px; }
+.auth-form label { display: grid; gap: 6px; font-size: 13px; font-weight: 650; }
+.auth-link { margin-top: 16px; padding: 0; border: 0; background: none; color: var(--brand-text); font-size: 14px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
 
 /* ---------- Icon picker ---------- */
 

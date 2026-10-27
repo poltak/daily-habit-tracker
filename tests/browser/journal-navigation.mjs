@@ -29,6 +29,8 @@ try {
     }
     if (path.startsWith("/api/entries/")) return route.fulfill({ status: 404, json: { completedGoalIds: [] } });
     if (path === "/api/calendar") return route.fulfill({ json: { days: [] } });
+    // A local server has no sign-in, so Setup shows no Sign-in section.
+    if (path === "/api/auth/status") return route.fulfill({ json: { mode: "local" } });
     throw new Error(`Unexpected API request: ${route.request().method()} ${path}`);
   });
 

@@ -53,13 +53,38 @@ for (const [path, content] of assets) {
   await writeFile(join(out, base, path), content);
 }
 
-// The page lists every module, so the browser fetches them together and not one import level at a time.
+// Each page lists every module that its entry script imports, so the browser fetches them together and not one import level at a time.
+function modulesFrom(entry) {
+  const found = new Set();
+  const stack = [entry];
+  while (stack.length > 0) {
+    const path = stack.pop();
+    if (found.has(path)) continue;
+    found.add(path);
+    for (const [, specifier] of assets.get(path).matchAll(IMPORT_SPECIFIER)) {
+      const target = posix.join(posix.dirname(path), specifier);
+      if (assets.has(target)) stack.push(target);
+    }
+  }
+  return [...found].sort();
+}
+
+/** @param {{ source: string; entry: string }} input */
+async function writePage({ source, entry }) {
+  const preloads = modulesFrom(entry).map((path) => `<link rel="modulepreload" href="/${base}/${path}">`).join("\n    ");
+  return (await read(source)).replaceAll('="/assets/', `="/${base}/`).replace("<!-- modulepreload -->", preloads);
+}
+
 const modules = [...assets.keys()].filter((path) => path.endsWith(".js")).sort();
-const preloads = modules.map((path) => `<link rel="modulepreload" href="/${base}/${path}">`).join("\n    ");
-const page = (await read("vanilla/site/index.html")).replaceAll('="/assets/', `="/${base}/`).replace("<!-- modulepreload -->", preloads);
+const page = await writePage({ source: "vanilla/site/index.html", entry: "js/app.js" });
 await writeFile(join(out, "index.html"), page);
 // The Insights page is the same shell at a second address.
 await writeFile(join(out, "insights.html"), page);
-await writeFile(join(out, "_headers"), "/b/*\n  Cache-Control: public, max-age=31536000, immutable\n");
+await writeFile(join(out, "sign-in.html"), await writePage({ source: "vanilla/site/sign-in.html", entry: "js/sign-in.js" }));
+// The sign-in page must not show inside a frame of another site, where a click could be hijacked.
+await writeFile(join(out, "_headers"), [
+  "/b/*\n  Cache-Control: public, max-age=31536000, immutable",
+  "/sign-in\n  X-Frame-Options: DENY\n  Content-Security-Policy: frame-ancestors 'none'\n  Referrer-Policy: same-origin\n  Cache-Control: no-store",
+].join("\n") + "\n");
 
 console.log(`vanilla/dist/${base}: ${modules.length} modules, ${modules.filter((path) => path.startsWith("lib/")).length} of them from lib/`);

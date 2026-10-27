@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Sign in — daymark</title>
+    <meta name="description" content="A quiet, personal daily mood and activity journal.">
+    <link rel="shortcut icon" href="/favicon.svg">
+    <link rel="icon" href="/favicon.svg">
+    <meta name="theme-color" content="#f7f3ec" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0f0e17" media="(prefers-color-scheme: dark)">
+    <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials">
+    <!-- Sets the theme before the first paint. Keep this script the same as THEME_BOOTSTRAP_SCRIPT in lib/theme.ts. -->
+    <script>(function () {
+  var root = document.documentElement;
+  var media = typeof window.matchMedia === "function"
+    ? window.matchMedia("(prefers-color-scheme: dark)")
+    : { matches: false };
+  function readPreference() {
+    try {
+      var value = window.localStorage.getItem("daymark-theme");
+      return value === "light" || value === "dark" || value === "system" ? value : "system";
+    } catch (_) {
+      return "system";
+    }
+  }
+  function apply() {
+    var preference = readPreference();
+    root.dataset.theme = preference === "system" ? (media.matches ? "dark" : "light") : preference;
+  }
+  try {
+    apply();
+    if (typeof media.addEventListener === "function") media.addEventListener("change", apply);
+    else if (typeof media.addListener === "function") media.addListener(apply);
+  } catch (_) {
+    root.dataset.theme = media.matches ? "dark" : "light";
+  }
+})();</script>
+    <link rel="stylesheet" href="/assets/css/app.css">
+    <!-- modulepreload -->
+    <script type="module" src="/assets/js/sign-in.js"></script>
+  </head>
+  <body>
+    <!-- js/sign-in.js asks the server whether this daymark has a passkey, then shows the sign-in or the setup form. -->
+    <main class="auth-shell">
+      <section class="auth-panel" aria-live="polite">
+        <p class="auth-brand"><span class="brand-mark" aria-hidden="true"></span><span>daymark</span></p>
+        <h1>Sign in to daymark</h1>
+        <p class="muted">Checking sign-in…</p>
+      </section>
+    </main>
+  </body>
+</html>

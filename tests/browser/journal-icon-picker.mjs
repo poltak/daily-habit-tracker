@@ -14,6 +14,8 @@ try {
   await context.route("**/api/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
+    // A local server has no sign-in, so Setup shows no Sign-in section.
+    if (url.pathname === "/api/auth/status") return route.fulfill({ json: { mode: "local" } });
     if (url.pathname === "/api/bootstrap") return route.fulfill({ json: store.bootstrap() });
     if (url.pathname.startsWith("/api/entries/")) return route.fulfill({ status: 404, json: store.getEntryState(url.pathname.split("/").at(-1)) });
     if (url.pathname.startsWith("/api/catalog/activity/") && request.method() === "PATCH") {

@@ -39,8 +39,10 @@ self.addEventListener("fetch", (event) => {
   const isIconFont = url.origin === "https://fonts.gstatic.com" && request.destination === "font";
   if (request.method !== "GET" || (!sameOrigin && !isIconFont) || url.pathname.startsWith("/api/")) return;
   if (request.mode === "navigate") {
+    // The sign-in page and the OAuth pages are not the app shell, so they must not become the offline page.
+    const isShell = url.pathname !== "/sign-in" && !url.pathname.startsWith("/oauth/");
     event.respondWith(fetch(request).then((response) => {
-      if (response.headers.get("content-type")?.includes("text/html")) storeResponse({ event, key: "/", response });
+      if (isShell && response.headers.get("content-type")?.includes("text/html")) storeResponse({ event, key: "/", response });
       return response;
     }).catch(async () => (await (await caches.open(CACHE_NAME)).match("/")) ?? new Response("You are offline.", { status: 503 })));
     return;

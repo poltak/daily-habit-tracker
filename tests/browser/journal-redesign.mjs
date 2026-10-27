@@ -25,6 +25,8 @@ async function mockApi({ context, store }) {
     let json;
     let status = 200;
     if (resource === "bootstrap") json = store.bootstrap();
+    // A local server has no sign-in, so Setup shows no Sign-in section.
+    else if (resource === "auth") json = { mode: "local" };
     else if (resource === "entries") {
       const entry = request.method() === "PUT" ? store.saveEntry(date, body) : store.getEntry(date);
       json = { entry, completedGoalIds: store.getGoalCompletionIds(date), daySelections: store.getDaySelections(date) };
