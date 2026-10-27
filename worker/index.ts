@@ -1,17 +1,12 @@
 import handler from "vinext/server/app-router-entry";
-import { validAccessRequest, type AccessEnvironment } from "./auth";
+import { withAuth, type AuthEnvironment } from "./auth/index.ts";
 
-type Env = Cloudflare.Env & AccessEnvironment;
+type Env = Cloudflare.Env & AuthEnvironment;
 
+// The earlier React runtime. Production deploys vanilla/worker.ts. This Worker has the same sign-in gate, but the React app has no sign-in page.
 const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const url = new URL(request.url);
-
-    if (url.pathname.startsWith("/api/") && !(await validAccessRequest(request, env))) {
-      return Response.json({ error: "Authentication required." }, { status: 403 });
-    }
-
-    return handler.fetch(request, env, ctx);
+    return withAuth({ request, env, next: () => handler.fetch(request, env, ctx) });
   },
 };
 

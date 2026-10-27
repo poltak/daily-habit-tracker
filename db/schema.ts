@@ -129,3 +129,84 @@ export const importRuns = sqliteTable("import_runs", {
   startedAt: text("started_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   completedAt: text("completed_at"),
 }, (table) => ({ sourceIdx: uniqueIndex("import_runs_source_sha256_idx").on(table.sourceSha256) }));
+
+// Passkey sign-in and the OAuth server of the MCP endpoint. The SQL is in
+// worker/auth/store.ts and worker/auth/oauth.ts. Times are Unix milliseconds.
+
+export const passkeys = sqliteTable("passkeys", {
+  id: text("id").primaryKey(),
+  publicKey: text("public_key").notNull(),
+  counter: integer("counter").notNull().default(0),
+  transportsJson: text("transports_json").notNull().default("[]"),
+  deviceType: text("device_type").notNull(),
+  backedUp: integer("backed_up", { mode: "boolean" }).notNull().default(false),
+  name: text("name").notNull(),
+  createdAt: integer("created_at").notNull(),
+  lastUsedAt: integer("last_used_at"),
+});
+
+export const authSessions = sqliteTable("auth_sessions", {
+  id: text("id").primaryKey(),
+  passkeyId: text("passkey_id"),
+  createdAt: integer("created_at").notNull(),
+  lastSeenAt: integer("last_seen_at").notNull(),
+  expiresAt: integer("expires_at").notNull(),
+}, (table) => ({
+  passkeyIdx: index("auth_sessions_passkey_idx").on(table.passkeyId),
+  expiresIdx: index("auth_sessions_expires_idx").on(table.expiresAt),
+}));
+
+export const authChallenges = sqliteTable("auth_challenges", {
+  id: text("id").primaryKey(),
+  purpose: text("purpose").notNull(),
+  challenge: text("challenge").notNull(),
+  createdAt: integer("created_at").notNull(),
+  expiresAt: integer("expires_at").notNull(),
+}, (table) => ({ expiresIdx: index("auth_challenges_expires_idx").on(table.expiresAt) }));
+
+export const authAttempts = sqliteTable("auth_attempts", {
+  id: text("id").primaryKey(),
+  kind: text("kind").notNull(),
+  createdAt: integer("created_at").notNull(),
+}, (table) => ({ kindCreatedIdx: index("auth_attempts_kind_created_idx").on(table.kind, table.createdAt) }));
+
+export const oauthClients = sqliteTable("oauth_clients", {
+  id: text("id").primaryKey(),
+  secretHash: text("secret_hash"),
+  name: text("name").notNull(),
+  redirectUrisJson: text("redirect_uris_json").notNull(),
+  tokenEndpointAuthMethod: text("token_endpoint_auth_method").notNull(),
+  createdAt: integer("created_at").notNull(),
+  approvedAt: integer("approved_at"),
+});
+
+export const oauthGrants = sqliteTable("oauth_grants", {
+  id: text("id").primaryKey(),
+  clientId: text("client_id").notNull(),
+  scope: text("scope").notNull().default(""),
+  resource: text("resource").notNull(),
+  createdAt: integer("created_at").notNull(),
+  lastUsedAt: integer("last_used_at"),
+}, (table) => ({ clientIdx: index("oauth_grants_client_idx").on(table.clientId) }));
+
+export const oauthCodes = sqliteTable("oauth_codes", {
+  id: text("id").primaryKey(),
+  grantId: text("grant_id").notNull(),
+  clientId: text("client_id").notNull(),
+  redirectUri: text("redirect_uri").notNull(),
+  codeChallenge: text("code_challenge").notNull(),
+  createdAt: integer("created_at").notNull(),
+  expiresAt: integer("expires_at").notNull(),
+}, (table) => ({ expiresIdx: index("oauth_codes_expires_idx").on(table.expiresAt) }));
+
+export const oauthTokens = sqliteTable("oauth_tokens", {
+  id: text("id").primaryKey(),
+  kind: text("kind").notNull(),
+  grantId: text("grant_id").notNull(),
+  clientId: text("client_id").notNull(),
+  createdAt: integer("created_at").notNull(),
+  expiresAt: integer("expires_at").notNull(),
+}, (table) => ({
+  grantIdx: index("oauth_tokens_grant_idx").on(table.grantId),
+  expiresIdx: index("oauth_tokens_expires_idx").on(table.expiresAt),
+}));

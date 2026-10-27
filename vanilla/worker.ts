@@ -1,4 +1,4 @@
-import { validAccessRequest, type AccessEnvironment } from "../worker/auth";
+import { deleteExpiredAuthData, withAuth, type AuthEnvironment } from "../worker/auth/index.ts";
 import * as bootstrap from "../app/api/bootstrap/route";
 import * as calendar from "../app/api/calendar/route";
 import * as catalogItem from "../app/api/catalog/[kind]/[id]/route";
@@ -17,7 +17,7 @@ import * as insights from "../app/api/insights/route";
 import * as mcp from "../app/api/mcp/route";
 import * as settings from "../app/api/settings/route";
 
-type Env = Cloudflare.Env & AccessEnvironment;
+type Env = Cloudflare.Env & AuthEnvironment;
 type RouteHandler = (request: Request, context: { params: Promise<Record<string, string>> }) => Response | Promise<Response>;
 type RouteModule = Partial<Record<string, unknown>>;
 
@@ -75,18 +75,30 @@ async function handleApi(request: Request, url: URL) {
   return Response.json({ error: "Not found." }, { status: 404 });
 }
 
+const NOT_FOUND_PAGE = "<!doctype html><title>Page not found</title><h1>404</h1><p>This page could not be found.</p>";
+
 const worker = {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-    if (url.pathname.startsWith("/api/")) {
-      if (!(await validAccessRequest(request, env))) return Response.json({ error: "Authentication required." }, { status: 403 });
-      return handleApi(request, url);
-    }
-    // The pages and their files are static assets. A request reaches this line only when no asset has its path.
-    return new Response("<!doctype html><title>Page not found</title><h1>404</h1><p>This page could not be found.</p>", {
-      status: 404,
-      headers: { "content-type": "text/html; charset=utf-8" },
+    // The sign-in gate answers the sign-in and OAuth routes, and refuses an API request without sign-in.
+    return withAuth({
+      request,
+      env,
+      next: async () => {
+        if (url.pathname.startsWith("/api/")) return handleApi(request, url);
+        // The pages and their files are static assets. A request reaches this line only when no asset has its path.
+        return new Response(NOT_FOUND_PAGE, { status: 404, headers: { "content-type": "text/html; charset=utf-8" } });
+      },
     });
+  },
+
+  /** The hourly cron trigger removes expired sessions, challenges, codes and tokens. */
+  async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
+    try {
+      await deleteExpiredAuthData(env.DB);
+    } catch {
+      console.error(JSON.stringify({ event: "auth_cleanup_error" }));
+    }
   },
 };
 
