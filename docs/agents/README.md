@@ -16,6 +16,8 @@ instructions.
 - [Setup and commands](setup.md): read to run, configure, or check the project.
 - [Evals](evals.md): how to measure a prompt with real models. Read before
   writing or running an eval.
+- [Route classes](recipes/route-classes.md): the rules for a route that needs
+  no session. Read before adding a public route or a route that a token opens.
 - [The template](template.md): how a project starts from this repository, how
   it takes later changes, and how dependency updates work. Read before work on
   the template itself.

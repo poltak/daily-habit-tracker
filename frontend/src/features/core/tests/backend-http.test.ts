@@ -5,6 +5,7 @@ import { createFullApplication } from "./full-application.js";
 /**
  * Each route that a caller with no session can reach. A new route outside the
  * session gate needs a line here, so that no route goes public by omission.
+ * See docs/agents/recipes/route-classes.md.
  */
 const PUBLIC_ROUTES = [
   "GET /health",
