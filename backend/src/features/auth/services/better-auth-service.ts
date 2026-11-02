@@ -122,7 +122,7 @@ export class BetterAuthService implements AuthServiceInterface {
       return { ok: false, reason: "invalidCredentials" };
     }
     if (response.status === 429) {
-      return { ok: false, reason: "rateLimited" };
+      return rateLimited(response);
     }
     if (response.status === 403) {
       return { ok: false, reason: "untrustedOrigin" };
@@ -156,7 +156,7 @@ export class BetterAuthService implements AuthServiceInterface {
       };
     }
     if (response.status === 429) {
-      return { ok: false, reason: "rateLimited" };
+      return rateLimited(response);
     }
     if (response.status === 403) {
       return { ok: false, reason: "untrustedOrigin" };
@@ -294,6 +294,14 @@ export class BetterAuthService implements AuthServiceInterface {
       user: { id: user.id, email: user.email, name: user.name },
     };
   }
+}
+
+function rateLimited(response: Response) {
+  return {
+    ok: false,
+    reason: "rateLimited",
+    retryAfterSeconds: Number(response.headers.get("x-retry-after")),
+  } as const;
 }
 
 /** Keep only the session cookies the SDK set; the response body stays private. */
