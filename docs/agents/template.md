@@ -39,6 +39,95 @@ record of a template commit, and a sync starts from that record. Do not use a
 GitHub fork. An organization can have only one fork of a repository, and a
 fork's pull requests go to the template by default.
 
+A repository with its own history takes the template with the steps in
+[Adopt an existing repository](#adopt-an-existing-repository).
+
+## Adopt an existing repository
+
+`start-project` works only on a new clone. A repository with its own history
+takes the template with a merge, and it is then a project like any other. A
+person makes these changes, because each conflict needs judgment.
+
+The template takes the whole repository. `AGENTS.md`, CI, and lint expect
+`backend`, `frontend`, and `common`, so a project cannot take only the rules.
+The old app moves to a workspace of its own, and keeps running until new code
+replaces it. These steps call that workspace `legacy`.
+
+Use a merge, not a copy of the files. A sync works after both, but only a
+merge puts the template commit in each clone, and the migration check reads
+that commit. `git log --first-parent` hides the template's commits.
+
+1. Move the old app into `legacy/`, with its `package.json` and lockfile, and
+   commit. Files that stay at the root conflict with the template's files. Move
+   the rules of an old `AGENTS.md` to `docs/agents/decisions.md` after the
+   merge.
+2. Read each path rule with a root anchor in the project's hooks, ignore files,
+   and CI. After the move, such a rule matches nothing, and no check reports
+   that. Change each one.
+3. Give each direct dependency in `legacy/package.json` the exact version from
+   its lockfile, and commit. The project gets one lockfile at the root, and
+   `pnpm install` gives a version range the newest version that it allows.
+4. Merge the template on a new branch:
+
+   ```sh
+   git remote add template <URL of the template>
+   git fetch template
+   git switch -c feature/adopt-template
+   git merge --allow-unrelated-histories --no-commit template/main
+   ```
+
+5. Resolve each conflict. Keep the project's `README.md`. Keep the rules of
+   both `.gitignore` files, and check that
+   `git ls-files -ci --exclude-standard` prints nothing.
+6. Do by hand what `start-project` does. `fileEdits` in
+   `scripts/start-project.mjs` lists the edits inside files. Then remove each
+   path in `templateOnly` of `scripts/template-paths.json` with `git rm -rf`.
+   Keep `renovate.json` if the project uses Renovate.
+7. Fit the template's checks to the new workspace:
+   - Add `legacy` to `packages` in `pnpm-workspace.yaml`.
+   - Add `legacy/` and other old folders to `.prettierignore`.
+   - Add `"ignoreWorkspaces": ["legacy"]` to `knip.jsonc`.
+   - Add `--filter '!legacy'` to `build`, `typecheck`, and `test` in the root
+     `package.json`. These use `pnpm -r`, so each workspace joins them.
+   - Delete `legacy/pnpm-lock.yaml`.
+8. Put each command of `.git/hooks/pre-commit` in `simple-git-hooks` in the root
+   `package.json`, before `pnpm exec lint-staged`. Keep that command, because
+   it runs the secret check.
+9. Write `template-version.json`, with the output of
+   `git remote get-url template` and `git rev-parse template/main`. Commit it
+   in the merge, because the migration check reads it.
+
+   ```json
+   {
+     "template": "<URL of the template>",
+     "commit": "<full commit ID>",
+     "skipped": []
+   }
+   ```
+
+10. Install, and commit the merge. The variable keeps the old hook in place.
+    Without it, `pnpm install` replaces `.git/hooks/pre-commit` with no check
+    for an existing hook, and each Git worktree of the repository shares that
+    file.
+
+    ```sh
+    SKIP_INSTALL_SIMPLE_GIT_HOOKS=1 pnpm install --no-frozen-lockfile
+    ```
+
+11. Write the new hook with `pnpm exec simple-git-hooks`. For each rule of the
+    hook, stage a file that the rule must refuse, and check that the commit
+    stops.
+12. Run `pnpm run check`, `pnpm run test:browser:install`,
+    `pnpm run test:browser`, `pnpm run test:live-start`, and
+    `pnpm run template:sync plan`. Run the old app's tests too. It now runs on
+    the template's Node version, and an indirect dependency can have a new
+    version.
+13. Set the maintainers and the label, as
+    [setup](setup.md#files-that-come-from-the-template) describes.
+
+Keep the notes example until the project has a feature of its own. The
+`remove-example` skill removes it.
+
 ## Take a later template change
 
 Use the `sync-template` skill, in the project. It runs the `sync-template`

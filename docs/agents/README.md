@@ -17,8 +17,8 @@ instructions.
 - [Evals](evals.md): how to measure a prompt with real models. Read before
   writing or running an eval.
 - [The template](template.md): how a project starts from this repository, how
-  it takes later changes, and how dependency updates work. Read before work on
-  the template itself.
+  an existing repository adopts it, how a project takes later changes, and how
+  dependency updates work. Read before work on the template itself.
 - [Open work](todos/initial-setup.md): unfinished work and temporary behavior.
   Read and update it as work completes.
 

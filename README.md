@@ -48,6 +48,9 @@ Clone this repository, and run the `start-project` workflow in the clone.
 "Use this template" button and do not fork: a project needs a record of its
 template commit.
 
+A repository with its own history follows
+[Adopt an existing repository](docs/agents/template.md#adopt-an-existing-repository).
+
 ## Documents
 
 The documents are in [`docs/agents/`](docs/agents/README.md). They are written
