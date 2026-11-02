@@ -13,6 +13,8 @@ import type { AuthUser } from "../../auth/services/types.js";
 // For the tests of the schema and the migrations. See each function.
 export { findStandardColumnProblems } from "../database/standard-columns.js";
 export { recordMigrationHash } from "../database/migration-hashes.js";
+// A test adds a route with its own limit, because the template has none.
+export { routeBodyLimit } from "../handlers/body-limit.js";
 
 interface OwnerCredentials {
   name: string;
