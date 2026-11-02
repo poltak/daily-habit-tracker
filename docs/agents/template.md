@@ -1,8 +1,8 @@
 # The template
 
 This repository is a template. A new project starts from its latest commit and
-keeps its Git history, so that the project can take later template changes
-with cherry-picks.
+records that commit, so that the project can take later template changes with
+cherry-picks.
 
 The template is a runnable application: auth, the notes example feature, and
 their tests. A passing `pnpm run check` is therefore the evidence that a
@@ -34,10 +34,10 @@ each check, and then makes one commit.
 A new project keeps the notes example, because it is the model for a feature.
 Use the `remove-example` skill to remove it later.
 
-Do not use GitHub's "Use this template" button. It makes a repository without
-the template's history, so no later sync is possible. Do not use a GitHub
-fork. An organization can have only one fork of a repository, and a fork's pull
-requests go to the template by default.
+Do not use GitHub's "Use this template" button. It makes a repository with no
+record of a template commit, and a sync starts from that record. Do not use a
+GitHub fork. An organization can have only one fork of a repository, and a
+fork's pull requests go to the template by default.
 
 ## Take a later template change
 

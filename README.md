@@ -2,7 +2,7 @@
 
 A template for a web application: a Hono backend, a React frontend, and code
 that both share, in one pnpm workspace. A new project starts from this
-repository and keeps its Git history, so that it can take later template
+repository and records that commit, so that it can take later template
 changes.
 
 ## What is in it
@@ -45,8 +45,8 @@ Open `http://localhost:5173` and sign in.
 
 Clone this repository, and run the `start-project` workflow in the clone.
 [The template](docs/agents/template.md) has the steps. Do not use GitHub's
-"Use this template" button and do not fork: a project needs the template's
-history.
+"Use this template" button and do not fork: a project needs a record of its
+template commit.
 
 ## Documents
 
