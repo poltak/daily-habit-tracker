@@ -22,6 +22,7 @@ on:
       - common/src/features/core/utils/app-name.ts
       - docs/agents/README.md
       - frontend/src/features/core/tests/browser/built-app.spec.ts
+      - frontend/src/features/core/tests/browser/built-app-visit.ts
       - frontend/src/features/core/black-box-tests/black-box-test.ts
   pull_request:
     paths:
@@ -36,6 +37,7 @@ on:
       - common/src/features/core/utils/app-name.ts
       - docs/agents/README.md
       - frontend/src/features/core/tests/browser/built-app.spec.ts
+      - frontend/src/features/core/tests/browser/built-app-visit.ts
       - frontend/src/features/core/black-box-tests/black-box-test.ts
 
 permissions:

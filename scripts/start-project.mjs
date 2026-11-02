@@ -207,7 +207,7 @@ function fileEdits({ projectName, productName, accountMode }) {
       },
       // The browser tests must run in the mode that the project runs in.
       {
-        file: "frontend/src/features/core/tests/browser/built-app.spec.ts",
+        file: "frontend/src/features/core/tests/browser/built-app-visit.ts",
         find: /^( *)trustedOrigins: \[FRONTEND_ORIGIN\],$/gm,
         replace: (line, indent) =>
           `${line}\n${indent}accountMode: "openSignUp",`,

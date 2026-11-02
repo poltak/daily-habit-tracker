@@ -248,7 +248,7 @@ test("sets the open sign-up mode for the server and for the browser tests", asyn
   assert.match(
     await readClone(
       clone,
-      "frontend/src/features/core/tests/browser/built-app.spec.ts",
+      "frontend/src/features/core/tests/browser/built-app-visit.ts",
     ),
     /\n {4}trustedOrigins: \[FRONTEND_ORIGIN\],\n {4}accountMode: "openSignUp",\n/,
   );

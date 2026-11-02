@@ -16,8 +16,8 @@ export const VERSION_FILE = "template-version.json";
  * - `example`: the directories of the notes example. A project has the
  *   example while it has a file in one of them.
  * - `withExample`: other files that a project needs only while it has the
- *   example. These are the migrations of the example, and the skill that
- *   removes the example.
+ *   example. These are the migrations of the example, its browser test, and
+ *   the skill that removes the example.
  * - `projectOwned`: files that a project writes for itself.
  * - `templateOwned`: files that a project takes from the template and does
  *   not change. `.agents/hooks/guard-template-owned-files.mjs` and
