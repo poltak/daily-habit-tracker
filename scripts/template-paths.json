@@ -2,6 +2,7 @@
   "templateOnly": [
     "docs/agents/template.md",
     "renovate.json",
+    "scripts/owned-documents.test.mjs",
     ".agents/skills/start-project/",
     ".claude/skills/start-project",
     ".github/workflows/start-project.yml",
