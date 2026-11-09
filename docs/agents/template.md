@@ -58,9 +58,10 @@ merge puts the template commit in each clone, and the migration check reads
 that commit. `git log --first-parent` hides the template's commits.
 
 1. Move the old app into `legacy/`, with its `package.json` and lockfile, and
-   commit. Files that stay at the root conflict with the template's files. Move
-   the rules of an old `AGENTS.md` to `docs/agents/decisions.md` after the
-   merge.
+   commit. Files that stay at the root conflict with the template's files.
+   After the merge, move the rules of an old `AGENTS.md` to
+   `docs/agents/project/rules.md`, and its decisions to
+   `docs/agents/project/decisions.md`. A sync never changes those files.
 2. Read each path rule with a root anchor in the project's hooks, ignore files,
    and CI. After the move, such a rule matches nothing, and no check reports
    that. Change each one.
@@ -105,6 +106,11 @@ that commit. `git log --first-parent` hides the template's commits.
    }
    ```
 
+   After the merge, a project that replaces a template path, such as the
+   database files on another engine, takes it over with
+   `pnpm run template:sync own`. See
+   [Paths that a project takes over](setup.md#paths-that-a-project-takes-over).
+
 10. Install, and commit the merge. The variable keeps the old hook in place.
     Without it, `pnpm install` replaces `.git/hooks/pre-commit` with no check
     for an existing hook, and each Git worktree of the repository shares that
@@ -125,8 +131,8 @@ that commit. `git log --first-parent` hides the template's commits.
 13. Set the maintainers and the label, as
     [setup](setup.md#files-that-come-from-the-template) describes.
 
-Keep the notes example until the project has a feature of its own. The
-`remove-example` skill removes it.
+The `remove-example` skill removes the notes example. A project that has no
+use for the example's pages can run it before it has a feature of its own.
 
 ## Take a later template change
 

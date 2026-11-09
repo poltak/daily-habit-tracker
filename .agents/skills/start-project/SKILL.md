@@ -5,8 +5,9 @@ description: Start a new project from the template repository, keeping its Git h
 
 # Start a project from the template
 
-A project is a clone of the template with a second remote. It keeps the
-template's history, and with that history it can take later template changes.
+A project is a clone of the template with a second remote. It records its
+template commit in `template-version.json`, and a sync takes later template
+changes from that commit.
 Read `docs/agents/template.md` first.
 
 `scripts/start-project.mjs` makes every change, so each project starts in the
