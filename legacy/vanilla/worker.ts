@@ -1,4 +1,5 @@
 import { deleteExpiredAuthData, withAuth, type AuthEnvironment } from "../worker/auth/index.ts";
+import { handleBlackBoxRoute } from "../worker/black-box.ts";
 import * as bootstrap from "../app/api/bootstrap/route";
 import * as calendar from "../app/api/calendar/route";
 import * as catalogItem from "../app/api/catalog/[kind]/[id]/route";
@@ -80,6 +81,9 @@ const NOT_FOUND_PAGE = "<!doctype html><title>Page not found</title><h1>404</h1>
 const worker = {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    // The test-only reset route answers only on the black-box Workers, and before sign-in.
+    const blackBox = await handleBlackBoxRoute(request, url.pathname, env);
+    if (blackBox) return blackBox;
     // The sign-in gate answers the sign-in and OAuth routes, and refuses an API request without sign-in.
     return withAuth({
       request,

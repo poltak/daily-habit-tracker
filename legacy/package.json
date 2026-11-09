@@ -19,6 +19,7 @@
     "test:import": "python3 -m unittest discover -s tests -p 'test_*.py'",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "typecheck": "tsc --noEmit && tsc --noEmit -p vanilla/tsconfig.json",
+    "black-box:serve": "node scripts/black-box-serve.mjs",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
