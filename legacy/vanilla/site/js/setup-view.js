@@ -604,7 +604,7 @@ export function createSetupView(app) {
         const [renameButton, upButton, downButton, archiveButton, deleteButton] = meta.children[0].children;
         const groupPending = isPending(catalogActionKey({ kind: "group", id: group.id })) || groupReordering;
         const updating = `Updating ${group.name}…`;
-        set(details, { class: group.archived ? "archived" : null, "data-id": group.id });
+        set(details, { class: group.archived ? "archived" : null, "data-id": group.id, "aria-label": group.name });
         // A filter opens each group, and the end of a filter closes each group. In between, the person's choice stays.
         if (filterOpened.get(details) !== Boolean(query)) {
           details.open = Boolean(query);

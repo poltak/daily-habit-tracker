@@ -59,7 +59,7 @@ export function createInsightsView(app) {
     </div>`);
   const [fromInput, toInput] = /** @type {HTMLInputElement[]} */ ([...customRange.querySelectorAll("input")]);
   const invalidRange = create(html`<p class="notice error" role="alert">Choose a valid date range ending today or earlier.</p>`);
-  const summary = create(html`<div class="insights-summary" aria-label="Selected period summary"></div>`);
+  const summary = create(html`<div class="insights-summary" role="group" aria-label="Selected period summary"></div>`);
   const emptyCard = create(html`<div class="insights-card insights-empty"></div>`);
   const jumpLinks = create(html`<nav class="insights-jump-links" aria-label="Insight sections">${SECTIONS.map(([id, label]) => html`<a href="#${id}">${label}<span aria-hidden="true">↗</span></a>`)}</nav>`);
   const methodNote = create(html`<p class="insights-method-note">These are associations, not explanations. “Not recorded” means an activity wasn’t selected on a recorded day; missing days are excluded. Small samples can change quickly.</p>`);

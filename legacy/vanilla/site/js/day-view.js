@@ -215,6 +215,7 @@ export function createLogView(app) {
         const [summary, grid] = details.children;
         const [title, meta] = summary.children;
         const [addButton, count] = meta.children;
+        set(details, { "aria-label": group.name });
         // A search opens each group, and the end of a search closes each group. In between, the person's choice stays.
         if (searchOpened.get(details) !== hasQuery) {
           details.open = hasQuery;

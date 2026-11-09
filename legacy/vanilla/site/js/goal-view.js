@@ -215,7 +215,7 @@ export function createGoalView(app) {
         if (!date) return html`<span class="calendar-blank"></span>`;
         const day = historyDays.get(date);
         const dayState = day?.completed ? "completed" : "not-completed";
-        return html`<div class="calendar-day goal-day ${dayState}"${attrs({ "aria-label": `${date}: ${dayState.replaceAll("-", " ")}${day?.scheduled ? ", expected" : ""}` })}><span>${Number(date.slice(-2))}</span>${day?.scheduled ? icon(day.completed ? UI_ICONS.check : "remove") : ""}</div>`;
+        return html`<div class="calendar-day goal-day ${dayState}"${attrs({ role: "img", "aria-label": `${date}: ${dayState.replaceAll("-", " ")}${day?.scheduled ? ", expected" : ""}` })}><span>${Number(date.slice(-2))}</span>${day?.scheduled ? icon(day.completed ? UI_ICONS.check : "remove") : ""}</div>`;
       }),
     });
     place({ node: historyLoading, present: isLoadingHistory, parent: historyCard, before: legend });
@@ -224,7 +224,7 @@ export function createGoalView(app) {
       html: html`
         <div class="section-heading"><div><p class="eyebrow">Weekly result</p><h2>Was the goal accomplished?</h2></div></div>
         ${!monthHistory && isLoadingHistory ? html`<p class="inline-loading">Loading weekly results…</p>` : monthHistory?.weeks.map((week) => html`
-          <div class="goal-week-row ${week.status}">
+          <div class="goal-week-row ${week.status}" role="group"${attrs({ "aria-label": `${shortDate(week.weekStart)} – ${shortDate(week.weekEnd)}` })}>
             <span class="goal-week-status ${week.status}" aria-label="${statusLabel(week.status)}">${icon(week.status === "accomplished" ? UI_ICONS.check : week.status === "not_accomplished" ? "close" : week.status === "upcoming" ? "event" : "hourglass_top")}</span>
             <span class="goal-week-copy"><strong>${shortDate(week.weekStart)} – ${shortDate(week.weekEnd)}</strong><small>${statusLabel(week.status)} · ${week.completedCount}/${week.expectedCount} ${week.repeatType === "daily" ? "scheduled days" : "days"}</small></span>
           </div>`)}`,
