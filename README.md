@@ -101,14 +101,14 @@ Streamable HTTP server: each `POST` carries one JSON-RPC message and gets a JSON
 reply. It uses the same D1 database as the rest of `/api`, but it signs in
 with an OAuth access token, not with the session cookie of the app.
 
-| Tool | What it does |
-| --- | --- |
-| `get_overview` | The moods and their scores, activities by group, goals and schedules, the week setting, and the first day, last day and count of recorded days. Agents call this first. |
-| `get_days` | Each recorded day in a date range: date, weekday, mood, score, activities and completed goals. At most 366 days per call. |
-| `summarize_mood` | Recorded days, mean mood, share of good days and the mood distribution, for any span, grouped by month, year, week or weekday. |
-| `summarize_activities` | For each activity: days recorded, mean mood with and without it, and the difference. Uses the same calculation as the Insights screen. |
-| `get_goal_history` | One goal's completed dates and weekly results in a date range. |
-| `save_day` | Adds the entry for one day. It refuses a day that has not started, and it refuses to overwrite an existing day unless `replace_existing` is true. |
+| Tool                   | What it does                                                                                                                                                            |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `get_overview`         | The moods and their scores, activities by group, goals and schedules, the week setting, and the first day, last day and count of recorded days. Agents call this first. |
+| `get_days`             | Each recorded day in a date range: date, weekday, mood, score, activities and completed goals. At most 366 days per call.                                               |
+| `summarize_mood`       | Recorded days, mean mood, share of good days and the mood distribution, for any span, grouped by month, year, week or weekday.                                          |
+| `summarize_activities` | For each activity: days recorded, mean mood with and without it, and the difference. Uses the same calculation as the Insights screen.                                  |
+| `get_goal_history`     | One goal's completed dates and weekly results in a date range.                                                                                                          |
+| `save_day`             | Adds the entry for one day. It refuses a day that has not started, and it refuses to overwrite an existing day unless `replace_existing` is true.                       |
 
 Reads return names, not IDs, to keep responses small. Two activities with the
 same name are told apart by their group, for example `Walk (Health)`. `save_day`
@@ -197,17 +197,28 @@ the local D1 state. Then give the two URLs to the scripts in `vanilla/bench/`.
 The scripts that open a browser need Playwright on `NODE_PATH`, as the browser
 tests do.
 
-| Script | What it does |
-| --- | --- |
-| `seed.mjs` | Writes the same synthetic journal to a local server. |
-| `compare-dom.mjs` | Checks that both servers show the same elements, text, and boxes in each view. |
-| `size.mjs` | Reports the bytes for the browser and for the Worker, and the source lines. |
-| `load.mjs` | Measures a first visit and a repeat visit, with and without CPU and network throttling. |
-| `interact.mjs` | Measures the main-thread time of 14 interactions. |
-| `lighthouse.mjs` | Runs Lighthouse on each server. Set `LIGHTHOUSE_BIN` to the Lighthouse command. |
-| `bundle.mjs` | Makes a bundled copy of the plain site in `vanilla/dist-bundled/`. This copy shows the effect of the request count. |
+| Script            | What it does                                                                                                        |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `seed.mjs`        | Writes the same synthetic journal to a local server.                                                                |
+| `compare-dom.mjs` | Checks that both servers show the same elements, text, and boxes in each view.                                      |
+| `size.mjs`        | Reports the bytes for the browser and for the Worker, and the source lines.                                         |
+| `load.mjs`        | Measures a first visit and a repeat visit, with and without CPU and network throttling.                             |
+| `interact.mjs`    | Measures the main-thread time of 14 interactions.                                                                   |
+| `lighthouse.mjs`  | Runs Lighthouse on each server. Set `LIGHTHOUSE_BIN` to the Lighthouse command.                                     |
+| `bundle.mjs`      | Makes a bundled copy of the plain site in `vanilla/dist-bundled/`. This copy shows the effect of the request count. |
 
 ```bash
 node vanilla/bench/seed.mjs http://localhost:3101
 node vanilla/bench/load.mjs react=http://localhost:3101 plain=http://localhost:3102
 ```
+
+## The template
+
+This project started from a template, and can take the template's later
+changes. [`template-version.json`](template-version.json) names the template
+and the last template commit that the project has. The `sync-template`
+workflow takes the new commits, and
+[setup](docs/agents/setup.md#changes-from-the-template) has its commands.
+
+The port onto the template is in progress. Until it ends, the running app is
+the old app in [`legacy/`](legacy/README.md).

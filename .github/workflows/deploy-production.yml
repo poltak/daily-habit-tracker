@@ -27,8 +27,8 @@ jobs:
       - name: Set up pnpm and Node.js
         uses: pnpm/setup@v2
         with:
-          version: 12.5.1
-          runtime: node@22
+          version: 12.18.0
+          runtime: node@26.13.0
           cache: true
           install: false
 
