@@ -8,7 +8,7 @@ export function requireSession({
   services,
   logic,
 }: {
-  services: Pick<BackendServices, "auth" | "logger">;
+  services: Pick<BackendServices, "auth">;
   logic: Pick<BackendLogic, "authAccess">;
 }) {
   return createMiddleware<AuthEnvironment>(async (context, next) => {
@@ -19,11 +19,8 @@ export function requireSession({
       });
     } catch (error) {
       // This gate has no answer, so it must not refuse the caller. A 401 here
-      // signs the user out during a database fault.
-      services.logger.error("Session check failed", {
-        requestId: context.get("requestId"),
-        error,
-      });
+      // signs the user out during a database fault. The request log records
+      // the 503, as for each `AppError`.
       throw new AppError({
         code: "UNAVAILABLE",
         message: "The service is not available. Try again later.",
