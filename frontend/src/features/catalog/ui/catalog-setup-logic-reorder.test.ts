@@ -139,7 +139,7 @@ describe("CatalogSetupLogic moving an item", () => {
       items: logic.state.groups,
       direction: 1,
     });
-    await backend.logic.catalog.reorder({
+    await backend.logic.catalogChange.reorder({
       kind: "group",
       updates: [{ id: "group-health", sortOrder: 7, expectedSortOrder: 0 }],
     });
@@ -153,7 +153,7 @@ describe("CatalogSetupLogic moving an item", () => {
   it("should refuse a move from a stale list, and change nothing", async () => {
     const { logic, backend } = await setupTest();
     await logic.load();
-    await backend.logic.catalog.reorder({
+    await backend.logic.catalogChange.reorder({
       kind: "group",
       updates: [{ id: "group-health", sortOrder: 7, expectedSortOrder: 0 }],
     });

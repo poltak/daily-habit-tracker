@@ -96,11 +96,11 @@ test.describe("catalog changes", () => {
 
     const activity = await ownerRequest.patch(
       `${apiOrigin}/api/catalog/activity/activity-gym`,
-      { data: { name: "Lifting", icon: "category", groupId: "group-home" } },
+      { data: { name: "Running", icon: "category", groupId: "group-home" } },
     );
     expect(activity.status()).toBe(200);
     expect((await activity.json()).activity).toMatchObject({
-      name: "Lifting",
+      name: "Running",
       groupId: "group-home",
       icon: "fitness_center",
     });

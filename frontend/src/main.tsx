@@ -9,6 +9,10 @@ import "./features/core/ui/app.css";
 import "./features/core/ui/journal-base.css";
 import "./features/core/ui/journal-shell.css";
 import "./features/days/ui/days.css";
+import "./features/insights/ui/insights.css";
+import "./features/insights/ui/insights-relationships.css";
+import "./features/insights/ui/insights-rhythms.css";
+import "./features/goals/ui/goals.css";
 import { createApp } from "./features/core/live/index.js";
 
 const rootElement = document.getElementById("root");

@@ -4,6 +4,7 @@ import {
 } from "@app/common/features/settings/utils/week";
 import { Logic } from "@app/common/features/core/logic/logic";
 import type { BackendLogicProps } from "../../core/logic/types.js";
+import type { AppSettingRow } from "../storage/types.js";
 
 type SettingsProps = BackendLogicProps<"settings", "clock">;
 
@@ -20,6 +21,16 @@ export class SettingsLogic extends Logic<SettingsProps, Record<string, never>> {
     const stored = Number(await this.deps.storage.settings.readWeekEndsOn());
     // A value that is not a weekday is read as the default, as the old app did.
     return { weekEndsOn: isWeekday(stored) ? stored : DEFAULT_WEEK_ENDS_ON };
+  }
+
+  /** The weekday (0 is Sunday) on which a week ends. */
+  async readWeekEndsOn(): Promise<number> {
+    return (await this.read()).weekEndsOn;
+  }
+
+  /** Every row, for the export file. */
+  exportRows(): Promise<AppSettingRow[]> {
+    return this.deps.storage.settings.listAll();
   }
 
   /** Save the settings in the patch, and return all settings. */

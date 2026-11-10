@@ -70,6 +70,23 @@ export class DaysStorage {
     }
   }
 
+  /** Keep the copy of a draft when `keep` is true, and drop it otherwise. */
+  settleDraft({
+    keep,
+    ...draft
+  }: {
+    logicalDate: string;
+    draft: Draft;
+    savedAt: string;
+    keep: boolean;
+  }): void {
+    if (keep) {
+      this.writeDraft(draft);
+    } else {
+      this.clearDraft(draft);
+    }
+  }
+
   clearDraft({ logicalDate }: { logicalDate: string }): void {
     try {
       this.deps.store.removeItem(`${DRAFT_PREFIX}${logicalDate}`);

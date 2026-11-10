@@ -82,7 +82,7 @@ describe("CatalogSetupLogic deleting", () => {
   it("should keep the item and say why when the server refuses", async () => {
     const { logic, backend } = await setupTest();
     await logic.load();
-    await backend.logic.catalog.deleteActivity({ id: "activity-gym" });
+    await backend.logic.catalogChange.deleteActivity({ id: "activity-gym" });
 
     await logic.remove({ kind: "activity", id: "activity-gym", name: "Gym" });
 

@@ -7,6 +7,7 @@ import type { CatalogEvent } from "../../catalog/types.js";
 import { FakeClockService } from "../../clock/services/fake-clock-service.js";
 import { DaysStorage } from "../../days/storage/days-storage.js";
 import { FakeDeviceService } from "../../device/services/fake-device-service.js";
+import { FakeDownloadService } from "../../downloads/services/fake-download-service.js";
 import { FakeDialogService } from "../../dialogs/services/fake-dialog-service.js";
 import { FakeThemeService } from "../../settings/services/fake-theme-service.js";
 import { SettingsStorage } from "../../settings/storage/settings-storage.js";
@@ -25,6 +26,8 @@ export interface TestApp extends App {
     device: FakeDeviceService;
     /** The questions to the owner. A test reads them, and picks the answer. */
     dialogs: FakeDialogService;
+    /** The files that the page saved. */
+    downloads: FakeDownloadService;
     /** The device's passkeys. A test gives it the owner's passkey, or makes it fail. */
     passkeys: SoftPasskeyService;
     theme: FakeThemeService;
@@ -58,6 +61,7 @@ export function createApp({
       clock: new FakeClockService(),
       device: new FakeDeviceService(),
       dialogs: new FakeDialogService(),
+      downloads: new FakeDownloadService(),
       theme: new FakeThemeService(),
       timers: new FakeTimerService(),
       // The page's origin is the one of the backend in these tests.

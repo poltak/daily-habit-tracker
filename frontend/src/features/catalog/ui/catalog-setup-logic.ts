@@ -139,6 +139,11 @@ export class CatalogSetupLogic extends Logic<
     return this.state.pendingKeys.includes(key);
   }
 
+  /** Every visit to the Setup page starts with the groups closed and no filter. */
+  startVisit(): void {
+    this.setState({ openGroupIds: [], activityQuery: "" });
+  }
+
   clearNotice(): void {
     this.setState({ notice: null });
   }

@@ -79,12 +79,22 @@ export function LogPage({ onOpenGoal, onAddActivity }: LogPageProps) {
   const formBusy = saving || deleting;
   const selecting = selection.pending !== null;
   const unavailable = loading || !ready || selecting;
+  const pending = selection.pending;
+  const tappedGoal =
+    pending?.kind === "goal"
+      ? catalog.goals.find((goal) => goal.id === pending.id)
+      : undefined;
+  // A goal follows its activity, and a tap on either one saves both.
   const pendingActivityId =
-    selection.pending?.kind === "activity" ? selection.pending.id : null;
+    pending?.kind === "activity"
+      ? pending.id
+      : (tappedGoal?.activityId ?? null);
   const pendingGoalIds = new Set(
     catalog.goals
       .filter(
-        (goal) => pendingActivityId && goal.activityId === pendingActivityId,
+        (goal) =>
+          goal.id === tappedGoal?.id ||
+          (pendingActivityId && goal.activityId === pendingActivityId),
       )
       .map((goal) => goal.id),
   );
@@ -129,7 +139,9 @@ export function LogPage({ onOpenGoal, onAddActivity }: LogPageProps) {
           completedGoalIds={draft.completedGoalIds}
           pendingGoalIds={pendingGoalIds}
           loading={loading || !ready}
+          busy={selecting}
           onOpen={onOpenGoal}
+          onToggle={(goalId) => void logic.toggleGoal({ goalId })}
         />
         <MoodPanel
           moods={catalog.moods}

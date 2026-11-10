@@ -104,7 +104,7 @@ describe("CatalogSetupLogic renaming", () => {
       "activity:activity-gym": { name: "Lifting" },
     });
     expect(logic.isPending("catalog:activity:activity-gym")).toEqual(true);
-    await backend.logic.catalog.deleteActivity({ id: "activity-gym" });
+    await backend.logic.catalogChange.deleteActivity({ id: "activity-gym" });
     held.release();
     await renaming;
 

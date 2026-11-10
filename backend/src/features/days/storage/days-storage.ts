@@ -6,12 +6,18 @@ import {
   type PlannedStatement,
 } from "../../core/database/planned-statement.js";
 import type { BackendStorageProps } from "../../core/storage/types.js";
+import { readEntriesOfPage, type EntryPageRows } from "./entry-read-storage.js";
+import {
+  planImportedCompletions,
+  planImportedEntries,
+  type ImportedCompletion,
+  type ImportedEntry,
+} from "../utils/import-statements.js";
 import type {
   ActivityLink,
   ActivitySelectionRow,
-  CompletionRow,
   DayRows,
-  EntryListRow,
+  EffectiveDayRow,
   EntryRow,
   EntryWrite,
 } from "./types.js";
@@ -99,55 +105,167 @@ export class DaysStorage {
     };
   }
 
-  /**
-   * One page of saved entries, newest first, with the rows that belong to the
-   * page. Each query holds the page in a CTE, so that it binds a few values
-   * and reads only the rows of the page.
-   */
-  async readEntryPage({
+  /** One page of saved entries, newest first, with the rows that belong to it. */
+  readEntryPage({
     limit,
     offset,
   }: {
     limit: number;
     offset: number;
-  }): Promise<{
-    entries: EntryListRow[];
-    links: ActivityLink[];
-    selections: ActivitySelectionRow[];
-    completions: CompletionRow[];
+  }): Promise<EntryPageRows> {
+    return readEntriesOfPage({
+      db: this.deps.db,
+      newestFirst: true,
+      page: sql`with page as (
+        select * from entries where deleted_at is null
+        order by logical_date desc limit ${limit} offset ${offset}
+      )`,
+    });
+  }
+
+  /** The saved entries from `startDate` to `endDate`, oldest first, with the rows that belong to them. */
+  readEntryRange({
+    startDate,
+    endDate,
+  }: {
+    startDate: string;
+    endDate: string;
+  }): Promise<EntryPageRows> {
+    return readEntriesOfPage({
+      db: this.deps.db,
+      newestFirst: false,
+      page: sql`with page as (
+        select * from entries where deleted_at is null
+          and logical_date between ${startDate} and ${endDate}
+        order by logical_date
+      )`,
+    });
+  }
+
+  /** The first and the last saved day, and how many days have an entry. */
+  async readHistorySpan(): Promise<{
+    firstDate: string | null;
+    lastDate: string | null;
+    recordedDays: number;
+  }> {
+    const { rows } = await sql<{
+      firstDate: string | null;
+      lastDate: string | null;
+      recordedDays: number;
+    }>`select min(logical_date) as first_date, max(logical_date) as last_date,
+        count(*) as recorded_days
+      from entries where deleted_at is null`.execute(this.deps.db);
+    return rows[0] ?? { firstDate: null, lastDate: null, recordedDays: 0 };
+  }
+
+  /** The entry that each of `dates` has, also when it was deleted, with its ID. */
+  async listEntryIdsOfDates({
+    dates,
+  }: {
+    dates: readonly string[];
+  }): Promise<{ id: string; logicalDate: string }[]> {
+    const { rows } = await sql<{ id: string; logicalDate: string }>`
+      select id, logical_date from entries
+      where logical_date in (select value from json_each(${JSON.stringify(dates)}))`.execute(
+      this.deps.db,
+    );
+    return rows;
+  }
+
+  /** Every row of the tables of the days, for the export file. */
+  async listAllForExport(): Promise<{
+    entries: Record<string, unknown>[];
+    entryActivities: Record<string, unknown>[];
+    dayMoodSelections: Record<string, unknown>[];
+    dayActivitySelections: Record<string, unknown>[];
+    goalCompletions: Record<string, unknown>[];
   }> {
     const { db } = this.deps;
-    const page = sql`with page as (
-      select * from entries where deleted_at is null
-      order by logical_date desc limit ${limit} offset ${offset}
-    )`;
-    const [entries, links, selections, completions] = await Promise.all([
-      sql<EntryListRow>`${page}
-        select page.*, coalesce(selection.mood_id, page.mood_id) as effective_mood_id
-        from page left join day_mood_selections as selection
-          on selection.logical_date = page.logical_date
-        order by page.logical_date desc`.execute(db),
-      sql<ActivityLink>`${page}
+    const [
+      entries,
+      entryActivities,
+      dayMoodSelections,
+      dayActivitySelections,
+      goalCompletions,
+    ] = await Promise.all([
+      db.selectFrom("entries").selectAll().orderBy("logicalDate").execute(),
+      db
+        .selectFrom("entryActivities")
+        .selectAll()
+        .orderBy("entryId")
+        .orderBy("activityId")
+        .execute(),
+      db
+        .selectFrom("dayMoodSelections")
+        .selectAll()
+        .orderBy("logicalDate")
+        .execute(),
+      db
+        .selectFrom("dayActivitySelections")
+        .selectAll()
+        .orderBy("logicalDate")
+        .orderBy("activityId")
+        .execute(),
+      db
+        .selectFrom("goalCompletions")
+        .selectAll()
+        .orderBy("logicalDate")
+        .orderBy("goalId")
+        .execute(),
+    ]);
+    return {
+      entries,
+      entryActivities,
+      dayMoodSelections,
+      dayActivitySelections,
+      goalCompletions,
+    };
+  }
+
+  /**
+   * Every saved day of a range, with the rows that decide its mood and its
+   * activities. Each query joins the entries of the range, so that it binds
+   * only the two dates, however many days the journal has.
+   */
+  async readEffectiveDayRows({
+    startDate,
+    endDate,
+  }: {
+    startDate: string;
+    endDate: string;
+  }): Promise<{
+    entries: EffectiveDayRow[];
+    links: ActivityLink[];
+    selections: ActivitySelectionRow[];
+  }> {
+    const { db } = this.deps;
+    const [entries, links, selections] = await Promise.all([
+      sql<EffectiveDayRow>`
+        select entries.id, entries.logical_date,
+          coalesce(selection.mood_id, entries.mood_id) as effective_mood_id
+        from entries left join day_mood_selections as selection
+          on selection.logical_date = entries.logical_date
+        where entries.deleted_at is null
+          and entries.logical_date between ${startDate} and ${endDate}
+        order by entries.logical_date`.execute(db),
+      sql<ActivityLink>`
         select link.entry_id, link.activity_id
-        from page join entry_activities as link on link.entry_id = page.id
-        order by link.activity_id`.execute(db),
-      sql<ActivitySelectionRow>`${page}
+        from entry_activities as link join entries on entries.id = link.entry_id
+        where entries.deleted_at is null
+          and entries.logical_date between ${startDate} and ${endDate}
+        order by link.entry_id, link.activity_id`.execute(db),
+      sql<ActivitySelectionRow>`
         select selection.logical_date, selection.activity_id, selection.selected
-        from page join day_activity_selections as selection
-          on selection.logical_date = page.logical_date
-        order by selection.activity_id`.execute(db),
-      // The page stays on the outer side of the lookup by date.
-      sql<CompletionRow>`${page}
-        select completion.logical_date, completion.goal_id
-        from page cross join goal_completions as completion
-          on completion.logical_date = page.logical_date
-        order by completion.goal_id`.execute(db),
+        from day_activity_selections as selection
+          join entries on entries.logical_date = selection.logical_date
+        where entries.deleted_at is null
+          and entries.logical_date between ${startDate} and ${endDate}
+        order by selection.logical_date, selection.activity_id`.execute(db),
     ]);
     return {
       entries: entries.rows,
       links: links.rows,
       selections: selections.rows,
-      completions: completions.rows,
     };
   }
 
@@ -248,6 +366,43 @@ export class DaysStorage {
       activityId: row.activityId,
       archived: row.archivedAt !== null,
     }));
+  }
+
+  /** The days of a range on which the goal was completed, oldest first. */
+  async listCompletionDates({
+    goalId,
+    startDate,
+    endDate,
+  }: {
+    goalId: string;
+    startDate: string;
+    endDate: string;
+  }): Promise<string[]> {
+    const rows = await this.deps.db
+      .selectFrom("goalCompletions")
+      .select("logicalDate")
+      .where("goalId", "=", goalId)
+      .where("logicalDate", ">=", startDate)
+      .where("logicalDate", "<=", endDate)
+      .orderBy("logicalDate")
+      .execute();
+    return rows.map((row) => row.logicalDate);
+  }
+
+  /** The earliest day on which the goal was completed, on any date. */
+  async findFirstCompletionDate({
+    goalId,
+  }: {
+    goalId: string;
+  }): Promise<string | null> {
+    const row = await this.deps.db
+      .selectFrom("goalCompletions")
+      .select("logicalDate")
+      .where("goalId", "=", goalId)
+      .orderBy("logicalDate")
+      .limit(1)
+      .executeTakeFirst();
+    return row?.logicalDate ?? null;
   }
 
   /** True when a save failed because another save changed the entry first. */
@@ -495,5 +650,19 @@ export class DaysStorage {
         WHERE logical_date = ? AND version = ? AND deleted_at IS NULL`,
       parameters: [timestamp, timestamp, logicalDate, version],
     });
+  }
+
+  /** The entries of a backup, with their activities. See `planImportedEntries`. */
+  planImportEntries(input: {
+    entries: readonly ImportedEntry[];
+    importedAt: string;
+  }): PlannedStatement<never>[] {
+    return planImportedEntries(input);
+  }
+
+  planImportCompletions(input: {
+    completions: readonly ImportedCompletion[];
+  }): PlannedStatement<never>[] {
+    return planImportedCompletions(input);
   }
 }

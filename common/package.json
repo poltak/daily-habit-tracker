@@ -75,6 +75,62 @@
     "./features/settings/utils/week": {
       "types": "./dist/features/settings/utils/week.d.ts",
       "default": "./dist/features/settings/utils/week.js"
+    },
+    "./features/insights/types": {
+      "types": "./dist/features/insights/types.d.ts",
+      "default": "./dist/features/insights/types.js"
+    },
+    "./features/insights/utils/activity-associations": {
+      "types": "./dist/features/insights/utils/activity-associations.d.ts",
+      "default": "./dist/features/insights/utils/activity-associations.js"
+    },
+    "./features/insights/utils/activity-lists": {
+      "types": "./dist/features/insights/utils/activity-lists.d.ts",
+      "default": "./dist/features/insights/utils/activity-lists.js"
+    },
+    "./features/insights/utils/activity-pairs": {
+      "types": "./dist/features/insights/utils/activity-pairs.d.ts",
+      "default": "./dist/features/insights/utils/activity-pairs.js"
+    },
+    "./features/insights/utils/best-weeks": {
+      "types": "./dist/features/insights/utils/best-weeks.d.ts",
+      "default": "./dist/features/insights/utils/best-weeks.js"
+    },
+    "./features/insights/utils/date-range": {
+      "types": "./dist/features/insights/utils/date-range.d.ts",
+      "default": "./dist/features/insights/utils/date-range.js"
+    },
+    "./features/insights/utils/mood-cohorts": {
+      "types": "./dist/features/insights/utils/mood-cohorts.d.ts",
+      "default": "./dist/features/insights/utils/mood-cohorts.js"
+    },
+    "./features/insights/utils/relationship-types": {
+      "types": "./dist/features/insights/utils/relationship-types.d.ts",
+      "default": "./dist/features/insights/utils/relationship-types.js"
+    },
+    "./features/insights/utils/rhythm-buckets": {
+      "types": "./dist/features/insights/utils/rhythm-buckets.d.ts",
+      "default": "./dist/features/insights/utils/rhythm-buckets.js"
+    },
+    "./features/insights/utils/rhythm-days": {
+      "types": "./dist/features/insights/utils/rhythm-days.d.ts",
+      "default": "./dist/features/insights/utils/rhythm-days.js"
+    },
+    "./features/insights/utils/rhythm-types": {
+      "types": "./dist/features/insights/utils/rhythm-types.d.ts",
+      "default": "./dist/features/insights/utils/rhythm-types.js"
+    },
+    "./features/insights/utils/summarize-mood": {
+      "types": "./dist/features/insights/utils/summarize-mood.d.ts",
+      "default": "./dist/features/insights/utils/summarize-mood.js"
+    },
+    "./features/goals/types": {
+      "types": "./dist/features/goals/types.d.ts",
+      "default": "./dist/features/goals/types.js"
+    },
+    "./features/goals/utils/goal-history": {
+      "types": "./dist/features/goals/utils/goal-history.d.ts",
+      "default": "./dist/features/goals/utils/goal-history.js"
     }
   },
   "scripts": {

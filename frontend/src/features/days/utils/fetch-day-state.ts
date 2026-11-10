@@ -1,19 +1,19 @@
 import type { DayState } from "@app/common/features/days/types";
 import type { BackendApi } from "../../api/client/api-client.js";
 
-/** The entry of a day, and the taps of the owner that wait for a save. */
+/** The day as the server has it, with the taps of the owner on top. */
 export async function fetchDayState({
   api,
   logicalDate,
   errorText,
   signal,
 }: {
-  api: BackendApi["entries"];
+  api: Pick<BackendApi, "entries">;
   logicalDate: string;
   errorText: string;
   signal: AbortSignal;
 }): Promise<DayState> {
-  const response = await api[":logicalDate"].$get(
+  const response = await api.entries[":logicalDate"].$get(
     { param: { logicalDate } },
     { init: { signal } },
   );

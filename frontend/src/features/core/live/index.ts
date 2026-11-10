@@ -12,6 +12,7 @@ import type { CatalogEvent } from "../../catalog/types.js";
 import { BrowserClockService } from "../../clock/services/browser-clock-service.js";
 import { DaysStorage } from "../../days/storage/days-storage.js";
 import { BrowserDeviceService } from "../../device/services/browser-device-service.js";
+import { BrowserDownloadService } from "../../downloads/services/browser-download-service.js";
 import { BrowserDialogService } from "../../dialogs/services/browser-dialog-service.js";
 import { BrowserThemeService } from "../../settings/services/browser-theme-service.js";
 import { SettingsStorage } from "../../settings/storage/settings-storage.js";
@@ -39,6 +40,7 @@ export function createApp({
     clock: new BrowserClockService(),
     device: new BrowserDeviceService(),
     dialogs: new BrowserDialogService(),
+    downloads: new BrowserDownloadService(),
     passkeys: new BrowserPasskeyService(),
     theme: new BrowserThemeService(),
     timers: new BrowserTimerService(),

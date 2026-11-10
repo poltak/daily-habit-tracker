@@ -7,9 +7,14 @@ import type {
 import { requireApiSuccess } from "../../api/client/api-client.js";
 import type { FrontendLogicProps } from "../../core/logic/types.js";
 import type { PendingSelection } from "../types.js";
+import { isExpectedGoalResult, type GoalResult } from "../utils/goal-change.js";
 import { isExpectedActivityResult } from "../utils/selection-change.js";
 
-export type SelectionProps = FrontendLogicProps<never, never, "day-selections">;
+export type SelectionProps = FrontendLogicProps<
+  never,
+  never,
+  "day-selections" | "goal-completions"
+>;
 
 interface SelectionState {
   /** The tap that waits for the server. */
@@ -113,6 +118,45 @@ export class SelectionPlugin extends LogicPlugin<
         return result;
       },
     );
+  }
+
+  /** The goals and the activity of the goal must follow it, or the answer is out of date. */
+  async chooseGoal({
+    logicalDate,
+    goalId,
+    completed,
+    activityId,
+    affectedGoalIds,
+  }: {
+    logicalDate: string;
+    goalId: string;
+    completed: boolean;
+    activityId: string | null;
+    affectedGoalIds: readonly string[];
+  }): Promise<Outcome<GoalResult>> {
+    return this.run({ pending: { kind: "goal", id: goalId } }, async () => {
+      const response = await this.deps.api["goal-completions"][":logicalDate"][
+        ":goalId"
+      ].$put(
+        { param: { logicalDate, goalId }, json: { completed } },
+        { init: { signal: this.signal } },
+      );
+      await requireApiSuccess(response);
+      const result = response.status === 200 ? await response.json() : null;
+      if (
+        !result?.completion ||
+        !isExpectedGoalResult({
+          result: { ...result, completion: result.completion },
+          goalId,
+          completed,
+          activityId,
+          affectedGoalIds,
+        })
+      ) {
+        throw new Error("The goal update was out of date.");
+      }
+      return { ...result, completion: result.completion };
+    });
   }
 
   private async run<Result>(

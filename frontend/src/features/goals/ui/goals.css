@@ -1,0 +1,120 @@
+/* The goal page: the history of the completed days of one goal. */
+
+.goal-detail-intro {
+  margin-bottom: 4px;
+}
+.goal-detail-title {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 10px;
+}
+.goal-detail-title h1 {
+  margin: 4px 0 6px;
+  font-size: clamp(30px, 7vw, 44px);
+}
+.goal-detail-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+  border-radius: 20px;
+  background: var(--surface-selected);
+  color: var(--positive);
+  font-size: 28px;
+}
+.goal-history-explainer {
+  margin: -6px 0 14px;
+  font-size: 12.5px;
+}
+.goal-day {
+  color: var(--muted);
+}
+.goal-day.not-completed {
+  background: var(--surface-subtle);
+}
+.goal-day.completed {
+  background: var(--calendar-filled);
+  color: var(--calendar-filled-text);
+}
+.goal-day .material-symbols-rounded {
+  font-size: 12px;
+  opacity: 0.8;
+}
+.legend-dot.goal-completed {
+  border-color: transparent;
+  background: var(--calendar-filled);
+}
+.goal-week-history .section-heading {
+  margin-bottom: 6px;
+}
+.goal-week-row {
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.goal-week-status {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+}
+.goal-week-status.accomplished {
+  background: var(--surface-success);
+  color: var(--positive-strong);
+}
+.goal-week-status.not_accomplished {
+  background: var(--surface-error);
+  color: var(--danger);
+}
+.goal-week-status.in_progress {
+  background: var(--surface-info);
+  color: var(--info);
+}
+.goal-week-status.upcoming {
+  background: var(--surface-muted);
+  color: var(--muted);
+}
+.goal-week-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.goal-week-copy strong {
+  font-size: 14px;
+  font-weight: 650;
+}
+.goal-week-copy small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.goal-week-row.upcoming .goal-week-copy strong {
+  color: var(--muted);
+  font-weight: 550;
+}
+
+@media (min-width: 621px) {
+  .goal-calendar-grid .calendar-day,
+  .goal-calendar-grid .calendar-blank {
+    height: 54px;
+    border-radius: 16px;
+  }
+  .goal-detail-page {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0 20px;
+    align-items: start;
+  }
+  .goal-detail-page > .page-intro,
+  .goal-detail-page > .goal-week-history {
+    grid-column: 1 / -1;
+  }
+}

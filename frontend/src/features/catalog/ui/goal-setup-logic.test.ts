@@ -71,7 +71,7 @@ describe("GoalSetupLogic loading", () => {
 
   it("should not open an archived goal", async () => {
     const { logic, backend } = await setupTest({ skipInitialization: true });
-    await backend.logic.catalog.updateGoal({
+    await backend.logic.catalogChange.updateGoal({
       id: "goal-read",
       patch: { archived: true },
     });
@@ -143,6 +143,16 @@ describe("GoalSetupLogic editing and saving", () => {
     expect(logic.state.weekdaysMask).toEqual(0b0111110);
   });
 
+  it("should close the icon dialog without a change", async () => {
+    const { logic } = await setupTest();
+    logic.openIconPicker();
+
+    logic.closeIconPicker();
+
+    expect(logic.state.iconPickerOpen).toEqual(false);
+    expect(logic.isDirty).toEqual(false);
+  });
+
   it("should link a goal to no activity", async () => {
     const { logic } = await setupTest({ goalId: "goal-move" });
     logic.setActivity({ activityId: null });
@@ -201,7 +211,7 @@ describe("GoalSetupLogic editing and saving", () => {
   it("should keep the form and say that the goal was restored when the server refuses", async () => {
     const { logic, backend } = await setupTest();
     logic.setName({ name: "Read more" });
-    await backend.logic.catalog.deleteGoal({ id: "goal-read" });
+    await backend.logic.catalogChange.deleteGoal({ id: "goal-read" });
 
     await logic.save();
 
@@ -314,7 +324,7 @@ describe("GoalSetupLogic archiving and deleting", () => {
 
   it("should say why a goal cannot be deleted", async () => {
     const { logic, backend } = await setupTest();
-    await backend.logic.catalog.deleteGoal({ id: "goal-read" });
+    await backend.logic.catalogChange.deleteGoal({ id: "goal-read" });
 
     expect(await logic.remove()).toEqual(false);
 

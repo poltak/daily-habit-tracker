@@ -7,6 +7,7 @@ import type { DialogServiceInterface } from "../dialogs/services/types.js";
 import type { PasskeyServiceInterface } from "../auth/services/types.js";
 import type { ClockServiceInterface } from "../clock/services/types.js";
 import type { DaysStorage } from "../days/storage/days-storage.js";
+import type { DownloadServiceInterface } from "../downloads/services/types.js";
 import type { DeviceServiceInterface } from "../device/services/types.js";
 import type { ThemeServiceInterface } from "../settings/services/types.js";
 import type { SettingsStorage } from "../settings/storage/settings-storage.js";
@@ -30,6 +31,7 @@ export interface FrontendServices extends FrontendCoreServices {
   clock: ClockServiceInterface;
   device: DeviceServiceInterface;
   dialogs: DialogServiceInterface;
+  downloads: DownloadServiceInterface;
   passkeys: PasskeyServiceInterface;
   theme: ThemeServiceInterface;
   timers: TimerServiceInterface;

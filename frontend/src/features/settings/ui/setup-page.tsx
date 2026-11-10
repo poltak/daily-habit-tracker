@@ -6,6 +6,7 @@ import { useMemo, type ReactNode } from "react";
 import { useLogic } from "../../core/logic/use-logic.js";
 import { useFrontendApp } from "../../core/ui/frontend-app-context.js";
 import type { ThemePreference } from "../utils/theme.js";
+import { ExportSection } from "./export-section.js";
 import { useTheme } from "./settings-context.js";
 import { WeekLogic } from "./week-logic.js";
 
@@ -150,6 +151,8 @@ export function SetupPage({ account, catalog, catalogNotice }: SetupPageProps) {
       </section>
 
       {catalog}
+
+      <ExportSection />
 
       {account}
     </section>

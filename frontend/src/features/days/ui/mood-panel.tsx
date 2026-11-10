@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import type { Mood } from "@app/common/features/catalog/types";
-import { MoodFace } from "./mood-face.js";
+import { MoodFace } from "../../core/ui/mood-face.js";
 
 interface MoodPanelProps {
   moods: readonly Mood[];

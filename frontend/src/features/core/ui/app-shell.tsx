@@ -1,12 +1,16 @@
 import type { CSSProperties, ReactNode } from "react";
 import { MaterialIcon } from "./material-icon.js";
 
-export type ShellView = "log" | "calendar" | "insights" | "settings";
+/** A page that the bottom navigation opens. */
+export type NavView = "log" | "calendar" | "insights" | "settings";
+
+/** Every page of the shell. The goal page opens from the log, not from the navigation. */
+export type ShellView = NavView | "goal";
 
 type ConnectionState = "checking" | "online" | "offline" | "error";
 
 interface ShellPage {
-  view: ShellView;
+  view: NavView;
   label: string;
   icon: string;
 }
@@ -35,7 +39,7 @@ interface AppShellProps {
   connection: ConnectionState;
   /** The colour of the sky behind the header. The log takes it from the mood of the day. */
   dayColor?: string | undefined;
-  onOpen: (view: ShellView) => void;
+  onOpen: (view: NavView) => void;
   children: ReactNode;
 }
 

@@ -28,7 +28,7 @@ describe("JournalLogic when a page changes the catalog", () => {
       "activity-gym",
       "activity-walk",
     ]);
-    await backend.logic.catalog.deleteActivity({ id: "activity-gym" });
+    await backend.logic.catalogChange.deleteActivity({ id: "activity-gym" });
 
     await frontend.catalogEvents.emit({ type: "catalogChanged" });
 

@@ -49,3 +49,10 @@ export interface CalendarEntryDay {
   logicalDate: string;
   moodId: string;
 }
+
+/** A saved day as the analysis reads it: the mood and the activities the owner sees for it. */
+export interface EffectiveDay {
+  logicalDate: string;
+  moodId: string;
+  activityIds: string[];
+}

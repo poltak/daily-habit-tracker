@@ -13,7 +13,7 @@ import {
 } from "./catalog-schemas.js";
 
 interface CatalogHandlerProps {
-  logic: Pick<BackendLogic, "catalog">;
+  logic: Pick<BackendLogic, "catalog" | "catalogChange">;
 }
 
 function unsupportedKind(): never {
@@ -28,24 +28,27 @@ function unsupportedKind(): never {
  * An item has one route for each kind, and any other kind is refused.
  */
 export function createCatalogHandlers({ logic }: CatalogHandlerProps) {
-  const { catalog } = logic;
+  const { catalog, catalogChange } = logic;
   return new Hono()
     .get("/", async (context) => context.json(await catalog.read(), 200))
     .post("/", validator("json", createSchema), async (context) => {
       const input = context.req.valid("json");
       if (input.kind === "group") {
-        return context.json({ group: await catalog.createGroup(input) }, 201);
-      }
-      if (input.kind === "activity") {
         return context.json(
-          { activity: await catalog.createActivity(input) },
+          { group: await catalogChange.createGroup(input) },
           201,
         );
       }
-      return context.json({ goal: await catalog.createGoal(input) }, 201);
+      if (input.kind === "activity") {
+        return context.json(
+          { activity: await catalogChange.createActivity(input) },
+          201,
+        );
+      }
+      return context.json({ goal: await catalogChange.createGoal(input) }, 201);
     })
     .post("/reorder", validator("json", reorderSchema), async (context) => {
-      await catalog.reorder(context.req.valid("json"));
+      await catalogChange.reorder(context.req.valid("json"));
       return context.json({ success: true }, 200);
     })
     .patch(
@@ -55,7 +58,7 @@ export function createCatalogHandlers({ logic }: CatalogHandlerProps) {
       async (context) =>
         context.json(
           {
-            group: await catalog.updateGroup({
+            group: await catalogChange.updateGroup({
               ...context.req.valid("param"),
               patch: context.req.valid("json"),
             }),
@@ -70,7 +73,7 @@ export function createCatalogHandlers({ logic }: CatalogHandlerProps) {
       async (context) =>
         context.json(
           {
-            activity: await catalog.updateActivity({
+            activity: await catalogChange.updateActivity({
               ...context.req.valid("param"),
               patch: context.req.valid("json"),
             }),
@@ -85,7 +88,7 @@ export function createCatalogHandlers({ logic }: CatalogHandlerProps) {
       async (context) =>
         context.json(
           {
-            goal: await catalog.updateGoal({
+            goal: await catalogChange.updateGoal({
               ...context.req.valid("param"),
               patch: context.req.valid("json"),
             }),
@@ -100,7 +103,7 @@ export function createCatalogHandlers({ logic }: CatalogHandlerProps) {
       "/group/:id",
       validator("param", itemParamSchema),
       async (context) => {
-        await catalog.deleteGroup(context.req.valid("param"));
+        await catalogChange.deleteGroup(context.req.valid("param"));
         return context.json({ success: true }, 200);
       },
     )
@@ -108,7 +111,7 @@ export function createCatalogHandlers({ logic }: CatalogHandlerProps) {
       "/activity/:id",
       validator("param", itemParamSchema),
       async (context) => {
-        await catalog.deleteActivity(context.req.valid("param"));
+        await catalogChange.deleteActivity(context.req.valid("param"));
         return context.json({ success: true }, 200);
       },
     )
@@ -116,7 +119,7 @@ export function createCatalogHandlers({ logic }: CatalogHandlerProps) {
       "/goal/:id",
       validator("param", itemParamSchema),
       async (context) => {
-        await catalog.deleteGoal(context.req.valid("param"));
+        await catalogChange.deleteGoal(context.req.valid("param"));
         return context.json({ success: true }, 200);
       },
     )

@@ -36,6 +36,7 @@ export function CatalogSections({
   const mounts = useRef(0);
   useEffect(() => {
     mounts.current += 1;
+    logic.startVisit();
     void logic.load();
     return () => {
       mounts.current -= 1;

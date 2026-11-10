@@ -6,7 +6,6 @@ import {
   logicalDateInTimeZone,
 } from "@app/common/features/core/utils/logical-date";
 import type { DayState, Entry } from "@app/common/features/days/types";
-import { fetchDayState } from "../utils/fetch-day-state.js";
 import { LatestRequest } from "../../core/logic/latest-request.js";
 import { CatalogReadPlugin } from "./catalog-read-plugin.js";
 import { SelectionPlugin, type Outcome } from "./selection-plugin.js";
@@ -21,19 +20,21 @@ import {
   undoActivityChange,
 } from "../utils/selection-change.js";
 import {
-  draftForOpenedDay,
   draftFromDayState,
   draftFromEntry,
   draftMatchesEntry,
   emptyDraft,
   sameDraft,
-  withKnownCatalog,
   type Draft,
 } from "../utils/draft.js";
+import { recoverDraft } from "../utils/recover-draft.js";
+import { fetchDayState } from "../utils/fetch-day-state.js";
+import { planGoalChange } from "../utils/goal-change.js";
 import {
   errorNotice,
   infoNotice,
   OFFLINE_DELETE,
+  OFFLINE_GOAL,
   OFFLINE_SAVE,
   PICK_MOOD,
   WAIT_BEFORE_DELETE,
@@ -45,7 +46,7 @@ import {
 type JournalProps = FrontendLogicProps<
   "days",
   "clock" | "dialogs" | "device" | "timers" | "windowFocus",
-  "catalog" | "entries" | "day-selections"
+  "catalog" | "entries" | "day-selections" | "goal-completions"
 > &
   Pick<App, "catalogEvents">;
 
@@ -138,12 +139,11 @@ export class JournalLogic extends Logic<
       }),
     );
     this.registerCleanup(windowFocus.listen(() => this.refreshOnReturn()));
-    // A deleted activity leaves the open day.
-    this.listen(this.deps.catalogEvents, async (event) => {
+    this.listen(this.deps.catalogEvents, async ({ notice }) => {
       await this.plugins.catalog.load();
       await this.refreshDay();
-      if (event.notice?.target === "log") {
-        this.setState({ notice: { kind: "success", text: event.notice.text } });
+      if (notice?.target === "log") {
+        this.setState({ notice: { kind: "success", text: notice.text } });
       }
     });
     this.registerCleanup(
@@ -222,7 +222,8 @@ export class JournalLogic extends Logic<
       notice: null,
     });
     await this.executeTask("loadDay", async () => {
-      const state = await this.fetchDayState({
+      const state = await fetchDayState({
+        api: this.deps.api,
         logicalDate,
         errorText: "Could not load that date.",
         signal: this.signal,
@@ -249,22 +250,13 @@ export class JournalLogic extends Logic<
   }): Promise<void> {
     const { storage } = this.deps;
     const { entryActions } = this.plugins;
-    const stored = storage.days.readDraft({ logicalDate });
-    const matches =
-      stored !== null && (stored.version ?? 0) === (state.entry?.version ?? 0);
-    if (stored && !matches) {
-      storage.days.clearDraft({ logicalDate });
-    }
-    const opened = draftForOpenedDay({
+    const opened = recoverDraft({
+      storage: storage.days,
+      logicalDate,
       state,
-      recovered: matches ? stored : null,
+      catalog: this.plugins.catalog,
     });
-    // A draft from this device can name an activity that was deleted since.
-    let draft = withKnownCatalog({
-      record: opened.draft,
-      activityIds: this.plugins.catalog.knownActivityIds(),
-      goalIds: this.plugins.catalog.knownGoalIds(),
-    });
+    let { draft } = opened;
     let entry = state.entry;
     let recoveryError: string | null = null;
     if (entry && opened.restored) {
@@ -313,7 +305,8 @@ export class JournalLogic extends Logic<
     }
     await this.executeTask("refreshDay", async () => {
       const signal = this.dayRefreshes.start();
-      const state = await this.fetchDayState({
+      const state = await fetchDayState({
+        api: this.deps.api,
         logicalDate,
         errorText: "Could not refresh that date.",
         signal,
@@ -351,7 +344,6 @@ export class JournalLogic extends Logic<
     });
   }
 
-  /** Tap an activity on or off. The goals that it completes follow it. */
   async toggleActivity({ activityId }: { activityId: string }): Promise<void> {
     const { selectedDate: logicalDate, draft } = this.state;
     if (!this.canChangeSelection()) {
@@ -374,6 +366,36 @@ export class JournalLogic extends Logic<
           selected: change.selected,
           linkedGoalIds: change.linkedGoalIds,
         }),
+      apply: (current, result) => ({
+        draft: applyActivityResult({ target: current, result }),
+        entry:
+          this.state.entry &&
+          applyActivityResult({ target: this.state.entry, result }),
+      }),
+    });
+  }
+
+  /** Tap the switch of a goal. Its activity and shared goals follow. */
+  async toggleGoal({ goalId }: { goalId: string }): Promise<void> {
+    const { selectedDate: logicalDate, draft } = this.state;
+    const goals = this.plugins.catalog.state.goals;
+    const change = planGoalChange({ draft, goals, goalId });
+    if (!change || !this.canChangeSelection()) {
+      return;
+    }
+    if (!this.deps.services.device.isOnline()) {
+      this.setState({
+        connection: "offline",
+        notice: errorNotice(OFFLINE_GOAL),
+      });
+      return;
+    }
+    await this.changeSelection({
+      nextDraft: change.nextDraft,
+      undo: change.undo,
+      failure: "The goal was restored.",
+      send: () =>
+        this.plugins.selection.chooseGoal({ logicalDate, goalId, ...change }),
       apply: (current, result) => ({
         draft: applyActivityResult({ target: current, result }),
         entry:
@@ -428,7 +450,6 @@ export class JournalLogic extends Logic<
     });
   }
 
-  /** Save the entry of the open day. */
   async saveEntry(): Promise<void> {
     const { selectedDate: logicalDate, draft } = this.state;
     const { storage, services } = this.deps;
@@ -533,7 +554,6 @@ export class JournalLogic extends Logic<
     this.plugins.swipe.move({ x, canGoForward: !this.isLatestDay() });
   }
 
-  /** A long sideways swipe moves a day. */
   async endSwipe(end: { x: number; y: number } | null): Promise<void> {
     const offset = this.plugins.swipe.end(end);
     const { selectedDate, loadDayState } = this.state;
@@ -542,7 +562,6 @@ export class JournalLogic extends Logic<
     }
   }
 
-  /** The journal stops at today. */
   isLatestDay(): boolean {
     return this.state.selectedDate >= this.state.today;
   }
@@ -602,14 +621,6 @@ export class JournalLogic extends Logic<
     );
   }
 
-  private fetchDayState(request: {
-    logicalDate: string;
-    errorText: string;
-    signal: AbortSignal;
-  }): Promise<DayState> {
-    return fetchDayState({ api: this.deps.api.entries, ...request });
-  }
-
   private changeDraft(draft: Draft): void {
     this.setState({ draft });
     this.deps.storage.days.writeDraft({
@@ -626,7 +637,6 @@ export class JournalLogic extends Logic<
     this.setState({ connection: "online", notice: null });
   }
 
-  /** The change is back to what it was. Keep the copy only when it held a draft before. */
   private settleFailed({
     logicalDate,
     hadLocalDraft,
@@ -634,15 +644,12 @@ export class JournalLogic extends Logic<
     logicalDate: string;
     hadLocalDraft: boolean;
   }): void {
-    if (hadLocalDraft) {
-      this.deps.storage.days.writeDraft({
-        logicalDate,
-        draft: this.state.draft,
-        savedAt: this.timestamp(),
-      });
-    } else {
-      this.deps.storage.days.clearDraft({ logicalDate });
-    }
+    this.deps.storage.days.settleDraft({
+      logicalDate,
+      draft: this.state.draft,
+      savedAt: this.timestamp(),
+      keep: hadLocalDraft,
+    });
     this.hasLocalDraft = hadLocalDraft;
   }
 }

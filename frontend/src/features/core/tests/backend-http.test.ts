@@ -148,6 +148,21 @@ describe("backend HTTP app", () => {
     );
   });
 
+  it("should forbid every cache to keep the history of the insights", async () => {
+    const { transport } = await createFullApplication();
+
+    const response = await transport.fetch(`${ORIGIN}/api/insights`);
+
+    expect(response.status).toEqual(200);
+    expect(response.headers.get("cache-control")).toEqual("private, no-store");
+    expect(Object.keys(await response.json()).toSorted()).toEqual([
+      "activities",
+      "days",
+      "groups",
+      "moods",
+    ]);
+  });
+
   it("should give each request an ID and log the request with it", async () => {
     const { backend, transport } = await createFullApplication({
       authenticated: false,

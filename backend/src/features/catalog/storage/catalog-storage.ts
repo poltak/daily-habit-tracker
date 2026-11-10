@@ -16,6 +16,17 @@ import {
   SEED_GROUPS,
   SEED_MOODS,
 } from "../utils/seed-catalog.js";
+import {
+  planGoalStartDateBackfill,
+  planImportedActivities,
+  planImportedGoals,
+  planImportedGroups,
+  planImportedMoods,
+  type ImportedActivity,
+  type ImportedGoal,
+  type ImportedGroup,
+  type ImportedMood,
+} from "../utils/import-statements.js";
 import type {
   ActivityGroupRow,
   ActivityRow,
@@ -314,5 +325,34 @@ export class CatalogStorage {
       ),
       planWrite(this.deps.db.deleteFrom("goals").where("id", "=", id)),
     ];
+  }
+
+  planImportMoods(input: {
+    moods: readonly ImportedMood[];
+  }): PlannedStatement<never>[] {
+    return planImportedMoods(input);
+  }
+
+  planImportGroups(input: {
+    groups: readonly ImportedGroup[];
+  }): PlannedStatement<never>[] {
+    return planImportedGroups(input);
+  }
+
+  planImportActivities(input: {
+    activities: readonly ImportedActivity[];
+  }): PlannedStatement<never>[] {
+    return planImportedActivities(input);
+  }
+
+  planImportGoals(input: {
+    goals: readonly ImportedGoal[];
+  }): PlannedStatement<never>[] {
+    return planImportedGoals(input);
+  }
+
+  /** It must run after the statements that write the goal completions. */
+  planBackfillGoalStartDates(): PlannedStatement<never> {
+    return planGoalStartDateBackfill();
   }
 }

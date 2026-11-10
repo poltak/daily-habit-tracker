@@ -35,7 +35,7 @@ describe("AddActivityLogic", () => {
 
   it("should fall back to the first active group", async () => {
     const { logic, backend } = await setupTest({ skipInitialization: true });
-    await backend.logic.catalog.updateGroup({
+    await backend.logic.catalogChange.updateGroup({
       id: "group-health",
       patch: { archived: true },
     });
@@ -150,7 +150,7 @@ describe("AddActivityLogic", () => {
   it("should keep the form and say why when the server refuses", async () => {
     const { logic, backend } = await setupTest();
     logic.setName({ name: "Yoga" });
-    await backend.logic.catalog.deleteGroup({ id: "group-health" });
+    await backend.logic.catalogChange.deleteGroup({ id: "group-health" });
 
     expect(await logic.add()).toEqual(false);
 

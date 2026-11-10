@@ -85,6 +85,19 @@ describe("CatalogSetupLogic filter and open groups", () => {
   });
 });
 
+describe("CatalogSetupLogic visits", () => {
+  it("should start a visit with the groups closed and no filter", async () => {
+    const { logic } = await setupTest();
+    logic.setGroupOpen({ groupId: "group-work", open: true });
+    logic.setActivityQuery({ query: "walk" });
+
+    logic.startVisit();
+
+    expect(logic.state.openGroupIds).toEqual([]);
+    expect(logic.state.activityQuery).toEqual("");
+  });
+});
+
 describe("CatalogSetupLogic adding a group", () => {
   it("should add a group, empty the field, and tell the other pages", async () => {
     const app = await setupTest();
