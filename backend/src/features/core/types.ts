@@ -13,10 +13,13 @@ import type { DaysLogic } from "../days/logic/days-logic.js";
 import type { DaysStorage } from "../days/storage/days-storage.js";
 import type { BlackBoxLogic } from "../black-box/logic/black-box-logic.js";
 import type { BlackBoxStorage } from "../black-box/storage/black-box-storage.js";
-import type { HealthLogic } from "../health/logic/health-logic.js";
-import type { HealthStorage } from "../health/storage/health-storage.js";
+import type { ExportLogic } from "../export/logic/export-logic.js";
+import type { ImportLogic } from "../import/logic/import-logic.js";
+import type { ImportStorage } from "../import/storage/import-storage.js";
 import type { SettingsLogic } from "../settings/logic/settings-logic.js";
 import type { SettingsStorage } from "../settings/storage/settings-storage.js";
+import type { HealthLogic } from "../health/logic/health-logic.js";
+import type { HealthStorage } from "../health/storage/health-storage.js";
 import type { RunAtomic } from "./logic/types.js";
 import type { ClockServiceInterface } from "./services/types.js";
 
@@ -26,6 +29,7 @@ export interface BackendStorage {
   catalog: CatalogStorage;
   days: DaysStorage;
   health: HealthStorage;
+  imports: ImportStorage;
   settings: SettingsStorage;
 }
 
@@ -53,7 +57,9 @@ export interface BackendLogic {
   blackBox: BlackBoxLogic;
   catalog: CatalogLogic;
   days: DaysLogic;
+  exports: ExportLogic;
   health: HealthLogic;
+  imports: ImportLogic;
   settings: SettingsLogic;
 }
 

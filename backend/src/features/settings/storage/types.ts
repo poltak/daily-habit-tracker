@@ -1,3 +1,5 @@
+import type { Selectable } from "kysely";
+
 /**
  * This table comes from the old app (`backend/migrations/0008`), and it keeps
  * its columns. The week setting is the row with the key `week_ends_on`.
@@ -13,3 +15,5 @@ interface AppSettingTable {
 export interface SettingsTables {
   appSettings: AppSettingTable;
 }
+
+export type AppSettingRow = Selectable<AppSettingTable>;

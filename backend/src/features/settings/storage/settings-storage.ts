@@ -1,4 +1,5 @@
 import type { BackendStorageProps } from "../../core/storage/types.js";
+import type { AppSettingRow } from "./types.js";
 
 /** The old app stored the week setting under this key. */
 const WEEK_ENDS_ON_KEY = "week_ends_on";
@@ -36,6 +37,15 @@ export class SettingsStorage {
           updatedAt,
         }),
       )
+      .execute();
+  }
+
+  /** Every row, for the export file. */
+  listAll(): Promise<AppSettingRow[]> {
+    return this.deps.db
+      .selectFrom("appSettings")
+      .selectAll()
+      .orderBy("key")
       .execute();
   }
 }

@@ -11,10 +11,13 @@ import { CatalogLogic } from "../catalog/logic/catalog-logic.js";
 import { CatalogStorage } from "../catalog/storage/catalog-storage.js";
 import { DaysLogic } from "../days/logic/days-logic.js";
 import { DaysStorage } from "../days/storage/days-storage.js";
-import { HealthLogic } from "../health/logic/health-logic.js";
-import { HealthStorage } from "../health/storage/health-storage.js";
+import { ExportLogic } from "../export/logic/export-logic.js";
+import { ImportLogic } from "../import/logic/import-logic.js";
+import { ImportStorage } from "../import/storage/import-storage.js";
 import { SettingsLogic } from "../settings/logic/settings-logic.js";
 import { SettingsStorage } from "../settings/storage/settings-storage.js";
+import { HealthLogic } from "../health/logic/health-logic.js";
+import { HealthStorage } from "../health/storage/health-storage.js";
 import { createRunAtomic } from "./database/atomic.js";
 import type { D1Binding } from "./database/d1-binding.js";
 import type { Database } from "./database/database.js";
@@ -42,6 +45,7 @@ function createStorage(db: Database): BackendStorage {
     catalog: new CatalogStorage({ db }),
     days: new DaysStorage({ db }),
     health: new HealthStorage({ db }),
+    imports: new ImportStorage({ db }),
     settings: new SettingsStorage({ db }),
   };
 }
@@ -73,7 +77,9 @@ export function composeApp({
     blackBox: new BlackBoxLogic({ storage, services, atomic, config }),
     catalog: new CatalogLogic({ storage, services, atomic }),
     days: new DaysLogic({ storage, services, atomic }),
+    exports: new ExportLogic({ storage, services }),
     health: new HealthLogic({ storage, services }),
+    imports: new ImportLogic({ storage, services, atomic }),
     settings: new SettingsLogic({ storage, services }),
   };
 
