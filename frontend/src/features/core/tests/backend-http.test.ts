@@ -20,6 +20,27 @@ const PUBLIC_ROUTES = [
   "POST /api/auth/logout",
 ];
 
+/**
+ * The routes for agents sit outside the session gate and take a token. `/api/mcp`
+ * and `/oauth/token` answer 401 without one, so they are not here. The rest
+ * are the discovery documents, the client registration, the preflight
+ * requests, and the consent page, which sends a visitor without a session to
+ * the sign-in page.
+ */
+const AGENT_ROUTES = [
+  "GET /.well-known/oauth-authorization-server",
+  "OPTIONS /.well-known/oauth-authorization-server",
+  "GET /.well-known/oauth-protected-resource",
+  "OPTIONS /.well-known/oauth-protected-resource",
+  "GET /.well-known/oauth-protected-resource/api/mcp",
+  "OPTIONS /.well-known/oauth-protected-resource/api/mcp",
+  "POST /oauth/register",
+  "OPTIONS /oauth/register",
+  "OPTIONS /oauth/token",
+  "GET /oauth/authorize",
+  "POST /oauth/authorize",
+];
+
 const ORIGIN = "http://app.test";
 const KILOBYTE = 1024;
 /** More than the default limit of 100 kB. */
@@ -70,7 +91,9 @@ describe("backend HTTP app", () => {
       }
     }
 
-    expect(reached).toEqual(PUBLIC_ROUTES);
+    expect(reached.toSorted()).toEqual(
+      [...PUBLIC_ROUTES, ...AGENT_ROUTES].toSorted(),
+    );
   });
 
   it("should answer the health routes without a session", async () => {

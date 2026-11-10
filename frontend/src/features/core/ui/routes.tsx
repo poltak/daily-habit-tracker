@@ -1,12 +1,31 @@
 import { APP_NAME } from "@app/common/features/core/utils/app-name";
 import { useMemo } from "react";
-import { Link, Outlet, Route, Routes, useLocation } from "react-router";
+import {
+  Link,
+  Navigate,
+  Outlet,
+  Route,
+  Routes,
+  useLocation,
+} from "react-router";
 import { AuthProvider, useAuth } from "../../auth/ui/auth-context.js";
 import { SessionGate } from "../../auth/ui/session-gate.js";
 import { SignInPage } from "../../auth/ui/sign-in-page.js";
 import { ErrorBoundary } from "./error-boundary.js";
 import { PageErrorFallback } from "./error-fallbacks.js";
 import type { ProtectedPageContext } from "./signed-in-user.js";
+
+/** The sign-in page was at `/login`. Old links and bookmarks still arrive there. */
+function LoginRedirect() {
+  const location = useLocation();
+  return (
+    <Navigate
+      to={{ pathname: "/sign-in", search: location.search }}
+      replace
+      state={location.state}
+    />
+  );
+}
 
 function ProtectedLayout() {
   const { logic, state } = useAuth();
@@ -48,7 +67,8 @@ export function AppRoutes() {
     <AuthProvider>
       <div className="app-shell">
         <Routes>
-          <Route path="/login" element={<SignInPage />} />
+          <Route path="/sign-in" element={<SignInPage />} />
+          <Route path="/login" element={<LoginRedirect />} />
           <Route element={<SessionGate />}>
             <Route element={<ProtectedLayout />}>
               {/* The app has no start page of its own yet. */}

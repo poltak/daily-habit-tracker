@@ -3,6 +3,8 @@ import { cors } from "hono/cors";
 import { requestId } from "hono/request-id";
 import { secureHeaders } from "hono/secure-headers";
 import { createBlackBoxHandlers } from "../../black-box/handlers/black-box-handlers.js";
+import { createOAuthHandlers } from "../../auth/handlers/oauth-handlers.js";
+import { createMcpHandlers } from "../../mcp/handlers/mcp-handlers.js";
 import { createAuthHandlers } from "../../auth/handlers/auth-handlers.js";
 import { requireTrustedOrigin } from "../../auth/handlers/require-trusted-origin.js";
 import { requireSession } from "../../auth/handlers/require-session.js";
@@ -32,11 +34,12 @@ interface HttpAppProps extends ApiHttpAppProps {
 }
 
 /**
- * Every business route, including future routes, shares the session gate. The
- * app has no business route yet.
+ * Every business route, including future routes, shares the session gate.
  */
 function createBusinessHttpApp() {
-  return new Hono<AuthEnvironment>().use("*", requireSession());
+  return new Hono<AuthEnvironment>()
+    .use("*", requireSession())
+    .get("/health", (context) => context.json({ ok: true as const }, 200));
 }
 
 /**
@@ -53,9 +56,16 @@ export function createApiHttpApp({ app }: ApiHttpAppProps) {
 }
 
 export function createHttpApp({ app, clientAddressHeader }: HttpAppProps) {
+  // The consent page sets its own headers: these would replace its
+  // `X-Frame-Options: DENY` and its `same-origin` referrer policy.
+  const defaultSecureHeaders = secureHeaders();
   const http = new Hono<RequestEnvironment>()
     .use("*", requestId())
-    .use("*", secureHeaders());
+    .use("*", (context, next) =>
+      context.req.path === "/oauth/authorize"
+        ? next()
+        : defaultSecureHeaders(context, next),
+    );
   // The Worker and the frontend share one origin, so a deployment sends no
   // CORS headers. Only a test backend behind a frontend on another origin has
   // trusted origins.
@@ -86,6 +96,13 @@ export function createHttpApp({ app, clientAddressHeader }: HttpAppProps) {
       .use("*", logRequests({ services: app.services }))
       .use("*", defaultBodyLimit(MAX_REQUEST_BODY_BYTES))
       .use("*", resolveClientAddress({ header: clientAddressHeader }))
+      // The routes for agents take a token, not the session cookie. The MCP
+      // endpoint is under `/api`, so it comes before the session gate.
+      .route("/", createMcpHandlers({ logic: app.logic }))
+      .route(
+        "/",
+        createOAuthHandlers({ logic: app.logic, services: app.services }),
+      )
       .route("/api", createApiHttpApp({ app }))
       .onError(createErrorHandler({ services: app.services }))
       .notFound(handleNotFound)

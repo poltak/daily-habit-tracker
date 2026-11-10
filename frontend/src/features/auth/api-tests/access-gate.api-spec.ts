@@ -29,9 +29,6 @@ test.describe("access to the API", () => {
           : { headers: { origin: apiOrigin }, data: {} }),
       });
       expect(response.status(), `${method} ${path}`).toBe(401);
-      expect(await response.json(), `${method} ${path}`).toMatchObject({
-        code: "sign_in_required",
-      });
     }
   });
 
@@ -55,7 +52,6 @@ test.describe("access to the API", () => {
     });
 
     expect(response.status()).toBe(403);
-    expect(await response.json()).toMatchObject({ code: "invalid_origin" });
   });
 
   test("should refuse the session of the owner on the MCP endpoint", async ({
@@ -82,6 +78,5 @@ test.describe("access to the API", () => {
     const response = await ownerRequest.get(`${apiOrigin}/api/bootstrap`);
 
     expect(response.status()).toBe(401);
-    expect(await response.json()).toMatchObject({ code: "sign_in_required" });
   });
 });

@@ -5,9 +5,20 @@ import {
   type PlannedStatement,
 } from "../../core/database/planned-statement.js";
 import type { BackendStorageProps } from "../../core/storage/types.js";
-import type { AuthSessionRow, ChallengePurpose, Passkey } from "./types.js";
+import type {
+  AuthSessionRow,
+  ChallengePurpose,
+  NewOauthClient,
+  NewOauthCode,
+  NewOauthGrant,
+  NewOauthToken,
+  OauthClient,
+  OauthGrant,
+  OauthToken,
+  Passkey,
+} from "./types.js";
 
-/** The passkeys, the WebAuthn challenges, the sessions, and the setup code attempts. */
+/** The passkeys, the WebAuthn challenges, the sessions, the setup code attempts, and the apps that the owner connected. */
 export class AuthStorage {
   constructor(private readonly deps: BackendStorageProps) {}
 
@@ -209,9 +220,187 @@ export class AuthStorage {
     });
   }
 
-  // ---------- OAuth rows of the MCP endpoint ----------
-  // The OAuth server comes with a later feature. Its tables exist in the
-  // database, and its expired rows go with the rest.
+  // ---------- Connected apps (OAuth) ----------
+
+  async insertClient(client: NewOauthClient): Promise<void> {
+    await this.deps.db.insertInto("oauthClients").values(client).execute();
+  }
+
+  findClient({ id }: { id: string }): Promise<OauthClient | undefined> {
+    return this.deps.db
+      .selectFrom("oauthClients")
+      .selectAll()
+      .where("id", "=", id)
+      .executeTakeFirst();
+  }
+
+  findGrant({ id }: { id: string }): Promise<OauthGrant | undefined> {
+    return this.deps.db
+      .selectFrom("oauthGrants")
+      .selectAll()
+      .where("id", "=", id)
+      .executeTakeFirst();
+  }
+
+  async listGrantIdsOfClient({
+    clientId,
+  }: {
+    clientId: string;
+  }): Promise<string[]> {
+    const rows = await this.deps.db
+      .selectFrom("oauthGrants")
+      .select("id")
+      .where("clientId", "=", clientId)
+      .execute();
+    return rows.map(({ id }) => id);
+  }
+
+  /** The apps of the owner, newest first. */
+  listConnections(): Promise<
+    {
+      id: string;
+      name: string;
+      createdAt: number;
+      lastUsedAt: number | null;
+    }[]
+  > {
+    return this.deps.db
+      .selectFrom("oauthGrants")
+      .innerJoin("oauthClients", "oauthClients.id", "oauthGrants.clientId")
+      .select([
+        "oauthGrants.id",
+        "oauthClients.name",
+        "oauthGrants.createdAt",
+        "oauthGrants.lastUsedAt",
+      ])
+      .orderBy("oauthGrants.createdAt", "desc")
+      .orderBy("oauthGrants.id")
+      .execute();
+  }
+
+  planInsertGrant(grant: NewOauthGrant): PlannedStatement<never> {
+    return planQuery(this.deps.db.insertInto("oauthGrants").values(grant));
+  }
+
+  planInsertCode(code: NewOauthCode): PlannedStatement<never> {
+    return planQuery(this.deps.db.insertInto("oauthCodes").values(code));
+  }
+
+  planMarkClientApproved({
+    id,
+    now,
+  }: {
+    id: string;
+    now: number;
+  }): PlannedStatement<never> {
+    return planWrite(
+      this.deps.db
+        .updateTable("oauthClients")
+        .set({ approvedAt: now })
+        .where("id", "=", id),
+    );
+  }
+
+  /** The statements that remove one connection with its codes and tokens. */
+  planDeleteGrant({ id }: { id: string }): PlannedStatement<never>[] {
+    const { db } = this.deps;
+    return [
+      planWrite(db.deleteFrom("oauthTokens").where("grantId", "=", id)),
+      planWrite(db.deleteFrom("oauthCodes").where("grantId", "=", id)),
+      planWrite(db.deleteFrom("oauthGrants").where("id", "=", id)),
+    ];
+  }
+
+  /** Delete the code and return it, so that it works once, also when the rest of the request fails. */
+  takeCode({ id }: { id: string }): Promise<NewOauthCode | undefined> {
+    return this.deps.db
+      .deleteFrom("oauthCodes")
+      .where("id", "=", id)
+      .returningAll()
+      .executeTakeFirst();
+  }
+
+  planInsertToken(token: NewOauthToken): PlannedStatement<never> {
+    return planQuery(this.deps.db.insertInto("oauthTokens").values(token));
+  }
+
+  planSetTokenExpiry({
+    id,
+    expiresAt,
+  }: {
+    id: string;
+    expiresAt: number;
+  }): PlannedStatement<never> {
+    return planWrite(
+      this.deps.db
+        .updateTable("oauthTokens")
+        .set({ expiresAt })
+        .where("id", "=", id),
+    );
+  }
+
+  findLiveRefreshToken({
+    id,
+    now,
+  }: {
+    id: string;
+    now: number;
+  }): Promise<OauthToken | undefined> {
+    return this.deps.db
+      .selectFrom("oauthTokens")
+      .selectAll()
+      .where("id", "=", id)
+      .where("kind", "=", "refresh")
+      .where("expiresAt", ">", now)
+      .executeTakeFirst();
+  }
+
+  async setTokenExpiry({
+    id,
+    expiresAt,
+  }: {
+    id: string;
+    expiresAt: number;
+  }): Promise<void> {
+    await this.deps.db
+      .updateTable("oauthTokens")
+      .set({ expiresAt })
+      .where("id", "=", id)
+      .execute();
+  }
+
+  /** The connection of a live access token. */
+  findAccessTokenGrant({ id, now }: { id: string; now: number }): Promise<
+    | {
+        grantId: string;
+        resource: string;
+        lastUsedAt: number | null;
+      }
+    | undefined
+  > {
+    return this.deps.db
+      .selectFrom("oauthTokens")
+      .innerJoin("oauthGrants", "oauthGrants.id", "oauthTokens.grantId")
+      .select([
+        "oauthGrants.id as grantId",
+        "oauthGrants.resource",
+        "oauthGrants.lastUsedAt",
+      ])
+      .where("oauthTokens.id", "=", id)
+      .where("oauthTokens.kind", "=", "access")
+      .where("oauthTokens.expiresAt", ">", now)
+      .executeTakeFirst();
+  }
+
+  async markGrantUsed({ id, now }: { id: string; now: number }): Promise<void> {
+    await this.deps.db
+      .updateTable("oauthGrants")
+      .set({ lastUsedAt: now })
+      .where("id", "=", id)
+      .execute();
+  }
+
+  // ---------- Clean-up of the OAuth rows ----------
 
   /**
    * Expired codes and tokens, grants with no refresh token after a day, and

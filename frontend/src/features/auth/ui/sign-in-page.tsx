@@ -1,4 +1,5 @@
 import { APP_NAME } from "@app/common/features/core/utils/app-name";
+import { useEffect } from "react";
 import { Navigate, useLocation } from "react-router";
 import { serverMessage } from "../utils/passkey-messages.js";
 import { useAuth } from "./auth-context.js";
@@ -16,6 +17,19 @@ function safeReturnTo(value: unknown): string {
 
 const WAITING = "Waiting for your device…";
 
+/** The page `/oauth/authorize` is not a page of the router: the browser must load it. */
+function isServerPage(path: string): boolean {
+  return path.startsWith("/oauth/");
+}
+
+function LoadServerPage({ path }: { path: string }) {
+  useEffect(() => {
+    // oxlint-disable-next-line no-restricted-globals -- The server draws this page, so the router cannot open it, and no Logic needs the load.
+    window.location.replace(path);
+  }, [path]);
+  return null;
+}
+
 /**
  * The sign-in page. It signs in with a passkey, or saves the first passkey
  * with the setup code. After sign-in, it opens the page that the visitor asked
@@ -32,8 +46,26 @@ export function SignInPage() {
     </span>
   );
 
+  // The consent page of an app sends the owner here with `returnTo` in the
+  // address. The session gate sends it in the state of the navigation.
+  const returnTo = safeReturnTo(
+    new URLSearchParams(location.search).get("returnTo") ??
+      location.state?.returnTo,
+  );
+  // The text is fixed, so a link cannot put its own words on this page.
+  const notice = returnTo.startsWith("/oauth/authorize") ? (
+    <p className="auth-notice">
+      An app wants to connect to your {APP_NAME}. Sign in first, then {APP_NAME}{" "}
+      asks you to allow it.
+    </p>
+  ) : null;
+
   if (state.isSignedIn) {
-    return <Navigate to={safeReturnTo(location.state?.returnTo)} replace />;
+    return isServerPage(returnTo) ? (
+      <LoadServerPage path={returnTo} />
+    ) : (
+      <Navigate to={returnTo} replace />
+    );
   }
   if (!logic.canUsePasskeys) {
     return (
@@ -82,6 +114,7 @@ export function SignInPage() {
       <section className="login-panel auth-panel" aria-live="polite">
         {brand}
         <h1>Sign in to {APP_NAME}</h1>
+        {notice}
         <p>
           Use your passkey. Your device asks for your face, fingerprint or
           screen lock.
@@ -124,6 +157,7 @@ export function SignInPage() {
     <section className="login-panel auth-panel" aria-live="polite">
       {brand}
       <h1>{state.recovery ? "Add a passkey" : `Set up ${APP_NAME}`}</h1>
+      {notice}
       <p>
         {state.recovery
           ? "Type your setup code. Then this device saves a new passkey."

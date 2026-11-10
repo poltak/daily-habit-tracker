@@ -24,8 +24,28 @@ const httpApp = createHttpApp({
   clientAddressHeader: "cf-connecting-ip",
 });
 
+/**
+ * The pages of the frontend router. The Worker answers each one with
+ * `index.html`, and any other path that is not a file gets the 404 page of the
+ * assets. Each path here is also in `assets.run_worker_first` of
+ * `wrangler.jsonc`: add a page to both. `/` is `index.html` itself, so the
+ * assets answer it.
+ */
+const APP_PAGES = new Set(["/sign-in", "/login", "/insights"]);
+
+interface AssetsEnvironment extends WorkerEnvironment {
+  ASSETS: { fetch(request: Request): Promise<Response> };
+}
+
 export default {
-  fetch(request: Request, env: WorkerEnvironment, context: ExecutionContext) {
+  fetch(request: Request, env: AssetsEnvironment, context: ExecutionContext) {
+    const url = new URL(request.url);
+    if (
+      (request.method === "GET" || request.method === "HEAD") &&
+      APP_PAGES.has(url.pathname)
+    ) {
+      return env.ASSETS.fetch(new Request(new URL("/", url), request));
+    }
     return httpApp.fetch(request, env, context);
   },
   /** The hourly cron of `wrangler.jsonc` removes expired sessions, challenges, codes and tokens. */

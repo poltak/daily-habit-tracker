@@ -8,9 +8,11 @@ import { SET_UP_HEADING, setUp, startVisit } from "./built-app-visit.js";
 // after it.
 test.describe.configure({ mode: "serial" });
 
-// An address with no route, so these tests need no page of a feature, and a
-// project with other pages keeps this file as it is.
-const MISSING_PAGE = "/a-page-that-no-route-has";
+// An address that the Worker serves as an app page (APP_PAGES in worker.ts)
+// and that the router has no route for yet, so these tests need no page of a
+// feature. The Worker answers any other address with a 404. When a feature
+// builds this page, pick another listed address with no route.
+const MISSING_PAGE = "/insights";
 
 let visit: Awaited<ReturnType<typeof startVisit>>;
 let page: Page;
@@ -23,10 +25,10 @@ test.beforeAll(async ({ browser, baseURL }) => {
 test.afterAll(() => visit.end());
 
 test("should send a visitor without a session to the sign-in page", async () => {
-  // The Worker must also answer a path that is not a file with the app.
+  // The Worker must also answer an app page that is not a file with the app.
   await page.goto(MISSING_PAGE);
 
-  await expect(page).toHaveURL(/\/login$/);
+  await expect(page).toHaveURL(/\/sign-in$/);
   await expect(page).toHaveTitle(APP_NAME);
   await expect(
     page.getByRole("heading", { name: SET_UP_HEADING }),
@@ -67,11 +69,11 @@ test("should open another page from a link without a page load", async () => {
 test("should sign the owner out, and ask for sign-in again", async () => {
   await page.getByRole("button", { name: "Sign out" }).click();
 
-  await expect(page).toHaveURL(/\/login$/);
+  await expect(page).toHaveURL(/\/sign-in$/);
 
   await page.goto(MISSING_PAGE);
 
-  await expect(page).toHaveURL(/\/login$/);
+  await expect(page).toHaveURL(/\/sign-in$/);
   await expect(
     page.getByRole("button", { name: "Sign in with passkey" }),
   ).toBeVisible();

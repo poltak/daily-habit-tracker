@@ -121,9 +121,24 @@ The project's own choices, with their reasons. Read this file when you read
   attempts, OAuth codes and tokens, as the old `scheduled` handler does.
 - **The frontend is built with an empty `VITE_API_BASE_URL`.** `pnpm run build`
   sets it, so the page uses its own origin whatever a local `.env` says.
-- **The sign-in page is at `/login`, not `/sign-in`.** The old site used
-  `/sign-in`. A later change for the OAuth consent flow must send the browser
-  to `/login`, or the route must answer `/sign-in` too.
+- **The sign-in page is at `/sign-in`, and `/login` redirects to it.** The old
+  site and the OAuth consent redirect (`/sign-in?returnTo=...`) use
+  `/sign-in`. The router keeps `/login` so that old links work, and the
+  redirect keeps the query. After sign-in, a `returnTo` that starts with
+  `/oauth/` is loaded as a new page, because the server draws the consent page.
+- **The Worker answers a 404 for an address that is not an app page.** The
+  Worker serves `index.html` only for the paths in `APP_PAGES`
+  (`backend/src/features/core/server/worker.ts`), and `wrangler.jsonc` lists
+  the same paths in `assets.run_worker_first`. The assets answer any other
+  address that is not a file with `frontend/public/404.html` and a 404 status
+  (`not_found_handling: "404-page"`). A feature that adds a page to the router
+  adds its path to both lists.
+- **OAuth for agents is in the auth feature, and the MCP endpoint takes only
+  its access token.** `/api/mcp` is mounted before `/api`, so the owner's
+  session cookie does not work there. The discovery documents, `/oauth/*` and
+  the token rules are the old Worker's. The consent page sets its own
+  `X-Frame-Options: DENY` and `Referrer-Policy: same-origin`, so
+  `createHttpApp` skips `secureHeaders` on `/oauth/authorize`.
 - **The reset route is `POST /api/__black-box/reset`.** It empties each app
   table between black-box tests, and adds the seed catalog of a new database
   (five moods, five groups, twelve activities, two goals), as the old route

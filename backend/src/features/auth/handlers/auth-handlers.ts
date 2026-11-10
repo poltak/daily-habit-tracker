@@ -35,7 +35,7 @@ const verifySchema = z.object({
 interface AuthHandlerProps {
   logic: Pick<
     BackendLogic,
-    "authPasskey" | "authPasskeyManage" | "authSession"
+    "authConnections" | "authPasskey" | "authPasskeyManage" | "authSession"
   >;
 }
 
@@ -156,6 +156,14 @@ export function createAuthHandlers({ logic }: AuthHandlerProps) {
           );
         }
         return context.json(result, 200);
+      })
+      // The apps, such as Claude, that the owner allowed to use the MCP endpoint.
+      .get("/connections", requireSession(), async (context) =>
+        context.json({ connections: await logic.authConnections.list() }, 200),
+      )
+      .delete("/connections/:id", requireSession(), async (context) => {
+        await logic.authConnections.remove({ id: context.req.param("id") });
+        return context.json({ removed: true as const }, 200);
       })
   );
 }

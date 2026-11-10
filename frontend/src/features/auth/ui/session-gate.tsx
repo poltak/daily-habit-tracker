@@ -23,7 +23,7 @@ export function SessionGate() {
   }
   return (
     <Navigate
-      to="/login"
+      to="/sign-in"
       replace
       state={
         state.signOutState !== "success"

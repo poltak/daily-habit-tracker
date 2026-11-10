@@ -28,6 +28,15 @@ export async function sha256Hex({ value }: { value: string }): Promise<string> {
   ).join("");
 }
 
+/** The SHA-256 of a text as base64url, the form of a PKCE code challenge. */
+export async function sha256Base64Url({
+  value,
+}: {
+  value: string;
+}): Promise<string> {
+  return base64UrlEncode(await sha256({ value }));
+}
+
 /**
  * Compare two secrets in constant time. Both are hashed first, so the run time
  * does not depend on where they differ or on their lengths.
