@@ -2,10 +2,16 @@ import type { LoggerServiceInterface } from "@app/common/features/core/services/
 import type { BackendApi } from "../api/client/api-client.js";
 import type { ApiAccessEvents } from "../api/client/access-events.js";
 import type { PasskeyServiceInterface } from "../auth/services/types.js";
+import type { ClockServiceInterface } from "../clock/services/types.js";
+import type { DaysStorage } from "../days/storage/days-storage.js";
+import type { DeviceServiceInterface } from "../device/services/types.js";
+import type { DialogServiceInterface } from "../dialogs/services/types.js";
+import type { TimerServiceInterface } from "../timers/services/types.js";
 import type { WindowFocusServiceInterface } from "../window-focus/services/types.js";
 
-/** The frontend Storage classes. The project has none yet. */
-export type FrontendStorage = Record<string, never>;
+export interface FrontendStorage {
+  days: DaysStorage;
+}
 
 /**
  * Core Services. Any Service, Storage, or Logic class may depend on one. See
@@ -16,7 +22,11 @@ interface FrontendCoreServices {
 }
 
 export interface FrontendServices extends FrontendCoreServices {
+  clock: ClockServiceInterface;
+  device: DeviceServiceInterface;
+  dialogs: DialogServiceInterface;
   passkeys: PasskeyServiceInterface;
+  timers: TimerServiceInterface;
   windowFocus: WindowFocusServiceInterface;
 }
 

@@ -1,5 +1,7 @@
 import { Kysely, type KyselyPlugin } from "kysely";
 import type { AuthTables } from "../../auth/storage/types.js";
+import type { CatalogTables } from "../../catalog/storage/types.js";
+import type { DaysTables } from "../../days/storage/types.js";
 import type { D1Binding } from "./d1-binding.js";
 import { D1Dialect } from "./d1-dialect.js";
 import { DatabaseNames } from "./database-names.js";
@@ -13,7 +15,7 @@ import type { AdoptedTable, BaseTable } from "./table-kinds.js";
  * project takes over the PostgreSQL files (the template takeover of the D1
  * paths, see docs/agents/project/decisions.md).
  */
-export interface DatabaseSchema extends AuthTables {}
+export interface DatabaseSchema extends AuthTables, CatalogTables, DaysTables {}
 
 /** The tables that are not in `ADOPTED_TABLES` and lack the columns of `BaseTable`. */
 type TablesWithoutStandardColumns = {

@@ -6,6 +6,9 @@ import { AppErrorFallback } from "./features/core/ui/error-fallbacks.js";
 import { FrontendAppProvider } from "./features/core/ui/frontend-app-context.js";
 import { AppRoutes } from "./features/core/ui/routes.js";
 import "./features/core/ui/app.css";
+import "./features/core/ui/journal-base.css";
+import "./features/core/ui/journal-shell.css";
+import "./features/days/ui/days.css";
 import { createApp } from "./features/core/live/index.js";
 
 const rootElement = document.getElementById("root");
@@ -14,6 +17,7 @@ if (!rootElement) {
 }
 
 const app = createApp({
+  browserStorage: window.localStorage,
   // An empty value in a `.env` file also means the page's own origin.
   baseUrl: import.meta.env.VITE_API_BASE_URL || window.location.origin,
   // The console shows every entry in development, and only problems in a build.
