@@ -1,39 +1,26 @@
-import type { Kysely } from "kysely";
-import type { ActivityTables } from "../../activity/storage/types.js";
+import { Kysely, type KyselyPlugin } from "kysely";
 import type { AuthTables } from "../../auth/storage/types.js";
-import type { NotesTables } from "../../notes/storage/types.js";
-import type {
-  APPEND_ONLY_TABLES,
-  AppendOnlyTable,
-  BaseTable,
-  SDK_TABLES,
-} from "./standard-columns.js";
+import type { D1Binding } from "./d1-binding.js";
+import { D1Dialect } from "./d1-dialect.js";
+import { DatabaseNames } from "./database-names.js";
+import type { AdoptedTable, BaseTable } from "./table-kinds.js";
 
 /**
- * Every table in the database. Add each feature's tables here, declared in
- * that feature's `storage/types.ts`.
+ * Every table in the database that the code uses. Add each feature's tables
+ * here, declared in that feature's `storage/types.ts`.
+ *
+ * @public `pglite-database.ts` and `postgres-database.ts` read it until the
+ * project takes over the PostgreSQL files (the template takeover of the D1
+ * paths, see docs/agents/project/decisions.md).
  */
-export interface DatabaseSchema
-  extends ActivityTables, AuthTables, NotesTables {}
+export interface DatabaseSchema extends AuthTables {}
 
-type ApplicationTableName = Exclude<
-  keyof DatabaseSchema,
-  (typeof SDK_TABLES)[number]
->;
-
-/**
- * The names of the application tables whose type lacks the standard columns:
- * `BaseTable`, or `AppendOnlyTable` for a table in `APPEND_ONLY_TABLES`.
- */
+/** The tables that are not in `ADOPTED_TABLES` and lack the columns of `BaseTable`. */
 type TablesWithoutStandardColumns = {
-  [Name in ApplicationTableName]: DatabaseSchema[Name] extends (
-    Name extends (typeof APPEND_ONLY_TABLES)[number]
-      ? AppendOnlyTable
-      : BaseTable
-  )
-    ? never
-    : Name;
-}[ApplicationTableName];
+  [
+    Name in Exclude<keyof DatabaseSchema, AdoptedTable>
+  ]: DatabaseSchema[Name] extends BaseTable ? never : Name;
+}[Exclude<keyof DatabaseSchema, AdoptedTable>];
 
 /** Compiles only when the first argument is `never`. The error shows what it is. */
 type WhenNone<_Problem extends never, Result> = Result;
@@ -48,3 +35,17 @@ export type Database = WhenNone<
   TablesWithoutStandardColumns,
   Kysely<DatabaseSchema>
 >;
+
+/** A query builder around a binding. It opens nothing, so it is safe to keep for an isolate. */
+export function createDatabase({
+  binding,
+  extraPlugins = [],
+}: {
+  binding: D1Binding;
+  extraPlugins?: KyselyPlugin[];
+}): Database {
+  return new Kysely<DatabaseSchema>({
+    dialect: new D1Dialect({ binding }),
+    plugins: [new DatabaseNames(), ...extraPlugins],
+  });
+}

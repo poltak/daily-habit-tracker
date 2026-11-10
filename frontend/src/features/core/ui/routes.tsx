@@ -1,20 +1,9 @@
 import { APP_NAME } from "@app/common/features/core/utils/app-name";
 import { useMemo } from "react";
-import {
-  Link,
-  Navigate,
-  NavLink,
-  Outlet,
-  Route,
-  Routes,
-  useLocation,
-} from "react-router";
-import { NoteEditPage } from "../../notes/ui/note-edit-page.js";
-import { NotesPage } from "../../notes/ui/notes-page.js";
+import { Link, Outlet, Route, Routes, useLocation } from "react-router";
 import { AuthProvider, useAuth } from "../../auth/ui/auth-context.js";
 import { SessionGate } from "../../auth/ui/session-gate.js";
-import { LoginPage } from "../../auth/ui/login-page.js";
-import { SignUpPage } from "../../auth/ui/sign-up-page.js";
+import { SignInPage } from "../../auth/ui/sign-in-page.js";
 import { ErrorBoundary } from "./error-boundary.js";
 import { PageErrorFallback } from "./error-fallbacks.js";
 import type { ProtectedPageContext } from "./signed-in-user.js";
@@ -24,8 +13,8 @@ function ProtectedLayout() {
   const location = useLocation();
   // The session gate renders this layout only for a signed-in user.
   const pageContext = useMemo<ProtectedPageContext>(
-    () => ({ user: { id: state.userId ?? "" }, authEvents: logic.events }),
-    [state.userId, logic.events],
+    () => ({ authEvents: logic.events }),
+    [logic.events],
   );
   return (
     <>
@@ -33,11 +22,7 @@ function ProtectedLayout() {
         <Link className="brand" to="/">
           {APP_NAME}
         </Link>
-        <nav aria-label="Main navigation">
-          <NavLink to="/notes">Notes</NavLink>
-        </nav>
         <div className="session-actions">
-          <span>{state.userName}</span>
           <button
             disabled={state.signOutState === "running"}
             onClick={() => void logic.signOut()}
@@ -63,20 +48,17 @@ export function AppRoutes() {
     <AuthProvider>
       <div className="app-shell">
         <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/sign-up" element={<SignUpPage />} />
+          <Route path="/login" element={<SignInPage />} />
           <Route element={<SessionGate />}>
             <Route element={<ProtectedLayout />}>
               {/* The app has no start page of its own yet. */}
-              <Route path="/" element={<Navigate to="/notes" replace />} />
-              <Route path="/notes" element={<NotesPage />} />
-              <Route path="/notes/:noteId" element={<NoteEditPage />} />
+              <Route path="/" element={<h1>{APP_NAME}</h1>} />
               <Route
                 path="*"
                 element={
                   <section>
                     <h1>Page not found</h1>
-                    <Link to="/notes">Go to your notes</Link>
+                    <Link to="/">Go to the start page</Link>
                   </section>
                 }
               />

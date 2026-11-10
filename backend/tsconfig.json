@@ -19,5 +19,13 @@
     "skipLibCheck": true
   },
   "include": ["src/**/*.ts"],
+  // The PostgreSQL migration system stays on disk for the check of migrations,
+  // and the project takes it over later (the template takeover of the D1
+  // paths, see docs/agents/project/decisions.md). These two files need the old
+  // Storage and Services, so they no longer compile.
+  "exclude": [
+    "src/features/core/logic/migration-logic.ts",
+    "src/features/core/scripts/migrate.ts"
+  ],
   "references": [{ "path": "../common" }]
 }

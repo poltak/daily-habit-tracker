@@ -65,6 +65,41 @@ The project's own choices, with their reasons. Read this file when you read
   waits until the day is stored (the page objects wait for a button to take
   clicks again) before it opens another address.
 
+## D1 and passkeys
+
+- **The backend runs on Cloudflare Workers with D1.** `core/database/` has a
+  Kysely dialect for a D1 binding (`d1-dialect.ts`), and `atomic` replaces
+  `transaction()`: a Logic class plans statements with the `plan*` methods of
+  Storage, and one D1 `batch()` runs them. The Worker entry is
+  `core/server/worker.ts`, and `core/live/index.ts` builds the App from the
+  Worker bindings.
+- **The tests run on `node:sqlite`.** `core/tests/node-sqlite-d1.ts` has the
+  shape of a D1 binding, with the limits of D1. It runs the files of
+  `backend/migrations` in the order of their names.
+- **`backend/migrations/0000` to `0010` are the SQL files of the old app
+  (`legacy/drizzle/`), under their old names.** The production D1 database
+  `daylio-clone` recorded those names as applied. Its tables keep their old
+  columns (`ADOPTED_TABLES` in `core/database/table-kinds.ts`). A new table or
+  change is a new file from `0011_<name>.sql` up, and a new table has the
+  columns of `BaseTable`.
+- **Sign-in is passkeys only, with the old app's rules.** The sign-in routes
+  keep the paths and the JSON of the old app under `/api/auth`, and the cookie
+  is `__Host-daymark_session` (`daymark_session` on `http://localhost`). The
+  tables `passkeys`, `auth_sessions`, `auth_challenges` and `auth_attempts` are
+  the old ones, which have no owner key (Daymark has one owner), so the
+  passkeys and the sessions of the owner keep working. A session lasts 180 days
+  of non-use. After a day of use it renews, and the answer sends the cookie
+  again. The secret `DAYMARK_SETUP_CODE` saves a passkey without a session,
+  also when passkeys exist, and 10 wrong codes of one network (50 of all
+  networks) in 15 minutes stop it. The last passkey cannot go.
+- **The new app has no local mode.** The old app skips sign-in for requests to
+  `localhost`, unless `DAYMARK_LOCAL_PASSKEYS` is `true`. The new backend
+  always needs a session, and a local run or a test signs in with a passkey.
+- **The PostgreSQL migration system stays on disk, unused.** The migration
+  check reads it, and the project takes over those template paths later with
+  the template takeover of the D1 paths. `backend/tsconfig.json` leaves out the
+  two files that no longer compile, and `knip.jsonc` lists the unused ones.
+
 ## What the black-box tests do not cover
 
 - The import of a Daylio backup has no page. The site has no file field, and
