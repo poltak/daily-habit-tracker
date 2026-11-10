@@ -4,6 +4,32 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#ffffff" />
+    <!-- Sets the theme before the first paint. Keep it the same as BrowserThemeService and the key of SettingsStorage. -->
+    <script>
+      (function () {
+        var root = document.documentElement;
+        var media =
+          typeof window.matchMedia === "function"
+            ? window.matchMedia("(prefers-color-scheme: dark)")
+            : { matches: false };
+        function readPreference() {
+          try {
+            var value = window.localStorage.getItem("daymark-theme");
+            return value === "light" || value === "dark" || value === "system"
+              ? value
+              : "system";
+          } catch (_) {
+            return "system";
+          }
+        }
+        root.dataset.theme =
+          readPreference() === "system"
+            ? media.matches
+              ? "dark"
+              : "light"
+            : readPreference();
+      })();
+    </script>
     <title>%APP_NAME%</title>
     <link rel="icon" href="/favicon.svg" />
     <link

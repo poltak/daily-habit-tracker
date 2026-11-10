@@ -4,7 +4,7 @@ import type { FrontendLogicProps } from "../../core/logic/types.js";
 import type { PasskeyRegistrationOptions } from "../services/types.js";
 import { ceremonyMessage } from "../utils/passkey-messages.js";
 
-type PasskeysProps = FrontendLogicProps<never, "passkeys", "auth">;
+type PasskeysProps = FrontendLogicProps<never, "passkeys" | "dialogs", "auth">;
 
 interface PasskeyInfo {
   id: string;
@@ -17,6 +17,11 @@ interface PasskeyInfo {
   current: boolean;
 }
 
+interface PasskeyNotice {
+  kind: "success" | "error";
+  text: string;
+}
+
 interface PasskeysState {
   passkeys: PasskeyInfo[];
   loadPasskeysState: TaskState;
@@ -25,6 +30,8 @@ interface PasskeysState {
   addPasskeyError: string | null;
   removePasskeyState: TaskState;
   removePasskeyError: string | null;
+  /** The result of the latest add or removal, for the owner. */
+  notice: PasskeyNotice | null;
 }
 
 /** The passkeys of the signed-in owner, for the settings page: list, add, and remove. */
@@ -40,6 +47,7 @@ export class PasskeysLogic extends Logic<PasskeysProps, PasskeysState> {
         addPasskeyError: null,
         removePasskeyState: "pristine",
         removePasskeyError: null,
+        notice: null,
       },
     });
   }
@@ -54,6 +62,7 @@ export class PasskeysLogic extends Logic<PasskeysProps, PasskeysState> {
 
   /** Save a passkey for this device. The owner has a session, so no setup code is needed. */
   async addPasskey(): Promise<void> {
+    this.setState({ notice: null });
     await this.executeTask("addPasskey", async () => {
       const { register } = this.deps.api.auth;
       const init = { init: { signal: this.signal } };
@@ -81,10 +90,30 @@ export class PasskeysLogic extends Logic<PasskeysProps, PasskeysState> {
       await requireApiSuccess(verified);
       await this.readPasskeys();
     });
+    this.showResult({
+      state: this.state.addPasskeyState,
+      error: this.state.addPasskeyError,
+      success: "Passkey added.",
+    });
   }
 
-  /** The backend keeps the last passkey and refuses its removal. */
+  /**
+   * Ask first. A no leaves everything as it was. The backend keeps the last
+   * passkey and refuses its removal.
+   */
   async removePasskey({ id }: { id: string }): Promise<void> {
+    const target = this.state.passkeys.find((candidate) => candidate.id === id);
+    if (
+      target &&
+      !this.deps.services.dialogs.confirm(
+        target.current
+          ? `Remove the passkey "${target.name}"? You signed in with it, so this device signs out.`
+          : `Remove the passkey "${target.name}"? Devices that signed in with it sign out.`,
+      )
+    ) {
+      return;
+    }
+    this.setState({ notice: null });
     await this.executeTask("removePasskey", async () => {
       const response = await this.deps.api.auth.passkeys[":id"].$delete(
         { param: { id: encodeURIComponent(id) } },
@@ -104,6 +133,28 @@ export class PasskeysLogic extends Logic<PasskeysProps, PasskeysState> {
       }
       await this.readPasskeys();
     });
+    this.showResult({
+      state: this.state.removePasskeyState,
+      error: this.state.removePasskeyError,
+      success: "Passkey removed.",
+    });
+  }
+
+  /** A task that is still running, because a second call returned early, shows nothing. */
+  private showResult({
+    state,
+    error,
+    success,
+  }: {
+    state: TaskState;
+    error: string | null;
+    success: string;
+  }): void {
+    if (state === "success") {
+      this.setState({ notice: { kind: "success", text: success } });
+    } else if (state === "error") {
+      this.setState({ notice: { kind: "error", text: error ?? "" } });
+    }
   }
 
   private async readPasskeys(): Promise<void> {

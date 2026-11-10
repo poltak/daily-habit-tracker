@@ -35,6 +35,10 @@
     "./features/core/utils/log-level": {
       "types": "./dist/features/core/utils/log-level.d.ts",
       "default": "./dist/features/core/utils/log-level.js"
+    },
+    "./features/settings/utils/week": {
+      "types": "./dist/features/settings/utils/week.d.ts",
+      "default": "./dist/features/settings/utils/week.js"
     }
   },
   "scripts": {

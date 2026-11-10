@@ -19,6 +19,7 @@ import {
 import { logRequests } from "../handlers/request-log.js";
 import type { RequestEnvironment } from "../handlers/types.js";
 import { createHealthHandlers } from "../../health/handlers/health-handlers.js";
+import { createSettingsHandlers } from "../../settings/handlers/settings-handlers.js";
 import type { App } from "../types.js";
 
 /** The server refuses a larger request body. A route that takes more uses `routeBodyLimit`. */
@@ -36,10 +37,11 @@ interface HttpAppProps extends ApiHttpAppProps {
 /**
  * Every business route, including future routes, shares the session gate.
  */
-function createBusinessHttpApp() {
+function createBusinessHttpApp({ logic }: Pick<App, "logic">) {
   return new Hono<AuthEnvironment>()
     .use("*", requireSession())
-    .get("/health", (context) => context.json({ ok: true as const }, 200));
+    .get("/health", (context) => context.json({ ok: true as const }, 200))
+    .route("/settings", createSettingsHandlers({ logic }));
 }
 
 /**
@@ -52,7 +54,7 @@ export function createApiHttpApp({ app }: ApiHttpAppProps) {
     .use("*", requireTrustedOrigin({ config: app.config }))
     .use("*", resolveSession({ services: app.services, logic: app.logic }))
     .route("/auth", createAuthHandlers({ logic: app.logic }))
-    .route("/", createBusinessHttpApp());
+    .route("/", createBusinessHttpApp({ logic: app.logic }));
 }
 
 export function createHttpApp({ app, clientAddressHeader }: HttpAppProps) {

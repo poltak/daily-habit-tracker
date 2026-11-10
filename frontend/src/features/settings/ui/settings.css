@@ -1,0 +1,210 @@
+/* The colours of the light and the dark theme. `data-theme` on the root element comes from the script in index.html and from the theme service. */
+:root {
+  color-scheme: light;
+  --paper: #f7f3ec;
+  --card: #ffffff;
+  --surface: #fbf8f2;
+  --ink: #221e2f;
+  --ink-inverse: #fffdf9;
+  --muted: #5f596a;
+  --line: #e9e1d4;
+  --line-strong: #dcd2c2;
+  --link: #35598b;
+  --danger: #a93a28;
+  --focus: #3f8f74;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #0f0e17;
+  --card: #181724;
+  --surface: #1e1d2c;
+  --ink: #f4f1f9;
+  --ink-inverse: #15131f;
+  --muted: #a9a4ba;
+  --line: #2a2939;
+  --line-strong: #38364b;
+  --link: #a9c5ee;
+  --danger: #f4a28f;
+  --focus: #7fcba8;
+}
+
+:root[data-theme] {
+  color: var(--ink);
+  background: var(--paper);
+}
+
+:root[data-theme] section {
+  background: var(--card);
+  border-color: var(--line);
+}
+
+:root[data-theme] button {
+  background: var(--surface);
+  border-color: var(--line-strong);
+}
+
+:root[data-theme] a {
+  color: var(--link);
+}
+
+:root[data-theme] [role="alert"] {
+  color: var(--danger);
+}
+
+:root[data-theme] button:focus-visible,
+:root[data-theme] a:focus-visible {
+  outline-color: var(--focus);
+}
+
+.settings-page {
+  display: grid;
+  gap: 16px;
+  background: none;
+  border: 0;
+  padding: 0;
+}
+
+.settings-page .settings-card {
+  display: grid;
+  gap: 12px;
+}
+
+.settings-page h2,
+.settings-page h3,
+.settings-page p {
+  margin: 0;
+}
+
+.settings-page .eyebrow {
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.settings-page .muted {
+  color: var(--muted);
+}
+
+.settings-notice {
+  padding: 10px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--card);
+}
+
+.settings-notice.error {
+  color: var(--danger);
+}
+
+.theme-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.theme-option {
+  position: relative;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+/* The radio stays in the accessibility tree and the focus order, and the card shows its state. */
+.theme-option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.theme-option:focus-within {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.theme-option.selected {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 1px var(--ink);
+}
+
+.theme-preview {
+  display: block;
+  height: 64px;
+  background: #f7f3ec;
+}
+
+.theme-preview-dark {
+  background: #0f0e17;
+}
+
+.theme-preview-system {
+  background: linear-gradient(90deg, #f7f3ec 50%, #0f0e17 50%);
+}
+
+.theme-option-copy {
+  display: grid;
+  gap: 2px;
+  padding: 10px 11px 12px;
+}
+
+.theme-option-copy small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.week-end-field {
+  display: grid;
+  gap: 6px;
+  max-width: 280px;
+}
+
+.week-end-field select {
+  font: inherit;
+  padding: 10px 12px;
+  color: inherit;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+}
+
+.account-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.account-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+
+.account-list .management-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.account-list small {
+  color: var(--muted);
+}
+
+.account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

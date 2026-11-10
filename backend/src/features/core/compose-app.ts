@@ -9,6 +9,8 @@ import { BlackBoxLogic } from "../black-box/logic/black-box-logic.js";
 import { BlackBoxStorage } from "../black-box/storage/black-box-storage.js";
 import { HealthLogic } from "../health/logic/health-logic.js";
 import { HealthStorage } from "../health/storage/health-storage.js";
+import { SettingsLogic } from "../settings/logic/settings-logic.js";
+import { SettingsStorage } from "../settings/storage/settings-storage.js";
 import { createRunAtomic } from "./database/atomic.js";
 import type { D1Binding } from "./database/d1-binding.js";
 import type { Database } from "./database/database.js";
@@ -34,6 +36,7 @@ function createStorage(db: Database): BackendStorage {
     auth: new AuthStorage({ db }),
     blackBox: new BlackBoxStorage({ db }),
     health: new HealthStorage({ db }),
+    settings: new SettingsStorage({ db }),
   };
 }
 
@@ -63,6 +66,7 @@ export function composeApp({
     authSession: new AuthSessionLogic({ storage, services, atomic }),
     blackBox: new BlackBoxLogic({ storage, services, atomic, config }),
     health: new HealthLogic({ storage, services }),
+    settings: new SettingsLogic({ storage, services }),
   };
 
   return {
