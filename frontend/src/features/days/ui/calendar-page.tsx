@@ -13,7 +13,7 @@ import { MaterialIcon } from "../../core/ui/material-icon.js";
 import { errorNotice, noticeText } from "../utils/journal-messages.js";
 import { CalendarLogic } from "./calendar-logic.js";
 import { useJournal } from "./journal-context.js";
-import { MoodFace } from "./mood-face.js";
+import { MoodFace } from "../../core/ui/mood-face.js";
 import { useLogicInstance } from "../../core/logic/use-logic.js";
 
 function Spinner() {

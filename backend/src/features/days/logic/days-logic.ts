@@ -9,6 +9,7 @@ import type {
   CalendarEntryDay,
   DayActivitySelection,
   DayState,
+  EffectiveDay,
   Entry,
   GoalCompletion,
 } from "@app/common/features/days/types";
@@ -19,7 +20,7 @@ import type {
   BackendLogicProps,
   PlanningStorage,
 } from "../../core/logic/types.js";
-import type { EntryWrite } from "../storage/types.js";
+import type { ActivitySelectionRow, EntryWrite } from "../storage/types.js";
 import { applySelections, toDayState, toEntry } from "../utils/day-rows.js";
 import type { DayInput, EntryInput } from "../utils/entry-input.js";
 import { planDaySave } from "../utils/plan-day-save.js";
@@ -28,6 +29,10 @@ type DaysProps = BackendLogicProps<"days", "clock"> & BackendAtomicProps;
 
 /** The time an entry has when the save names none. */
 const DEFAULT_LOCAL_TIME = "23:00";
+
+/** The bounds of a read of the whole journal. */
+const EARLIEST_DATE = "0001-01-01";
+const LATEST_DATE = "9999-12-31";
 
 function invalid(message: string): AppError {
   return new AppError({ code: "INVALID_REQUEST", message });
@@ -108,6 +113,51 @@ export class DaysLogic extends Logic<DaysProps, Record<string, never>> {
       throw invalid("Choose a valid month.");
     }
     return this.deps.storage.days.listCalendarDays(monthDateRange(month));
+  }
+
+  /**
+   * The saved days from `startDate` to `endDate` (the whole journal when a
+   * bound is missing), oldest first, each with the mood and the activities
+   * that the owner sees: the taps that wait for a save count.
+   */
+  async listEffectiveDays({
+    startDate = EARLIEST_DATE,
+    endDate = LATEST_DATE,
+  }: {
+    startDate?: string | undefined;
+    endDate?: string | undefined;
+  }): Promise<EffectiveDay[]> {
+    if (!isLogicalDate(startDate) || !isLogicalDate(endDate)) {
+      throw invalid("Choose a valid date.");
+    }
+    const rows = await this.deps.storage.days.readEffectiveDayRows({
+      startDate,
+      endDate,
+    });
+    const linksOf = new Map<string, string[]>();
+    for (const link of rows.links) {
+      linksOf.set(link.entryId, [
+        ...(linksOf.get(link.entryId) ?? []),
+        link.activityId,
+      ]);
+    }
+    const selectionsOf = new Map<string, ActivitySelectionRow[]>();
+    for (const selection of rows.selections) {
+      selectionsOf.set(selection.logicalDate, [
+        ...(selectionsOf.get(selection.logicalDate) ?? []),
+        selection,
+      ]);
+    }
+    return rows.entries.map((row) => ({
+      logicalDate: row.logicalDate,
+      moodId: row.effectiveMoodId,
+      activityIds: [
+        ...applySelections({
+          saved: linksOf.get(row.id) ?? [],
+          selections: selectionsOf.get(row.logicalDate) ?? [],
+        }),
+      ],
+    }));
   }
 
   /** The day as the owner sees it. The entry is `null` for a day without one. */

@@ -48,20 +48,35 @@ const EXPRESSIONS: Record<number, ReactNode> = {
   ),
 };
 
-/** A drawn face for a mood, so that moods look the same on every device. */
+/**
+ * A drawn face for a mood, so that moods look the same on every device. Inside
+ * a chart, `x`, `y`, `width` and `height` place it.
+ */
 export function MoodFace({
   score,
   color,
   className,
+  x,
+  y,
+  width,
+  height,
 }: {
   score: number;
   color: string;
-  className: string;
+  className?: string;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
 }) {
   const level = Math.min(5, Math.max(1, Math.round(score)));
   return (
     <svg
       className={className}
+      x={x}
+      y={y}
+      width={width}
+      height={height}
       viewBox="0 0 64 64"
       aria-hidden="true"
       focusable="false"

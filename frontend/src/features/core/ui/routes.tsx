@@ -19,6 +19,7 @@ import {
   LogDateSwitcher,
 } from "../../days/ui/log-date-switcher.js";
 import { LogPage } from "../../days/ui/log-page.js";
+import { InsightsPage } from "../../insights/ui/insights-page.js";
 import { ThemeProvider } from "../../settings/ui/settings-context.js";
 import { SetupPage } from "../../settings/ui/setup-page.js";
 import { WeekLogic } from "../../settings/ui/week-logic.js";
@@ -27,7 +28,6 @@ import { AppShell, type ShellView } from "./app-shell.js";
 import { useFrontendApp } from "./frontend-app-context.js";
 import { ErrorBoundary } from "./error-boundary.js";
 import { PageErrorFallback } from "./error-fallbacks.js";
-import { InsightsPlaceholder } from "./placeholder-pages.js";
 import type { ProtectedPageContext } from "./signed-in-user.js";
 
 /** The sign-in page was at `/login`. Old links and bookmarks still arrive there. */
@@ -137,7 +137,7 @@ function JournalViews() {
     return <SetupPage account={<AccountSection />} />;
   }
   if (view === "insights") {
-    return <InsightsPlaceholder />;
+    return <InsightsPage weekEndsOn={weekEndsOn} />;
   }
   return (
     <LogPage
@@ -188,7 +188,7 @@ export function AppRoutes() {
               }
             >
               <Route path="/" element={<JournalViews />} />
-              <Route path="/insights" element={<InsightsPlaceholder />} />
+              <Route path="/insights" element={<JournalViews />} />
               <Route path="*" element={<NotFoundPage />} />
             </Route>
           </Route>

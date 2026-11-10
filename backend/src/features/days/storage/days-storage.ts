@@ -11,6 +11,7 @@ import type {
   ActivitySelectionRow,
   CompletionRow,
   DayRows,
+  EffectiveDayRow,
   EntryListRow,
   EntryRow,
   EntryWrite,
@@ -148,6 +149,53 @@ export class DaysStorage {
       links: links.rows,
       selections: selections.rows,
       completions: completions.rows,
+    };
+  }
+
+  /**
+   * Every saved day of a range, with the rows that decide its mood and its
+   * activities. Each query joins the entries of the range, so that it binds
+   * only the two dates, however many days the journal has.
+   */
+  async readEffectiveDayRows({
+    startDate,
+    endDate,
+  }: {
+    startDate: string;
+    endDate: string;
+  }): Promise<{
+    entries: EffectiveDayRow[];
+    links: ActivityLink[];
+    selections: ActivitySelectionRow[];
+  }> {
+    const { db } = this.deps;
+    const [entries, links, selections] = await Promise.all([
+      sql<EffectiveDayRow>`
+        select entries.id, entries.logical_date,
+          coalesce(selection.mood_id, entries.mood_id) as effective_mood_id
+        from entries left join day_mood_selections as selection
+          on selection.logical_date = entries.logical_date
+        where entries.deleted_at is null
+          and entries.logical_date between ${startDate} and ${endDate}
+        order by entries.logical_date`.execute(db),
+      sql<ActivityLink>`
+        select link.entry_id, link.activity_id
+        from entry_activities as link join entries on entries.id = link.entry_id
+        where entries.deleted_at is null
+          and entries.logical_date between ${startDate} and ${endDate}
+        order by link.entry_id, link.activity_id`.execute(db),
+      sql<ActivitySelectionRow>`
+        select selection.logical_date, selection.activity_id, selection.selected
+        from day_activity_selections as selection
+          join entries on entries.logical_date = selection.logical_date
+        where entries.deleted_at is null
+          and entries.logical_date between ${startDate} and ${endDate}
+        order by selection.logical_date, selection.activity_id`.execute(db),
+    ]);
+    return {
+      entries: entries.rows,
+      links: links.rows,
+      selections: selections.rows,
     };
   }
 

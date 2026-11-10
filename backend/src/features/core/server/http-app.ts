@@ -4,6 +4,7 @@ import { requestId } from "hono/request-id";
 import { secureHeaders } from "hono/secure-headers";
 import { createCatalogHandlers } from "../../catalog/handlers/catalog-handlers.js";
 import { createDayHandlers } from "../../days/handlers/day-handlers.js";
+import { createInsightsHandlers } from "../../insights/handlers/insights-handlers.js";
 import { createBlackBoxHandlers } from "../../black-box/handlers/black-box-handlers.js";
 import { createOAuthHandlers } from "../../auth/handlers/oauth-handlers.js";
 import { createMcpHandlers } from "../../mcp/handlers/mcp-handlers.js";
@@ -43,6 +44,7 @@ function createBusinessHttpApp({ app }: ApiHttpAppProps) {
     .get("/health", (context) => context.json({ ok: true as const }, 200))
     .route("/settings", createSettingsHandlers({ logic: app.logic }))
     .route("/catalog", createCatalogHandlers({ logic: app.logic }))
+    .route("/insights", createInsightsHandlers({ logic: app.logic }))
     .route("/", createDayHandlers({ logic: app.logic }));
 }
 
