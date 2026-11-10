@@ -100,6 +100,54 @@ The project's own choices, with their reasons. Read this file when you read
   the template takeover of the D1 paths. `backend/tsconfig.json` leaves out the
   two files that no longer compile, and `knip.jsonc` lists the unused ones.
 
+## One Worker on one origin
+
+- **The new app is one Cloudflare Worker.** It serves the API and the built
+  frontend (Workers static assets) on one origin, as the old app does. The page
+  calls the API on its own origin, so a deployment sends no CORS headers and
+  the cookie is first-party. `frontend/dist` is the assets directory. A path
+  that is not a file gets `index.html`, and the Worker answers `/api/*`,
+  `/health`, `/health/*` and the paths that later phases add (`/mcp`,
+  `/oauth/*`, `/.well-known/*`, `/llms.txt`).
+- **`wrangler.jsonc` is at the repository root.** The Deploy to Cloudflare
+  button reads the root, and `backend/` imports the workspace package
+  `common/`. The `cloudflare.bindings` description is in the root
+  `package.json`, and `.dev.vars.example` lists the secret. The config has the
+  same Worker name (`daylio-clone`) and the same D1 database as
+  `legacy/vanilla/wrangler.jsonc`, so the new app can replace the old one on
+  the same data. `migrations_dir` is `backend/migrations`, which holds the old
+  files under their old names. The hourly cron calls
+  `AuthSessionLogic.deleteExpired`, which removes expired sessions, challenges,
+  attempts, OAuth codes and tokens, as the old `scheduled` handler does.
+- **The frontend is built with an empty `VITE_API_BASE_URL`.** `pnpm run build`
+  sets it, so the page uses its own origin whatever a local `.env` says.
+- **The sign-in page is at `/login`, not `/sign-in`.** The old site used
+  `/sign-in`. A later change for the OAuth consent flow must send the browser
+  to `/login`, or the route must answer `/sign-in` too.
+- **The reset route is `POST /api/__black-box/reset`.** It empties each app
+  table between black-box tests, and adds the seed catalog of a new database
+  (five moods, five groups, twelve activities, two goals), as the old route
+  does. It exists only when `DAYMARK_BLACK_BOX` is `true`, which only
+  `scripts/black-box-next.mjs` sets. `BlackBoxStorage` plans the deletes and
+  the seed rows, `BlackBoxLogic` runs them in one batch and refuses without the
+  setting, and the HTTP app mounts the handler only when `config.blackBox` is
+  on. An integration test shows that it is absent without the setting. The
+  seed rows are in `black-box/utils/seed-catalog.ts` until the catalog feature
+  takes them over.
+- **The `next` target signs in with passkeys.** There is one Worker, and a test
+  with `authenticated: false` gets an empty instance. For `authenticated: true`
+  the fixture uses a virtual authenticator, opens the sign-in page, and saves
+  the first passkey with the setup code, as a real owner does, and gives the
+  test that page. The old app's `localhost` mode with no sign-in does not exist
+  in the new app.
+- **The `next` Worker runs with `wrangler dev` 4.158.0.** The runtime of the
+  4.92.0 version of the old app stopped at start-up with "Disallowed operation
+  called within global scope", from the Logic classes that the Worker builds
+  once for each isolate. Version 4.158.0 starts. The root `package.json` has it
+  as a dev dependency. The compatibility date is the one of the old Worker.
+- **The build checks of the template run on `next` only.** They use the passkey
+  sign-in on the Worker (`core/tests/browser/`).
+
 ## What the black-box tests do not cover
 
 - The import of a Daylio backup has no page. The site has no file field, and

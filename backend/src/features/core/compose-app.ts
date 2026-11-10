@@ -2,6 +2,8 @@ import { AuthPasskeyLogic } from "../auth/logic/auth-passkey-logic.js";
 import { AuthPasskeyManageLogic } from "../auth/logic/auth-passkey-manage-logic.js";
 import { AuthSessionLogic } from "../auth/logic/auth-session-logic.js";
 import { AuthStorage } from "../auth/storage/auth-storage.js";
+import { BlackBoxLogic } from "../black-box/logic/black-box-logic.js";
+import { BlackBoxStorage } from "../black-box/storage/black-box-storage.js";
 import { HealthLogic } from "../health/logic/health-logic.js";
 import { HealthStorage } from "../health/storage/health-storage.js";
 import { createRunAtomic } from "./database/atomic.js";
@@ -27,6 +29,7 @@ interface ComposeAppProps {
 function createStorage(db: Database): BackendStorage {
   return {
     auth: new AuthStorage({ db }),
+    blackBox: new BlackBoxStorage({ db }),
     health: new HealthStorage({ db }),
   };
 }
@@ -51,7 +54,8 @@ export function composeApp({
       services,
       atomic,
     }),
-    authSession: new AuthSessionLogic({ storage, services }),
+    authSession: new AuthSessionLogic({ storage, services, atomic }),
+    blackBox: new BlackBoxLogic({ storage, services, atomic, config }),
     health: new HealthLogic({ storage, services }),
   };
 

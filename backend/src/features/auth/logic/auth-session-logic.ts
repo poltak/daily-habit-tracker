@@ -1,13 +1,17 @@
 import { Logic } from "@app/common/features/core/logic/logic";
-import type { BackendLogicProps } from "../../core/logic/types.js";
+import type {
+  BackendAtomicProps,
+  BackendLogicProps,
+} from "../../core/logic/types.js";
 import { sha256Hex } from "../../core/utils/crypto.js";
 import type { AuthSession } from "../types.js";
 import {
+  CLEANUP_RETENTION_MS,
   SESSION_IDLE_TTL_MS,
   SESSION_RENEW_AFTER_MS,
 } from "../utils/session-times.js";
 
-type AuthSessionProps = BackendLogicProps<"auth", "clock">;
+type AuthSessionProps = BackendLogicProps<"auth", "clock"> & BackendAtomicProps;
 
 /** Reads and ends the session of a cookie token. Passkey sign-in starts one. */
 export class AuthSessionLogic extends Logic<
@@ -47,6 +51,18 @@ export class AuthSessionLogic extends Logic<
       });
     }
     return { passkeyId: session.passkeyId, renewed };
+  }
+
+  /** The hourly cron: remove what has expired, in one batch. */
+  async deleteExpired(): Promise<void> {
+    const now = this.deps.services.clock.now();
+    const dayAgo = now - CLEANUP_RETENTION_MS;
+    await this.deps.atomic((storage) => [
+      storage.auth.planDeleteExpiredSessions({ now }),
+      storage.auth.planDeleteExpiredChallenges({ now }),
+      storage.auth.planDeleteOldAttempts({ before: dayAgo }),
+      ...storage.auth.planDeleteExpiredOAuthRows({ now, dayAgo }),
+    ]);
   }
 
   async endSession({ token }: { token: string }): Promise<void> {

@@ -178,6 +178,76 @@ export class AuthStorage {
     });
   }
 
+  /** Sessions that nobody used for 180 days. */
+  planDeleteExpiredSessions({ now }: { now: number }): PlannedStatement<never> {
+    return planRaw({
+      sql: `DELETE FROM auth_sessions WHERE expires_at <= ?1`,
+      parameters: [now],
+    });
+  }
+
+  planDeleteExpiredChallenges({
+    now,
+  }: {
+    now: number;
+  }): PlannedStatement<never> {
+    return planRaw({
+      sql: `DELETE FROM auth_challenges WHERE expires_at <= ?1`,
+      parameters: [now],
+    });
+  }
+
+  /** Attempts that no rate limit counts any more. */
+  planDeleteOldAttempts({
+    before,
+  }: {
+    before: number;
+  }): PlannedStatement<never> {
+    return planRaw({
+      sql: `DELETE FROM auth_attempts WHERE created_at < ?1`,
+      parameters: [before],
+    });
+  }
+
+  // ---------- OAuth rows of the MCP endpoint ----------
+  // The OAuth server comes with a later feature. Its tables exist in the
+  // database, and its expired rows go with the rest.
+
+  /**
+   * Expired codes and tokens, grants with no refresh token after a day, and
+   * clients that nobody approved after a day. A client that the owner allowed
+   * once stays, because some clients use their client ID again after a
+   * disconnect.
+   */
+  planDeleteExpiredOAuthRows({
+    now,
+    dayAgo,
+  }: {
+    now: number;
+    dayAgo: number;
+  }): PlannedStatement<never>[] {
+    return [
+      planRaw({
+        sql: `DELETE FROM oauth_codes WHERE expires_at <= ?1`,
+        parameters: [now],
+      }),
+      planRaw({
+        sql: `DELETE FROM oauth_tokens WHERE expires_at <= ?1`,
+        parameters: [now],
+      }),
+      planRaw({
+        sql: `DELETE FROM oauth_grants WHERE created_at < ?1 AND NOT EXISTS (
+                SELECT 1 FROM oauth_tokens
+                WHERE oauth_tokens.grant_id = oauth_grants.id AND oauth_tokens.kind = 'refresh')`,
+        parameters: [dayAgo],
+      }),
+      planRaw({
+        sql: `DELETE FROM oauth_clients WHERE approved_at IS NULL AND created_at < ?1`,
+        parameters: [dayAgo],
+      }),
+    ];
+  }
+
   // ---------- Setup code attempts ----------
 
   planInsertAttempts(

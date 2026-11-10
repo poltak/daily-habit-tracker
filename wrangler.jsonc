@@ -1,0 +1,55 @@
+{
+  // This file is at the repository root because the Deploy to Cloudflare
+  // button reads the root, and the Worker imports the workspace package
+  // common/. See docs/agents/project/decisions.md.
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "daylio-clone",
+  "main": "backend/src/features/core/server/worker.ts",
+  "compatibility_date": "2026-05-22",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    // `pnpm run build` writes the frontend here, built for the same origin.
+    "directory": "frontend/dist",
+    // The Worker answers these paths. Later phases add the routes for /mcp,
+    // /oauth/*, /.well-known/* and /llms.txt.
+    "run_worker_first": [
+      "/api/*",
+      "/health",
+      "/health/*",
+      "/mcp",
+      "/oauth/*",
+      "/.well-known/*",
+      "/llms.txt",
+    ],
+    // Any other path gets index.html, and the router shows the page.
+    "not_found_handling": "single-page-application",
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "daylio-clone",
+      "database_id": "ae34a2d3-c377-41fc-8cf0-893104abfef8",
+      "migrations_dir": "backend/migrations",
+    },
+  ],
+  // Hourly removal of expired sessions, challenges, codes and tokens.
+  "triggers": {
+    "crons": ["0 * * * *"],
+  },
+  // Each instance sets its own setup code as a secret on its Worker, in the
+  // dashboard or by the Deploy to Cloudflare button.
+  // Keep the variables that the dashboard sets. Without this, each deploy
+  // deletes them.
+  "keep_vars": true,
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.05,
+    },
+  },
+}
