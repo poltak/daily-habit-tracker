@@ -53,6 +53,14 @@ export class CatalogStorage {
       .execute();
   }
 
+  findGoal({ id }: { id: string }): Promise<GoalRow | undefined> {
+    return this.deps.db
+      .selectFrom("goals")
+      .selectAll()
+      .where("id", "=", id)
+      .executeTakeFirst();
+  }
+
   /**
    * The rows of a new journal. `insert or ignore` keeps a row that exists, so
    * two first requests at once do no harm. One statement for each row, because

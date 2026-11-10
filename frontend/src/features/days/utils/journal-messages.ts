@@ -8,6 +8,7 @@ export const WAIT_BEFORE_SAVE =
   "Wait for the mood, activity, or goal update to finish before saving the entry.";
 export const WAIT_BEFORE_DELETE =
   "Wait for the mood, activity, or goal update to finish before deleting the entry.";
+export const OFFLINE_GOAL = "You’re offline. Reconnect before updating a goal.";
 export const PICK_MOOD = "Pick the mood that best sums up the day.";
 export const OFFLINE_SAVE = "You’re offline. Reconnect to save this entry.";
 export const OFFLINE_DELETE =

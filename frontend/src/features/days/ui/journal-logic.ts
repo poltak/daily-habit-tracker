@@ -19,19 +19,21 @@ import {
   undoActivityChange,
 } from "../utils/selection-change.js";
 import {
-  draftForOpenedDay,
   draftFromDayState,
   draftFromEntry,
   draftMatchesEntry,
   emptyDraft,
   sameDraft,
-  withKnownCatalog,
   type Draft,
 } from "../utils/draft.js";
+import { recoverDraft } from "../utils/recover-draft.js";
+import { fetchDayState } from "../utils/fetch-day-state.js";
+import { planGoalChange } from "../utils/goal-change.js";
 import {
   errorNotice,
   infoNotice,
   OFFLINE_DELETE,
+  OFFLINE_GOAL,
   OFFLINE_SAVE,
   PICK_MOOD,
   WAIT_BEFORE_DELETE,
@@ -43,7 +45,7 @@ import {
 type JournalProps = FrontendLogicProps<
   "days",
   "clock" | "dialogs" | "device" | "timers" | "windowFocus",
-  "catalog" | "entries" | "day-selections"
+  "catalog" | "entries" | "day-selections" | "goal-completions"
 >;
 
 const REFRESH_INTERVAL_MS = 15_000;
@@ -211,7 +213,8 @@ export class JournalLogic extends Logic<
       notice: null,
     });
     await this.executeTask("loadDay", async () => {
-      const state = await this.fetchDayState({
+      const state = await fetchDayState({
+        api: this.deps.api,
         logicalDate,
         errorText: "Could not load that date.",
         signal: this.signal,
@@ -238,22 +241,13 @@ export class JournalLogic extends Logic<
   }): Promise<void> {
     const { storage } = this.deps;
     const { entryActions } = this.plugins;
-    const stored = storage.days.readDraft({ logicalDate });
-    const matches =
-      stored !== null && (stored.version ?? 0) === (state.entry?.version ?? 0);
-    if (stored && !matches) {
-      storage.days.clearDraft({ logicalDate });
-    }
-    const opened = draftForOpenedDay({
+    const opened = recoverDraft({
+      storage: storage.days,
+      logicalDate,
       state,
-      recovered: matches ? stored : null,
+      catalog: this.plugins.catalog,
     });
-    // A draft from this device can name an activity that was deleted since.
-    let draft = withKnownCatalog({
-      record: opened.draft,
-      activityIds: this.plugins.catalog.knownActivityIds(),
-      goalIds: this.plugins.catalog.knownGoalIds(),
-    });
+    let { draft } = opened;
     let entry = state.entry;
     let recoveryError: string | null = null;
     if (entry && opened.restored) {
@@ -302,7 +296,8 @@ export class JournalLogic extends Logic<
     }
     await this.executeTask("refreshDay", async () => {
       const signal = this.dayRefreshes.start();
-      const state = await this.fetchDayState({
+      const state = await fetchDayState({
+        api: this.deps.api,
         logicalDate,
         errorText: "Could not refresh that date.",
         signal,
@@ -363,6 +358,36 @@ export class JournalLogic extends Logic<
           selected: change.selected,
           linkedGoalIds: change.linkedGoalIds,
         }),
+      apply: (current, result) => ({
+        draft: applyActivityResult({ target: current, result }),
+        entry:
+          this.state.entry &&
+          applyActivityResult({ target: this.state.entry, result }),
+      }),
+    });
+  }
+
+  /** Tap the switch of a goal. Its activity and shared goals follow. */
+  async toggleGoal({ goalId }: { goalId: string }): Promise<void> {
+    const { selectedDate: logicalDate, draft } = this.state;
+    const goals = this.plugins.catalog.state.goals;
+    const change = planGoalChange({ draft, goals, goalId });
+    if (!change || !this.canChangeSelection()) {
+      return;
+    }
+    if (!this.deps.services.device.isOnline()) {
+      this.setState({
+        connection: "offline",
+        notice: errorNotice(OFFLINE_GOAL),
+      });
+      return;
+    }
+    await this.changeSelection({
+      nextDraft: change.nextDraft,
+      undo: change.undo,
+      failure: "The goal was restored.",
+      send: () =>
+        this.plugins.selection.chooseGoal({ logicalDate, goalId, ...change }),
       apply: (current, result) => ({
         draft: applyActivityResult({ target: current, result }),
         entry:
@@ -589,31 +614,6 @@ export class JournalLogic extends Logic<
       this.state.loadDayState !== "running" &&
       !this.plugins.selection.isRunning
     );
-  }
-
-  private async fetchDayState({
-    logicalDate,
-    errorText,
-    signal,
-  }: {
-    logicalDate: string;
-    errorText: string;
-    signal: AbortSignal;
-  }): Promise<DayState> {
-    const response = await this.deps.api.entries[":logicalDate"].$get(
-      { param: { logicalDate } },
-      { init: { signal } },
-    );
-    // A day without an entry answers 404 with the same body, and a route
-    // that is missing answers 404 with an error.
-    if (response.status !== 200 && response.status !== 404) {
-      throw new Error(errorText);
-    }
-    const body = await response.json();
-    if (!("daySelections" in body)) {
-      throw new Error(errorText);
-    }
-    return body;
   }
 
   private changeDraft(draft: Draft): void {

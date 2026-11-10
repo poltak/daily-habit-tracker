@@ -250,6 +250,43 @@ export class DaysStorage {
     }));
   }
 
+  /** The days of a range on which the goal was completed, oldest first. */
+  async listCompletionDates({
+    goalId,
+    startDate,
+    endDate,
+  }: {
+    goalId: string;
+    startDate: string;
+    endDate: string;
+  }): Promise<string[]> {
+    const rows = await this.deps.db
+      .selectFrom("goalCompletions")
+      .select("logicalDate")
+      .where("goalId", "=", goalId)
+      .where("logicalDate", ">=", startDate)
+      .where("logicalDate", "<=", endDate)
+      .orderBy("logicalDate")
+      .execute();
+    return rows.map((row) => row.logicalDate);
+  }
+
+  /** The earliest day on which the goal was completed, on any date. */
+  async findFirstCompletionDate({
+    goalId,
+  }: {
+    goalId: string;
+  }): Promise<string | null> {
+    const row = await this.deps.db
+      .selectFrom("goalCompletions")
+      .select("logicalDate")
+      .where("goalId", "=", goalId)
+      .orderBy("logicalDate")
+      .limit(1)
+      .executeTakeFirst();
+    return row?.logicalDate ?? null;
+  }
+
   /** True when a save failed because another save changed the entry first. */
   isVersionConflict(error: unknown): boolean {
     return isNotNullViolation({ error, column: "entries.version" });

@@ -59,6 +59,18 @@
     "./features/days/utils/month-grid": {
       "types": "./dist/features/days/utils/month-grid.d.ts",
       "default": "./dist/features/days/utils/month-grid.js"
+    },
+    "./features/goals/types": {
+      "types": "./dist/features/goals/types.d.ts",
+      "default": "./dist/features/goals/types.js"
+    },
+    "./features/goals/utils/goal-history": {
+      "types": "./dist/features/goals/utils/goal-history.d.ts",
+      "default": "./dist/features/goals/utils/goal-history.js"
+    },
+    "./features/settings/types": {
+      "types": "./dist/features/settings/types.d.ts",
+      "default": "./dist/features/settings/types.js"
     }
   },
   "scripts": {

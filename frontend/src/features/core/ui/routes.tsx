@@ -11,6 +11,7 @@ import {
 import { AuthProvider, useAuth } from "../../auth/ui/auth-context.js";
 import { SessionGate } from "../../auth/ui/session-gate.js";
 import { SignInPage } from "../../auth/ui/sign-in-page.js";
+import { GoalPage } from "../../goals/ui/goal-page.js";
 import { CalendarPage } from "../../days/ui/calendar-page.js";
 import { JournalProvider, useJournal } from "../../days/ui/journal-context.js";
 import {
@@ -19,7 +20,7 @@ import {
 } from "../../days/ui/log-date-switcher.js";
 import { LogPage } from "../../days/ui/log-page.js";
 import { useLogicInstance } from "../logic/use-logic.js";
-import { AppShell, type ShellView } from "./app-shell.js";
+import { AppShell, type NavView, type ShellView } from "./app-shell.js";
 import { ErrorBoundary } from "./error-boundary.js";
 import { PageErrorFallback } from "./error-fallbacks.js";
 import { InsightsPlaceholder, SetupPlaceholder } from "./placeholder-pages.js";
@@ -42,10 +43,11 @@ const VIEW_TITLES: Record<ShellView, string> = {
   calendar: "Your calendar",
   insights: "Your insights",
   settings: "Your setup",
+  goal: "Goal history",
 };
 
 /** The address that opens each page. The old site kept the page in `?view=`. */
-const VIEW_PATHS: Record<ShellView, string> = {
+const VIEW_PATHS: Record<NavView, string> = {
   log: "/",
   calendar: "/?view=calendar",
   insights: "/insights",
@@ -67,6 +69,9 @@ function viewOfAddress({
     return null;
   }
   const requested = search.get("view");
+  if (requested === "goal" && search.get("goal")) {
+    return "goal";
+  }
   if (requested === "calendar" || requested === "entries") {
     return "calendar";
   }
@@ -111,6 +116,49 @@ function JournalFrame() {
   );
 }
 
+/** The goal page, with the catalog and the open day of the log. */
+function GoalRoute({ goalId }: { goalId: string }) {
+  const { logic, state } = useJournal();
+  const catalog = useLogicInstance(logic.plugins.catalog);
+  const location = useLocation();
+  const navigate = useNavigate();
+  if (catalog.loadCatalogState === "error") {
+    return (
+      <div className="journal-loading">
+        <div className="notice error" role="alert">
+          <p>{catalog.loadCatalogError}</p>
+          <button
+            type="button"
+            className="loading-retry"
+            onClick={() => void logic.loadJournal()}
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+  if (catalog.loadCatalogState !== "success" || !state.selectedDate) {
+    return (
+      <div className="journal-loading" aria-busy="true">
+        <output className="sr-only">Loading goal…</output>
+      </div>
+    );
+  }
+  return (
+    <GoalPage
+      goal={catalog.goals.find((goal) => goal.id === goalId && !goal.archived)}
+      initialMonth={state.selectedDate.slice(0, 7)}
+      // The page that opened the goal is one step back. A goal opened by its address has none.
+      onBack={() =>
+        location.key === "default"
+          ? navigate("/", { replace: true })
+          : navigate(-1)
+      }
+    />
+  );
+}
+
 /** The pages that share the address `/`, told apart by `?view=`. */
 function JournalViews() {
   const auth = useAuth();
@@ -121,6 +169,9 @@ function JournalViews() {
   if (view === "calendar") {
     // The day on which a week ends comes from the setup page of a later phase.
     return <CalendarPage weekEndsOn={0} />;
+  }
+  if (view === "goal") {
+    return <GoalRoute goalId={search.get("goal") ?? ""} />;
   }
   if (view === "settings") {
     return (

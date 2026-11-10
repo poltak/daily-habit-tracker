@@ -13,6 +13,8 @@ import type { DaysLogic } from "../days/logic/days-logic.js";
 import type { DaysStorage } from "../days/storage/days-storage.js";
 import type { BlackBoxLogic } from "../black-box/logic/black-box-logic.js";
 import type { BlackBoxStorage } from "../black-box/storage/black-box-storage.js";
+import type { SettingsLogic } from "../settings/logic/settings-logic.js";
+import type { SettingsStorage } from "../settings/storage/settings-storage.js";
 import type { HealthLogic } from "../health/logic/health-logic.js";
 import type { HealthStorage } from "../health/storage/health-storage.js";
 import type { RunAtomic } from "./logic/types.js";
@@ -24,6 +26,7 @@ export interface BackendStorage {
   catalog: CatalogStorage;
   days: DaysStorage;
   health: HealthStorage;
+  settings: SettingsStorage;
 }
 
 /**
@@ -51,6 +54,7 @@ export interface BackendLogic {
   catalog: CatalogLogic;
   days: DaysLogic;
   health: HealthLogic;
+  settings: SettingsLogic;
 }
 
 /**

@@ -283,6 +283,95 @@ export class DaysLogic extends Logic<DaysProps, Record<string, never>> {
     };
   }
 
+  /** The days of a range on which the goal was completed, oldest first. */
+  listCompletionDates(input: {
+    goalId: string;
+    startDate: string;
+    endDate: string;
+  }): Promise<string[]> {
+    return this.deps.storage.days.listCompletionDates(input);
+  }
+
+  /** The earliest day on which the goal was completed, on any date. */
+  findFirstCompletionDate(input: { goalId: string }): Promise<string | null> {
+    return this.deps.storage.days.findFirstCompletionDate(input);
+  }
+
+  /**
+   * The owner taps the switch of a goal. A goal with an activity follows that
+   * activity: the activity and every goal that it completes change together.
+   * A goal without an activity changes alone.
+   */
+  async setGoalCompletion({
+    logicalDate,
+    goalId,
+    completed,
+  }: {
+    logicalDate: string;
+    goalId: string;
+    completed: boolean;
+  }): Promise<SelectionResult> {
+    this.requireStartedDate(logicalDate);
+    const { storage } = this.deps;
+    const [links, entry] = await Promise.all([
+      storage.days.listGoalLinks(),
+      storage.days.findEntryRow({ logicalDate }),
+    ]);
+    const goal = links.find((link) => link.id === goalId);
+    if (!goal) {
+      throw invalid("One goal is no longer available.");
+    }
+    const { activityId } = goal;
+    const linkedGoalIds = activityId
+      ? links
+          .filter((link) => !link.archived && link.activityId === activityId)
+          .map((link) => link.id)
+          .toSorted()
+      : [goalId];
+    const entryId = entry && !entry.deletedAt ? entry.id : null;
+    const timestamp = this.timestamp();
+    await this.deps.atomic((planning) => [
+      ...linkedGoalIds.map((linkedId) =>
+        completed
+          ? planning.days.planUpsertCompletion({
+              goalId: linkedId,
+              logicalDate,
+              entryId,
+              timestamp,
+            })
+          : planning.days.planDeleteCompletion({
+              goalId: linkedId,
+              logicalDate,
+            }),
+      ),
+      ...(activityId
+        ? [
+            planning.days.planUpsertActivitySelection({
+              logicalDate,
+              activityId,
+              selected: completed,
+              timestamp,
+            }),
+          ]
+        : []),
+    ]);
+    const entryField = entryId === null ? {} : { entryId };
+    const selection = activityId
+      ? { logicalDate, activityId, selected: completed }
+      : undefined;
+    return {
+      completion: { goalId, logicalDate, completed, ...entryField },
+      ...(selection ? { selection } : {}),
+      affectedGoalCompletions: linkedGoalIds.map((linkedId) => ({
+        goalId: linkedId,
+        logicalDate,
+        completed,
+        ...entryField,
+      })),
+      affectedActivitySelections: selection ? [selection] : [],
+    };
+  }
+
   private timestamp(): string {
     return new Date(this.deps.services.clock.now()).toISOString();
   }

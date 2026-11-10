@@ -8,4 +8,6 @@ export type ConnectionState = "checking" | "online" | "offline" | "error";
 
 /** The tap that waits for the server. */
 export type PendingSelection =
-  { kind: "mood" } | { kind: "activity"; id: string };
+  | { kind: "mood" }
+  | { kind: "activity"; id: string }
+  | { kind: "goal"; id: string };

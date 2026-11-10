@@ -3,6 +3,8 @@ import { cors } from "hono/cors";
 import { requestId } from "hono/request-id";
 import { secureHeaders } from "hono/secure-headers";
 import { createCatalogHandlers } from "../../catalog/handlers/catalog-handlers.js";
+import { createGoalHandlers } from "../../goals/handlers/goal-handlers.js";
+import { createSettingsHandlers } from "../../settings/handlers/settings-handlers.js";
 import { createDayHandlers } from "../../days/handlers/day-handlers.js";
 import { createBlackBoxHandlers } from "../../black-box/handlers/black-box-handlers.js";
 import { createOAuthHandlers } from "../../auth/handlers/oauth-handlers.js";
@@ -41,6 +43,8 @@ function createBusinessHttpApp({ app }: ApiHttpAppProps) {
     .use("*", requireSession())
     .get("/health", (context) => context.json({ ok: true as const }, 200))
     .route("/catalog", createCatalogHandlers({ logic: app.logic }))
+    .route("/settings", createSettingsHandlers({ logic: app.logic }))
+    .route("/", createGoalHandlers({ logic: app.logic }))
     .route("/", createDayHandlers({ logic: app.logic }));
 }
 

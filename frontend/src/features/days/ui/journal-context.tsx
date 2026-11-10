@@ -30,6 +30,7 @@ export function JournalProvider({ children }: { children: ReactNode }) {
         catalog: app.api.catalog,
         entries: app.api.entries,
         "day-selections": app.api["day-selections"],
+        "goal-completions": app.api["goal-completions"],
       },
     }),
     [app],
