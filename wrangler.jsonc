@@ -11,24 +11,12 @@
     // `pnpm run build` writes the frontend here, built for the same origin.
     "directory": "frontend/dist",
     "binding": "ASSETS",
-    // The Worker answers these paths. The last three are the pages of the
-    // frontend router (APP_PAGES in worker.ts). Later phases add the route
-    // for /llms.txt, and each new page.
-    "run_worker_first": [
-      "/api/*",
-      "/health",
-      "/health/*",
-      "/mcp",
-      "/oauth/*",
-      "/.well-known/*",
-      "/llms.txt",
-      "/sign-in",
-      "/login",
-      "/insights",
-    ],
-    // A path that is not a file or a page gets frontend/public/404.html and a
-    // 404 status.
-    "not_found_handling": "404-page",
+    // The Worker sees every request first. It serves the files, the app
+    // pages (APP_PAGES in worker.ts) and the backend routes, and it answers
+    // an unknown path with index.html and a 404 status. The assets alone
+    // cannot send a 404 with index.html.
+    "run_worker_first": true,
+    "not_found_handling": "none",
   },
   "d1_databases": [
     {

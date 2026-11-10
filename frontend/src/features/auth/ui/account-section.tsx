@@ -135,6 +135,7 @@ export function AccountSection() {
           Sign out
         </button>
       </div>
+      {auth.state.signOutError && <p role="alert">{auth.state.signOutError}</p>}
       <h3 className="account-subheading">Connected apps</h3>
       {connectionNotice && (
         <output className={`settings-notice ${connectionNotice.kind}`}>

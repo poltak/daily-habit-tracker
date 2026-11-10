@@ -2,6 +2,8 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { requestId } from "hono/request-id";
 import { secureHeaders } from "hono/secure-headers";
+import { createCatalogHandlers } from "../../catalog/handlers/catalog-handlers.js";
+import { createDayHandlers } from "../../days/handlers/day-handlers.js";
 import { createBlackBoxHandlers } from "../../black-box/handlers/black-box-handlers.js";
 import { createOAuthHandlers } from "../../auth/handlers/oauth-handlers.js";
 import { createMcpHandlers } from "../../mcp/handlers/mcp-handlers.js";
@@ -34,14 +36,14 @@ interface HttpAppProps extends ApiHttpAppProps {
   clientAddressHeader?: string | undefined;
 }
 
-/**
- * Every business route, including future routes, shares the session gate.
- */
-function createBusinessHttpApp({ logic }: Pick<App, "logic">) {
+/** Every business route shares the session gate. */
+function createBusinessHttpApp({ app }: ApiHttpAppProps) {
   return new Hono<AuthEnvironment>()
     .use("*", requireSession())
     .get("/health", (context) => context.json({ ok: true as const }, 200))
-    .route("/settings", createSettingsHandlers({ logic }));
+    .route("/settings", createSettingsHandlers({ logic: app.logic }))
+    .route("/catalog", createCatalogHandlers({ logic: app.logic }))
+    .route("/", createDayHandlers({ logic: app.logic }));
 }
 
 /**
@@ -54,7 +56,7 @@ export function createApiHttpApp({ app }: ApiHttpAppProps) {
     .use("*", requireTrustedOrigin({ config: app.config }))
     .use("*", resolveSession({ services: app.services, logic: app.logic }))
     .route("/auth", createAuthHandlers({ logic: app.logic }))
-    .route("/", createBusinessHttpApp({ logic: app.logic }));
+    .route("/", createBusinessHttpApp({ app }));
 }
 
 export function createHttpApp({ app, clientAddressHeader }: HttpAppProps) {
