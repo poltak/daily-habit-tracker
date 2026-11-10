@@ -76,10 +76,11 @@ export default defineConfig({
     legacyOwnerOrigin: LEGACY_OWNER_ORIGIN,
     legacyPasskeyOrigin: LEGACY_PASSKEY_ORIGIN,
   },
-  // The build checks in `core/tests/browser/`, and the black box tests in each
-  // feature's `black-box-tests/` directory.
+  // The build checks in `core/tests/browser/`, the black box tests in each
+  // feature's `black-box-tests/` directory, and the API black-box tests in
+  // its `api-tests/` directory (docs/agents/project/rules.md).
   testDir: "src/features",
-  testMatch: "**/*.spec.ts",
+  testMatch: ["**/*.spec.ts", "**/*.api-spec.ts"],
   testIgnore: app.testIgnore,
   outputDir: ".browser-test/results",
   // The build has one backend address in it. Each test file or test starts

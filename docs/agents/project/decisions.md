@@ -70,8 +70,10 @@ The project's own choices, with their reasons. Read this file when you read
 - The import of a Daylio backup has no page. The site has no file field, and
   the import runs with `scripts/daylio_import.py` and `POST /api/import`.
 - The MCP endpoint, the OAuth pages and routes, the content of the export file,
-  `/api/health` and the other routes that no page calls are for API
-  black-box tests in a later phase.
+  `/api/health` and the other routes that no page calls have API black-box
+  tests in `api-tests/` directories. See [rules](rules.md). The import of a
+  Daylio backup has them too, and sends the normalized JSON that
+  `scripts/daylio_import.py` makes.
 - Drafts in device storage are not reachable through the page: a mood or an
   activity is stored on the server at once, so a draft stays only when a
   request is lost, and the page clears it then. The UI Logic tests of the new
