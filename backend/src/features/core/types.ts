@@ -4,6 +4,10 @@ import type { AuthPasskeyManageLogic } from "../auth/logic/auth-passkey-manage-l
 import type { AuthSessionLogic } from "../auth/logic/auth-session-logic.js";
 import type { PasskeyServiceInterface } from "../auth/services/types.js";
 import type { AuthStorage } from "../auth/storage/auth-storage.js";
+import type { CatalogLogic } from "../catalog/logic/catalog-logic.js";
+import type { CatalogStorage } from "../catalog/storage/catalog-storage.js";
+import type { DaysLogic } from "../days/logic/days-logic.js";
+import type { DaysStorage } from "../days/storage/days-storage.js";
 import type { BlackBoxLogic } from "../black-box/logic/black-box-logic.js";
 import type { BlackBoxStorage } from "../black-box/storage/black-box-storage.js";
 import type { HealthLogic } from "../health/logic/health-logic.js";
@@ -14,6 +18,8 @@ import type { ClockServiceInterface } from "./services/types.js";
 export interface BackendStorage {
   auth: AuthStorage;
   blackBox: BlackBoxStorage;
+  catalog: CatalogStorage;
+  days: DaysStorage;
   health: HealthStorage;
 }
 
@@ -36,6 +42,8 @@ export interface BackendLogic {
   authPasskeyManage: AuthPasskeyManageLogic;
   authSession: AuthSessionLogic;
   blackBox: BlackBoxLogic;
+  catalog: CatalogLogic;
+  days: DaysLogic;
   health: HealthLogic;
 }
 

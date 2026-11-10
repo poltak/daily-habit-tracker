@@ -1,16 +1,10 @@
+import type { SeedInsert } from "../storage/types.js";
+
 /**
- * The catalog that a new database of the old app starts with. The reset route
- * adds it back after it empties the tables, because the old app adds it to an
- * empty database on the first request. The catalog feature takes it over.
+ * The catalog that a new database starts with: five moods, five groups, twelve
+ * activities and two goals. The first read of an empty catalog adds it, as the
+ * old app did, and the reset route of the black-box tests adds it back.
  */
-
-type Row = readonly (string | number | null)[];
-
-export interface SeedInsert {
-  /** The SQL with one `?` for each value. */
-  sql: string;
-  rows: readonly Row[];
-}
 
 export const SEED_MOODS: SeedInsert = {
   sql: "insert or ignore into mood_levels (id, score, name, emoji, color, sort_order) values (?, ?, ?, ?, ?, ?)",

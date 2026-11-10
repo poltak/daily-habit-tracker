@@ -1,0 +1,646 @@
+/* ---------- Log: mood ---------- */
+
+.log-form {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.log-form[aria-busy="true"] {
+  opacity: 0.8;
+}
+.log-form > .mood-panel {
+  order: 1;
+}
+.log-form > .goals-panel {
+  order: 2;
+}
+.log-form > .activities-panel {
+  order: 3;
+}
+.log-form > .secondary-button {
+  align-self: flex-start;
+  margin-top: 14px;
+}
+
+.mood-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+}
+.mood-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 12px 2px 11px;
+  border: 0;
+  border-radius: 20px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 650;
+}
+.mood-emoji {
+  display: block;
+  width: clamp(44px, 13vw, 60px);
+  height: auto;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  transition:
+    transform 0.22s cubic-bezier(0.3, 1.6, 0.5, 1),
+    opacity 0.2s ease,
+    filter 0.2s ease,
+    box-shadow 0.2s ease;
+}
+.mood-grid:has(.selected) .mood-option:not(.selected) .mood-emoji {
+  opacity: 0.45;
+  filter: saturate(0.55);
+}
+.mood-option.selected {
+  background: color-mix(in srgb, var(--mood-color) 16%, var(--card));
+  color: var(--ink);
+}
+.mood-option.selected .mood-emoji {
+  transform: scale(1.08);
+  box-shadow:
+    0 0 0 3px var(--card),
+    0 0 0 5px var(--mood-color),
+    0 12px 22px -10px var(--mood-color);
+}
+
+/* ---------- Log: goals ---------- */
+
+.goal-list {
+  display: grid;
+  gap: 8px;
+}
+.goal-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px;
+  border: 1px solid transparent;
+  border-radius: 18px;
+  background: var(--surface-subtle);
+  color: var(--ink);
+  transition:
+    background-color 0.16s ease,
+    border-color 0.16s ease;
+}
+.goal-row.checked {
+  background: var(--surface-selected);
+}
+.goal-checkbox {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-inverse);
+  font-size: 15px;
+}
+.goal-checkbox::before {
+  content: "";
+  grid-area: 1 / 1;
+  width: 26px;
+  height: 26px;
+  border: 2px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--card);
+  transition:
+    background-color 0.16s ease,
+    border-color 0.16s ease;
+}
+.goal-checkbox > .material-symbols-rounded {
+  grid-area: 1 / 1;
+  z-index: 1;
+}
+.goal-row.checked .goal-checkbox::before {
+  border-color: var(--positive);
+  background: var(--positive);
+  animation: pop 0.28s ease;
+}
+.goal-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  min-height: 46px;
+  padding: 0 6px 0 2px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+.goal-copy {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.goal-copy strong {
+  font-size: 14.5px;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.goal-copy strong .material-symbols-rounded {
+  margin-right: 3px;
+  color: var(--muted);
+  font-size: 18px;
+  vertical-align: -4px;
+}
+.goal-copy small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.goal-arrow {
+  color: var(--muted);
+  font-size: 20px;
+}
+
+/* ---------- Log: activities ---------- */
+
+/* Grows to three rows of chips, then scrolls, so the groups below stop moving. The padding keeps focus rings from being clipped. */
+.selection-row {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 6px;
+  min-height: 48px;
+  max-height: 132px;
+  margin: -8px -6px 8px;
+  padding: 6px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.selection-empty {
+  align-self: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+.selection-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  max-width: 100%;
+  height: 36px;
+  padding: 0 8px 0 11px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface-selected);
+  color: var(--positive-strong);
+  font-size: 12.5px;
+  font-weight: 650;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  animation: rise 0.2s ease both;
+}
+.selection-chip > .material-symbols-rounded {
+  font-size: 16px;
+}
+.selection-chip > span:last-child {
+  display: grid;
+  place-items: center;
+  opacity: 0.55;
+  font-size: 13px;
+}
+
+.activity-groups {
+  display: grid;
+}
+.activity-groups details {
+  border-top: 1px solid var(--line);
+}
+.activity-groups details:first-child {
+  border-top: 0;
+}
+.activity-groups details[open] {
+  padding-bottom: 14px;
+}
+.activity-groups summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 60px;
+  padding: 8px 2px;
+  color: var(--ink);
+  cursor: pointer;
+  list-style: none;
+}
+.activity-groups summary::-webkit-details-marker,
+.activity-groups summary::marker {
+  display: none;
+  content: "";
+}
+.group-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+.group-icon {
+  --tone: var(--tone-1);
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--tone) 18%, var(--card));
+  color: color-mix(in srgb, var(--tone) 62%, var(--ink));
+}
+.group-icon .material-symbols-rounded {
+  font-size: 21px;
+}
+.activity-groups details:nth-child(8n + 2) .group-icon {
+  --tone: var(--tone-2);
+}
+.activity-groups details:nth-child(8n + 3) .group-icon {
+  --tone: var(--tone-3);
+}
+.activity-groups details:nth-child(8n + 4) .group-icon {
+  --tone: var(--tone-4);
+}
+.activity-groups details:nth-child(8n + 5) .group-icon {
+  --tone: var(--tone-5);
+}
+.activity-groups details:nth-child(8n + 6) .group-icon {
+  --tone: var(--tone-6);
+}
+.activity-groups details:nth-child(8n + 7) .group-icon {
+  --tone: var(--tone-7);
+}
+.activity-groups details:nth-child(8n + 8) .group-icon {
+  --tone: var(--tone-8);
+}
+.group-summary-meta,
+.management-group-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 550;
+}
+.group-summary-meta > span {
+  white-space: nowrap;
+}
+.group-expand-icon {
+  font-size: 20px;
+  transition: transform 0.2s ease;
+}
+details[open] > summary .group-expand-icon {
+  transform: rotate(180deg);
+}
+.add-activity-button {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface-selected);
+  color: var(--positive-strong);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+details:not([open]) > summary .add-activity-button {
+  display: none;
+}
+/* An open group also shows the Add new button. Where the group name and the buttons do not fit on one line, the buttons go below the name. */
+.activity-groups details[open] > summary {
+  flex-wrap: wrap;
+}
+
+.activity-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding-top: 2px;
+}
+.activity-button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  min-height: 54px;
+  padding: 8px 34px 8px 8px;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  background: var(--surface-subtle);
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 550;
+  text-align: left;
+}
+.activity-button > span:not(.activity-icon):not(.check-mark) {
+  overflow-wrap: anywhere;
+}
+.activity-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--card);
+  color: var(--muted);
+  font-size: 19px;
+  line-height: 1;
+  box-shadow: inset 0 0 0 1px var(--line);
+  transition:
+    background-color 0.16s ease,
+    color 0.16s ease;
+}
+.activity-button.selected {
+  border-color: color-mix(in srgb, var(--positive) 45%, transparent);
+  background: var(--surface-selected);
+  color: var(--positive-strong);
+}
+.activity-button.selected .activity-icon {
+  background: var(--positive);
+  color: var(--ink-inverse);
+  box-shadow: none;
+}
+.check-mark {
+  position: absolute;
+  right: 11px;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  transform: translateY(-50%);
+  color: var(--positive);
+  font-size: 15px;
+}
+
+/* ---------- Log: save bar ---------- */
+
+.save-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 16px;
+  padding: 18px 18px 18px 22px;
+  border-radius: var(--radius);
+  background: var(--save-bg);
+  color: var(--save-foreground);
+  box-shadow: var(--shadow-lg);
+}
+.save-bar > div:first-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.save-bar strong {
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+.save-bar span {
+  color: var(--save-muted);
+  font-size: 12.5px;
+}
+.save-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.save-bar .primary-button {
+  background: var(--brand);
+  color: var(--brand-ink);
+  box-shadow: var(--accent-shadow);
+}
+.save-bar .primary-button.is-saved {
+  background: color-mix(in srgb, var(--save-foreground) 12%, transparent);
+  color: var(--save-foreground);
+  box-shadow: none;
+  opacity: 1;
+}
+.save-bar .ghost-button {
+  color: var(--save-foreground);
+}
+.save-bar .ghost-button.danger {
+  color: #f7b3a3;
+}
+
+/* ---------- Calendar ---------- */
+
+.calendar-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.calendar-heading h2 {
+  margin: 0;
+  font-size: 24px;
+  letter-spacing: -0.02em;
+}
+.calendar-weekdays,
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 5px;
+}
+.calendar-weekdays {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-transform: uppercase;
+}
+.calendar-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  aspect-ratio: 1;
+  min-height: 42px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: var(--surface-subtle);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.calendar-day.filled {
+  background: color-mix(
+    in srgb,
+    var(--calendar-mood-color, var(--positive)) 20%,
+    var(--card)
+  );
+  color: var(--ink);
+}
+.calendar-day.today {
+  box-shadow: inset 0 0 0 2px var(--ink);
+  color: var(--ink);
+}
+.calendar-day.not-started {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+.calendar-mood-emoji {
+  display: block;
+  width: clamp(18px, 5.4vw, 28px);
+  height: auto;
+  aspect-ratio: 1;
+}
+.calendar-blank {
+  aspect-ratio: 1;
+  min-height: 42px;
+}
+.calendar-loading {
+  margin: 13px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+.calendar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-top: 16px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.calendar-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.legend-dot {
+  width: 11px;
+  height: 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--surface-subtle);
+}
+.legend-dot.filled {
+  border-color: transparent;
+  background: var(--brand);
+}
+
+@media (hover: hover) {
+  .mood-option:hover:not(:disabled) .mood-emoji {
+    transform: translateY(-3px) scale(1.06);
+    opacity: 1;
+    filter: none;
+  }
+  .activity-button:hover:not(:disabled):not(.selected),
+  .goal-row:hover:not(.checked) {
+    border-color: var(--line-strong);
+    background: var(--surface-muted);
+  }
+  .calendar-page .calendar-day:hover:not(:disabled) {
+    border-color: var(--line-strong);
+    color: var(--ink);
+  }
+  .add-activity-button:hover {
+    background: var(--mint);
+  }
+}
+.mood-option:active .mood-emoji,
+.activity-button:active {
+  transform: scale(0.97);
+}
+@media (min-width: 621px) {
+  .activity-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .calendar-weekdays,
+  .calendar-grid {
+    gap: 8px;
+  }
+  .calendar-day,
+  .calendar-blank {
+    aspect-ratio: auto;
+    height: clamp(62px, 9.5vh, 86px);
+  }
+  .calendar-day {
+    border-radius: 18px;
+    font-size: 13px;
+  }
+  .calendar-mood-emoji {
+    width: 30px;
+  }
+  .save-bar {
+    padding: 22px 22px 22px 28px;
+  }
+}
+@media (min-width: 960px) {
+  .loading-panels {
+    display: grid;
+    grid-template-columns: 5fr 7fr;
+    gap: 20px;
+  }
+}
+@media (min-width: 1100px) {
+  .log-form {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    grid-template-areas: "hero hero" "notice notice" "mood activities" "goals activities" ". activities";
+    gap: 0 20px;
+    align-items: start;
+  }
+  .log-form > * {
+    grid-column: 1 / -1;
+  }
+  .log-form > .hero-card {
+    grid-area: hero;
+  }
+  .log-form > .notice {
+    grid-area: notice;
+    margin-bottom: 4px;
+  }
+  .log-form > .mood-panel {
+    grid-area: mood;
+  }
+  .log-form > .goals-panel {
+    grid-area: goals;
+  }
+  .log-form > .activities-panel {
+    grid-area: activities;
+  }
+}
+@media (max-width: 360px) {
+  .group-summary-meta {
+    gap: 6px;
+  }
+}
+@media (max-width: 620px) {
+  .save-actions {
+    width: 100%;
+  }
+  .save-actions .primary-button {
+    flex: 1;
+  }
+}

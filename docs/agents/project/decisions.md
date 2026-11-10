@@ -132,8 +132,8 @@ The project's own choices, with their reasons. Read this file when you read
   the seed rows, `BlackBoxLogic` runs them in one batch and refuses without the
   setting, and the HTTP app mounts the handler only when `config.blackBox` is
   on. An integration test shows that it is absent without the setting. The
-  seed rows are in `black-box/utils/seed-catalog.ts` until the catalog feature
-  takes them over.
+  seed rows are in `catalog/utils/seed-catalog.ts`, and `BlackBoxLogic` plans
+  them through `CatalogStorage.planSeedCatalog`.
 - **The `next` target signs in with passkeys.** There is one Worker, and a test
   with `authenticated: false` gets an empty instance. For `authenticated: true`
   the fixture uses a virtual authenticator, opens the sign-in page, and saves
@@ -162,3 +162,59 @@ The project's own choices, with their reasons. Read this file when you read
   request is lost, and the page clears it then. The UI Logic tests of the new
   app cover the storage.
 - The service worker is off on `localhost`, so the offline shell is not tested.
+
+## The log, the days and the catalog
+
+- **The catalog read is `GET /api/catalog`.** It gives `{ moods, groups,
+activities, goals }` in the JSON of the old `/api/bootstrap`, without
+  `settings`, `today` and `yesterday`: the device knows its own day, and the
+  settings feature gives the week. The first read of a catalog with no mood
+  adds the starting catalog (five moods, five groups, twelve activities, two
+  goals), as the old app did on its first request, so that a new deployment
+  works. `CatalogStorage` and `CatalogLogic` have read methods only.
+- **The days routes keep the old paths and the JSON of a success.** They are
+  `GET /api/entries` (paging), `GET`, `PUT` and `DELETE /api/entries/:date`,
+  `PUT /api/day-selections/:date/mood` and `.../activities/:id`, and
+  `GET /api/calendar?month=`. `GET /api/entries/:date` answers 404 with the
+  same body when the day has no entry. A refusal has the shared error body
+  (`error.code`, `error.message`): 400 for a bad value, and 409 `CONFLICT` for
+  a save or a delete with a stale version.
+- **A save writes the entry in one batch.** The statement of the entry sets
+  the version to `NULL` when the row has another version than the caller read.
+  `NOT NULL` then stops the whole batch, and `DaysStorage.isVersionConflict`
+  turns that into the 409. `saveEntry` is the save of the page. `saveDay` is the
+  save of a whole day, with the goals that follow the activities. It has no
+  route yet: the MCP tool `save_day` calls it. `goal_completions` rows are
+  written by the day selections and by `saveDay`. The goals feature adds the
+  route that toggles a goal on its own.
+- **The log is one `JournalLogic` for the whole session.** `JournalProvider`
+  owns it above the routes, so that the open day and the search stay when the
+  owner opens the calendar and comes back. The Logic has four plugins: the
+  catalog read, the taps (mood and activities), the save and the delete, and
+  the swipe on the date row. The calendar page owns a `CalendarLogic` for its
+  month.
+- **Four Services are new.** `clock` (the day on the clock of the device),
+  `dialogs` (the question before a delete), `device` (online, in view, and the
+  leave warning of the browser) and `timers` (the 15 second refresh and the one
+  minute check of the day). A test root gives fakes: `clock.advance`,
+  `dialogs.answerWith`, `device.setOnline`, `device.setVisible`, and
+  `timers.fire({ intervalMs })`.
+- **The draft on the device keeps the keys of the old app**
+  (`daymark:draft:v1:<date>` and `daymark:active-draft-date:v1`).
+  `DaysStorage` of the frontend reads and writes them through the injected
+  `localStorage`.
+- **The styles of the template are in the `template` layer.** `app.css` has its
+  rules inside `@layer template`, so that the styles of the journal win:
+  `journal-base.css` (tokens and a reset that has no weight and covers only
+  `.journal-shell`), `journal-shell.css` and `days/ui/days.css`. They come from
+  `legacy/app/globals.css`, with `.app-shell` renamed to `.journal-shell`,
+  because the template uses `.app-shell` for the sign-in page.
+- **Pages that a later phase builds.** The goal switches of the log are
+  disabled until the goals feature adds the route that toggles a goal.
+  `+ Add new` of a group and the goal button open `/?view=add-activity` and
+  `/?view=goal`, and the log answers those addresses until the catalog and
+  goals pages exist. Insights and Setup are placeholders with the old headings
+  (`core/ui/placeholder-pages.tsx`). The calendar starts its week on Monday
+  (`weekEndsOn` 0) until Setup gives the stored value. The header has no
+  "Sign out" button. The Setup placeholder has one, so that a session can end,
+  and `built-app.spec.ts` signs out from there.

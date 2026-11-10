@@ -16,3 +16,20 @@ export function isUniqueViolation({
     message.includes("UNIQUE constraint failed") && message.includes(column)
   );
 }
+
+/**
+ * A `NOT NULL` rule that a statement broke on purpose. `column` has the form
+ * `table.column` of the database.
+ */
+export function isNotNullViolation({
+  error,
+  column,
+}: {
+  error: unknown;
+  column: string;
+}): boolean {
+  const message = error instanceof Error ? error.message : "";
+  return (
+    message.includes("NOT NULL constraint failed") && message.includes(column)
+  );
+}

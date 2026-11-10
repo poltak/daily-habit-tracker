@@ -4,14 +4,13 @@ import {
   type PlannedStatement,
 } from "../../core/database/planned-statement.js";
 import type { BackendStorageProps } from "../../core/storage/types.js";
-import type { SeedInsert } from "../utils/seed-catalog.js";
 
 /** Quote a table name as an SQL identifier. */
 function quoteName(name: string): string {
   return `"${name.replaceAll('"', '""')}"`;
 }
 
-/** The deletes and the seed rows of the reset route for the black-box tests. */
+/** The deletes of the reset route for the black-box tests. */
 export class BlackBoxStorage {
   constructor(private readonly deps: BackendStorageProps) {}
 
@@ -33,13 +32,6 @@ export class BlackBoxStorage {
   /** Let the foreign keys wait for the end of the batch, so the deletes can run in any order. */
   planDeferForeignKeys(): PlannedStatement<never> {
     return planRaw({ sql: "pragma defer_foreign_keys = on" });
-  }
-
-  /** One statement for each row, because a D1 statement binds one row of values. */
-  planSeedRows({ insert }: { insert: SeedInsert }): PlannedStatement<never>[] {
-    return insert.rows.map((row) =>
-      planRaw({ sql: insert.sql, parameters: row }),
-    );
   }
 
   planDeleteAllRows({

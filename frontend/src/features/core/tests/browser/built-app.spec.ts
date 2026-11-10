@@ -47,14 +47,16 @@ test("should keep the session across a reload", async () => {
   await page.reload();
 
   await expect(page).toHaveURL(new RegExp(`${MISSING_PAGE}$`));
-  await expect(page.getByRole("button", { name: "Sign out" })).toBeEnabled();
+  await expect(
+    page.getByRole("navigation", { name: "Primary navigation" }),
+  ).toBeVisible();
 });
 
 test("should open another page from a link without a page load", async () => {
   let pageLoads = 0;
   page.on("load", () => (pageLoads += 1));
 
-  await page.getByRole("link", { name: APP_NAME, exact: true }).click();
+  await page.getByRole("button", { name: "Go to log" }).click();
 
   await expect(page).not.toHaveURL(new RegExp(`${MISSING_PAGE}$`));
   await expect(
@@ -65,6 +67,7 @@ test("should open another page from a link without a page load", async () => {
 });
 
 test("should sign the owner out, and ask for sign-in again", async () => {
+  await page.getByRole("button", { name: "Setup", exact: true }).click();
   await page.getByRole("button", { name: "Sign out" }).click();
 
   await expect(page).toHaveURL(/\/login$/);

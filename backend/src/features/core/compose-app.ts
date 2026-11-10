@@ -4,6 +4,10 @@ import { AuthSessionLogic } from "../auth/logic/auth-session-logic.js";
 import { AuthStorage } from "../auth/storage/auth-storage.js";
 import { BlackBoxLogic } from "../black-box/logic/black-box-logic.js";
 import { BlackBoxStorage } from "../black-box/storage/black-box-storage.js";
+import { CatalogLogic } from "../catalog/logic/catalog-logic.js";
+import { CatalogStorage } from "../catalog/storage/catalog-storage.js";
+import { DaysLogic } from "../days/logic/days-logic.js";
+import { DaysStorage } from "../days/storage/days-storage.js";
 import { HealthLogic } from "../health/logic/health-logic.js";
 import { HealthStorage } from "../health/storage/health-storage.js";
 import { createRunAtomic } from "./database/atomic.js";
@@ -30,6 +34,8 @@ function createStorage(db: Database): BackendStorage {
   return {
     auth: new AuthStorage({ db }),
     blackBox: new BlackBoxStorage({ db }),
+    catalog: new CatalogStorage({ db }),
+    days: new DaysStorage({ db }),
     health: new HealthStorage({ db }),
   };
 }
@@ -56,6 +62,8 @@ export function composeApp({
     }),
     authSession: new AuthSessionLogic({ storage, services, atomic }),
     blackBox: new BlackBoxLogic({ storage, services, atomic, config }),
+    catalog: new CatalogLogic({ storage, services, atomic }),
+    days: new DaysLogic({ storage, services, atomic }),
     health: new HealthLogic({ storage, services }),
   };
 
