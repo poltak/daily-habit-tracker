@@ -1,6 +1,6 @@
 import unittest
 
-from scripts.daylio_import import normalize_backup
+from daylio_import import normalize_backup
 
 
 class DaylioImportTests(unittest.TestCase):

@@ -2,8 +2,8 @@
 
 Daymark has one owner. The owner signs in with a passkey. MCP clients, such
 as Claude Code, sign in with OAuth 2.1, and the owner allows each client with
-a passkey session. The code is in `worker/auth/`. Both Workers call
-`withAuth` before their own routes.
+a passkey session. The code is in `backend/src/features/auth/`. The Worker checks
+the session or the access token before the routes of the app.
 
 The design is the same as in calocount (`calocount/docs/sign-in.md`). Daymark
 has no Cloudflare Access mode and no owner key, because it has one deployment
@@ -11,18 +11,10 @@ and one owner.
 
 ## Local development
 
-Requests to `localhost`, `127.0.0.1` and `[::1]` skip sign-in, so
-`pnpm run dev` and the integration tests need no passkey. A public host name
-always needs sign-in.
-
-To try passkeys locally, put these lines in `.dev.vars`:
-
-```sh
-DAYMARK_LOCAL_PASSKEYS=true
-DAYMARK_SETUP_CODE=a long local setup code
-```
-
-Then run `pnpm run dev` and open `http://localhost:3000`. Browsers allow
+There is no local mode: a request to `localhost` needs a session, as any other
+request does. Copy `.dev.vars.example` to `.dev.vars`, and set
+`DAYMARK_SETUP_CODE` to a long local phrase. Run `pnpm run dev`, open
+`http://localhost:5173`, type the setup code and save a passkey. Browsers allow
 passkeys on `localhost`, but not on `127.0.0.1`.
 
 ## Setup code
@@ -144,7 +136,7 @@ These steps keep the data. They change only the sign-in.
 1. Add the setup code to the Worker:
 
    ```sh
-   pnpm exec wrangler secret put DAYMARK_SETUP_CODE --config vanilla/wrangler.jsonc
+   pnpm exec wrangler secret put DAYMARK_SETUP_CODE
    ```
 
    Versions before passkey support do not read this value, so you can add it
@@ -161,7 +153,7 @@ These steps keep the data. They change only the sign-in.
 5. In Cloudflare Zero Trust, open **Access > Applications**, and delete the
    daymark application.
 6. Open the app in a private window. You must see the daymark sign-in page,
-   not Access. `curl https://<host>/api/bootstrap` must return `401`.
+   not Access. `curl https://<host>/api/catalog` must return `401`.
 7. Connect Claude Code again, as in the README. Do this after step 5, because
    Access blocks `/oauth/*` while it is in front.
 8. Delete the secrets `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` and `ALLOWED_EMAIL`.

@@ -3,8 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { SET_UP_HEADING, setUp, startVisit } from "./built-app-visit.js";
 
 // These tests are one visit to the built app, in one page, on the Worker that
-// serves the API and the frontend. They run on the `next` target only. Each
-// test starts where the test before it ended, and a failure skips the tests
+// serves the API and the frontend. Each test starts where the test before it ended, and a failure skips the tests
 // after it.
 test.describe.configure({ mode: "serial" });
 

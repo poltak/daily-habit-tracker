@@ -5,15 +5,6 @@ import { LogPageObject } from "../../days/black-box-tests/log-page-object.js";
 import { SetupPageObject } from "./setup-page-object.js";
 
 test.describe("sign-in section of the setup page", () => {
-  test("should show no sign-in section on a local server", async ({ page }) => {
-    const setup = new SetupPageObject(page);
-    await setup.goto();
-    await expect(setup.exportButton).toBeVisible();
-
-    await expect(setup.signInHeading).toBeHidden();
-    await expect(setup.signOutButton).toBeHidden();
-  });
-
   test.describe("with passkeys", () => {
     test.use({ authenticated: false, passkeyDevice: true });
 

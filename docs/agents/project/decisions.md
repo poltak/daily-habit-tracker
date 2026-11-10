@@ -5,62 +5,41 @@ The project's own choices, with their reasons. Read this file when you read
 
 ## The port onto the template
 
-- The old app moved to `legacy/` and keeps running until the new app has each
-  workflow. The black-box tests run against it first, so that the rebuild has
-  a fixed target. The same tests then run against the new app with no change,
-  because they know only what a user sees.
-- Production uses the plain-DOM site in `legacy/vanilla/` (`worker.ts`,
-  `wrangler.jsonc`, `build.mjs`). The React frontend in `legacy/app/` is an
-  older version that production does not serve. The black-box tests cover the
-  plain-DOM site only.
-- `BLACK_BOX_TARGET` selects `legacy` or `next` in
-  `frontend/playwright.config.ts`. The default is `legacy` until the new app
-  passes each black-box test. The change that makes `next` the default deletes
-  `legacy/` and the `legacy` paths of the config and the fixture. The `next`
-  path is still the template's own: its Worker, sign-in and reset route come
-  with a later phase.
-- The old app changes only to give an element a role or an accessible name for
-  the tests, and for the test-only reset route. The changes are:
-  `aria-label` on the activity groups of the log and of Setup, `role="img"` on
-  the day cells of the goal history, `role="group"` and a name on the weekly
-  results and on the period summary of Insights.
+- The app was rebuilt on the template. The old app (a plain-DOM site on a
+  Worker) is deleted. Its data stays: the new app uses the same Worker name,
+  the same D1 database and the same tables. Its choices that still hold are in
+  the sections below.
+- The black-box tests were written against the old app first, so that the
+  rebuild had a fixed target. They know only what a user sees, so they run on
+  the new app with no change.
+- `frontend/playwright.config.ts` has one target: the app as one Worker. There
+  is no target switch.
+- The import tool `scripts/daylio_import.py` came from the old app. It reads a
+  `.daylio` backup only, and needs no file of the app.
 
-## The black-box tests on the old app
+## The black-box tests
 
-- `legacy/scripts/black-box-serve.mjs` builds the plain site when one of its
-  inputs changed, and starts two local Workers on that build with
-  `wrangler dev --local`. Each has its own migrated D1 database.
-  - `owner`: sign-in is off, because a request to `localhost` skips it, so
-    each browser is the owner. A test with `authenticated: true` (the default)
-    uses it.
-  - `passkey`: `DAYMARK_LOCAL_PASSKEYS=true` turns sign-in on for `localhost`,
-    and `DAYMARK_SETUP_CODE` is a known value (`black-box-setup-code`). A test
-    with `authenticated: false` uses it.
-    The script starts a Worker again when it stops, and gives each readiness
-    request a limit of 5 seconds.
-- The ports start at `LEGACY_BLACK_BOX_PORT` (default 4344) for the `owner`
-  Worker, and the next port is the `passkey` Worker. The default is outside
-  the 4274 to 4314 range that another project uses at the same time. The
-  database folders are `legacy/.wrangler/black-box/<port>/`, so two runs on
-  other ports do not share one.
+- `scripts/black-box-next.mjs` builds the backend and the frontend, migrates a
+  fresh local D1 in `.wrangler/black-box/`, and starts the Worker with
+  `wrangler dev --local` on `NEXT_BLACK_BOX_PORT` (default 4354, outside the
+  4274 to 4314 range that another project uses at the same time). The setup
+  code is `black-box-setup-code`.
 - `wrangler dev` did not stop on the passkey sign-in request here. Calocount
   saw a "Network connection lost" stop in the dev proxy with the same request.
   If it comes back, run the Worker through Miniflare directly.
-- Each Worker has one database for a whole run, so the fixture empties it
-  before each test through a reset route. `POST /api/__black-box/reset`
-  (`legacy/worker/black-box.ts`) deletes each row of each table, and adds the
-  seed catalog that a new database has (five groups, twelve activities, two
-  goals, five moods). The route exists only when `DAYMARK_BLACK_BOX` is `true`,
-  which only the serve script sets. It answers before the sign-in gate.
-- The tests use the real clock. The old Worker reads "today" from its own
-  clock, and the site reads it from the browser, so a browser clock alone would
-  give the two sides different days. Each browser is in UTC, so that the
-  owner's day and the browser's day match. A run across midnight UTC can fail.
+- The Worker has one database for a whole run, so the fixture empties it
+  before each test through a reset route (see below).
+- The tests use the real clock. The Worker reads "today" from its own clock,
+  and the site reads it from the browser, so a browser clock alone would give
+  the two sides different days. Each browser is in UTC, so that the owner's
+  day and the browser's day match. A run across midnight UTC can fail.
   `local-day.spec.ts` uses two other zones and computes the expected day in the
   test, so it does not depend on the time of the run.
 - Passkeys come from a Chromium virtual authenticator that says yes to each
   request (the `passkeyDevice` option and `otherDevicePage`). The setup code is
-  `setupCode` in the fixture.
+  `setupCode` in the fixture. A test with `authenticated: true` (the default)
+  starts as the signed-in owner. A test with `authenticated: false` starts on
+  an empty instance.
 - The browser asks before it leaves a page that has a save in progress. A test
   waits until the day is stored (the page objects wait for a button to take
   clicks again) before it opens another address.
@@ -77,7 +56,7 @@ The project's own choices, with their reasons. Read this file when you read
   shape of a D1 binding, with the limits of D1. It runs the files of
   `backend/migrations` in the order of their names.
 - **`backend/migrations/0000` to `0010` are the SQL files of the old app
-  (`legacy/drizzle/`), under their old names.** The production D1 database
+  (its drizzle folder), under their old names.** The production D1 database
   `daylio-clone` recorded those names as applied. Its tables keep their old
   columns (`ADOPTED_TABLES` in `core/database/table-kinds.ts`). A new table or
   change is a new file from `0011_<name>.sql` up, and a new table has the
@@ -92,9 +71,9 @@ The project's own choices, with their reasons. Read this file when you read
   again. The secret `DAYMARK_SETUP_CODE` saves a passkey without a session,
   also when passkeys exist, and 10 wrong codes of one network (50 of all
   networks) in 15 minutes stop it. The last passkey cannot go.
-- **The new app has no local mode.** The old app skips sign-in for requests to
-  `localhost`, unless `DAYMARK_LOCAL_PASSKEYS` is `true`. The new backend
-  always needs a session, and a local run or a test signs in with a passkey.
+- **There is no local mode.** The old app skipped sign-in for requests to
+  `localhost`. The backend always needs a session, and a local run or a test
+  signs in with a passkey.
 - **The PostgreSQL migration system stays on disk, unused.** The migration
   check reads it, and the project takes over those template paths later with
   the template takeover of the D1 paths. `backend/tsconfig.json` leaves out the
@@ -103,20 +82,18 @@ The project's own choices, with their reasons. Read this file when you read
 ## One Worker on one origin
 
 - **The new app is one Cloudflare Worker.** It serves the API and the built
-  frontend (Workers static assets) on one origin, as the old app does. The page
+  frontend (Workers static assets) on one origin. The page
   calls the API on its own origin, so a deployment sends no CORS headers and
   the cookie is first-party. `frontend/dist` is the assets directory. A path
   that is not a file gets `index.html`, and the Worker answers `/api/*`,
-  `/health`, `/health/*` and the paths that later phases add (`/mcp`,
-  `/oauth/*`, `/.well-known/*`, `/llms.txt`).
+  `/health`, `/health/*`, `/oauth/*` and `/.well-known/*`.
 - **`wrangler.jsonc` is at the repository root.** The Deploy to Cloudflare
   button reads the root, and `backend/` imports the workspace package
   `common/`. The `cloudflare.bindings` description is in the root
   `package.json`, and `.dev.vars.example` lists the secret. The config has the
-  same Worker name (`daylio-clone`) and the same D1 database as
-  `legacy/vanilla/wrangler.jsonc`, so the new app can replace the old one on
-  the same data. `migrations_dir` is `backend/migrations`, which holds the old
-  files under their old names. The hourly cron calls
+  same Worker name (`daylio-clone`) and the same D1 database as the old app
+  had, so the new app replaced the old one on the same data. `migrations_dir`
+  is `backend/migrations`, which holds the old files under their old names. The hourly cron calls
   `AuthSessionLogic.deleteExpired`, which removes expired sessions, challenges,
   attempts, OAuth codes and tokens, as the old `scheduled` handler does.
 - **The frontend is built with an empty `VITE_API_BASE_URL`.** `pnpm run build`
@@ -143,27 +120,28 @@ The project's own choices, with their reasons. Read this file when you read
   `createHttpApp` skips `secureHeaders` on `/oauth/authorize`.
 - **The reset route is `POST /api/__black-box/reset`.** It empties each app
   table between black-box tests, and adds the seed catalog of a new database
-  (five moods, five groups, twelve activities, two goals), as the old route
-  does. It exists only when `DAYMARK_BLACK_BOX` is `true`, which only
+  (five moods, five groups, twelve activities, two goals). It exists only when `DAYMARK_BLACK_BOX` is `true`, which only
   `scripts/black-box-next.mjs` sets. `BlackBoxStorage` plans the deletes and
   the seed rows, `BlackBoxLogic` runs them in one batch and refuses without the
   setting, and the HTTP app mounts the handler only when `config.blackBox` is
   on. An integration test shows that it is absent without the setting. The
   seed rows are in `catalog/utils/seed-catalog.ts`, and `BlackBoxLogic` plans
   them through `CatalogStorage.planSeedCatalog`.
-- **The `next` target signs in with passkeys.** There is one Worker, and a test
-  with `authenticated: false` gets an empty instance. For `authenticated: true`
-  the fixture uses a virtual authenticator, opens the sign-in page, and saves
-  the first passkey with the setup code, as a real owner does, and gives the
-  test that page. The old app's `localhost` mode with no sign-in does not exist
-  in the new app.
-- **The `next` Worker runs with `wrangler dev` 4.158.0.** The runtime of the
-  4.92.0 version of the old app stopped at start-up with "Disallowed operation
-  called within global scope", from the Logic classes that the Worker builds
-  once for each isolate. Version 4.158.0 starts. The root `package.json` has it
-  as a dev dependency. The compatibility date is the one of the old Worker.
-- **The build checks of the template run on `next` only.** They use the passkey
-  sign-in on the Worker (`core/tests/browser/`).
+- **The black-box fixture signs in with passkeys.** For `authenticated: true`
+  it uses a virtual authenticator, opens the sign-in page, and saves the first
+  passkey with the setup code, as a real owner does, and gives the test that
+  page.
+- **The Worker runs with `wrangler dev` 4.158.0.** Version 4.92.0 stopped at
+  start-up with "Disallowed operation called within global scope", from the
+  Logic classes that the Worker builds once for each isolate. The root
+  `package.json` has 4.158.0 as a dev dependency.
+- **The build checks of the template** use the passkey sign-in on the Worker
+  (`core/tests/browser/`).
+- **`pnpm run dev` runs the Worker and Vite.** `scripts/dev.mjs` migrates the
+  local D1 and starts `wrangler dev` on `DEV_WORKER_PORT` (default 8787) and
+  the Vite dev server with hot reload. Vite proxies `/api`, `/health`,
+  `/oauth` and `/.well-known` to the Worker and keeps the `Host` header, so
+  passkeys and the origin check work on `localhost:5173`.
 
 ## What the black-box tests do not cover
 
@@ -201,9 +179,8 @@ activities, goals }` in the JSON of the old `/api/bootstrap`, without
   `NOT NULL` then stops the whole batch, and `DaysStorage.isVersionConflict`
   turns that into the 409. `saveEntry` is the save of the page. `saveDay` is the
   save of a whole day, with the goals that follow the activities. It has no
-  route yet: the MCP tool `save_day` calls it. `goal_completions` rows are
-  written by the day selections and by `saveDay`. The goals feature adds the
-  route that toggles a goal on its own.
+  route: the MCP tool `save_day` calls it. `goal_completions` rows are written
+  by the day selections, by `saveDay` and by the goal route.
 - **The log is one `JournalLogic` for the whole session.** `JournalProvider`
   owns it above the routes, so that the open day and the search stay when the
   owner opens the calendar and comes back. The Logic has four plugins: the
@@ -224,17 +201,8 @@ activities, goals }` in the JSON of the old `/api/bootstrap`, without
   rules inside `@layer template`, so that the styles of the journal win:
   `journal-base.css` (tokens and a reset that has no weight and covers only
   `.journal-shell`), `journal-shell.css` and `days/ui/days.css`. They come from
-  `legacy/app/globals.css`, with `.app-shell` renamed to `.journal-shell`,
+  the old stylesheet, with `.app-shell` renamed to `.journal-shell`,
   because the template uses `.app-shell` for the sign-in page.
-- **Pages that a later phase builds.** The goal switches of the log are
-  disabled until the goals feature adds the route that toggles a goal.
-  `+ Add new` of a group and the goal button open `/?view=add-activity` and
-  `/?view=goal`, and the log answers those addresses until the catalog and
-  goals pages exist. Insights and Setup are placeholders with the old headings
-  (`core/ui/placeholder-pages.tsx`). The calendar starts its week on Monday
-  (`weekEndsOn` 0) until Setup gives the stored value. The header has no
-  "Sign out" button. The Setup placeholder has one, so that a session can end,
-  and `built-app.spec.ts` signs out from there.
 
 ## MCP, the import and the export
 

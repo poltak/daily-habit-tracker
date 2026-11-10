@@ -12,8 +12,6 @@
 pnpm-lock.yaml
 .swamp/
 .swamp.yaml
-# The old app has its own format rules, and the rebuild replaces it.
-legacy/
 # The old app's documents.
 docs/*.md
 DAYLIO_DISCOVERY.md

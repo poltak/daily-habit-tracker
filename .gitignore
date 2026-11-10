@@ -180,7 +180,6 @@ vite.config.ts.timestamp-*
 
 # dependencies
 /node_modules
-/legacy/node_modules
 /.pnp
 .pnp.*
 .yarn/*
@@ -191,13 +190,10 @@ vite.config.ts.timestamp-*
 
 # testing
 /coverage
-/legacy/coverage
 
 # next.js
 /.next/
-/legacy/.next/
 /.vinext/
-/legacy/.vinext/
 /out/
 
 # misc
@@ -220,14 +216,6 @@ yarn-error.log*
 # typescript
 next-env.d.ts
 /dist/
-/legacy/dist/
-/vanilla/dist/
-/legacy/vanilla/dist/
-/vanilla/dist-bundled/
-/legacy/vanilla/dist-bundled/
-/vanilla/.wrangler/
-/legacy/.wrangler/
-/legacy/vanilla/.wrangler/
 /.wrangler/
 /outputs/
 /work/
@@ -236,23 +224,8 @@ next-env.d.ts
 /.obsidian/
 /Untitled.md
 
-# starter/example files not used by Daymark
-/examples/
-/legacy/examples/
-/app/chatgpt-auth.ts
-/legacy/app/chatgpt-auth.ts
-/next.config.ts
-/legacy/next.config.ts
-/public/file.svg
-/legacy/public/file.svg
-/public/globe.svg
-/legacy/public/globe.svg
-/public/window.svg
-/legacy/public/window.svg
-
 # generated TypeScript/Python artifacts
 /tsconfig.tsbuildinfo
-/legacy/tsconfig.tsbuildinfo
 **/__pycache__/
 *.py[cod]
 

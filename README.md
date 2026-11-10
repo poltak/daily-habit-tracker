@@ -2,26 +2,26 @@
 
 Daymark is a small, server-backed Daylio-style journal for a single-user deployment. It stores
 one mood, selected activities, and goal completions per logical calendar date.
-The frontend is a mobile-first PWA with plain DOM code and no framework. The
-data is in Cloudflare D1.
+The frontend is a mobile-first PWA built with React and Vite. One Cloudflare
+Worker serves the API and the frontend, and the data is in Cloudflare D1.
 
 ## Local development
 
-Prerequisites: Node.js `>=22.13.0` and Python 3.
+Prerequisites: Node.js (the version in `.nvmrc`), pnpm and Python 3 (for the
+import tool).
 
 ```bash
 pnpm install
+cp .dev.vars.example .dev.vars   # then set DAYMARK_SETUP_CODE
 pnpm run dev
 ```
 
-`pnpm run dev` builds the plain site, applies the checked-in D1 migrations, and
-starts the production Worker with Wrangler on `http://localhost:3000`. It has no
-hot reload. Run it again after a change. The backend is not mocked or
-memory-only. Wrangler provides the local D1 binding. Requests to `localhost`
-skip sign-in. To try passkeys locally, see [docs/sign-in.md](docs/sign-in.md).
-
-The earlier React app is still in the repository. `pnpm run dev:react` starts it
-with hot reload, and `pnpm run dev:react:wrangler` runs its compiled Worker.
+`pnpm run dev` applies the checked-in D1 migrations, starts the Worker with
+Wrangler on a local D1, and starts Vite with hot reload on
+`http://localhost:5173`. The backend is not mocked or memory-only. Sign-in
+needs a passkey, also on `localhost`: type the setup code on the first visit.
+See [docs/sign-in.md](docs/sign-in.md) and
+[the project setup](docs/agents/project/setup.md).
 
 If `pnpm install` fails while it builds `sharp` from source, a system copy of
 libvips is installed. Run `SHARP_IGNORE_GLOBAL_LIBVIPS=1 pnpm install`.
@@ -29,11 +29,10 @@ libvips is installed. Run `SHARP_IGNORE_GLOBAL_LIBVIPS=1 pnpm install`.
 Useful checks:
 
 ```bash
-pnpm test
-pnpm run test:import
-pnpm run lint
 pnpm run typecheck
-pnpm run build
+pnpm run lint
+pnpm run test:feature
+pnpm run check
 ```
 
 ## Import a Daylio backup
@@ -51,11 +50,15 @@ python3 scripts/daylio_import.py \
 The script validates the Daylio v15 ZIP/Base64 format, handles the different
 month conventions used by entries and goal history, preserves source IDs and
 raw state values, skips photo bytes, and reports CSV mismatches. Send the
-report to a running local app:
+report to the app with the owner's session cookie (copy it from the browser;
+its name is `__Host-daymark_session`, and `daymark_session` on `localhost`).
+The app refuses a write from another origin, so the request names its own:
 
 ```bash
-curl -X POST http://localhost:3000/api/import \
+curl -X POST http://localhost:5173/api/import \
   -H 'content-type: application/json' \
+  -H 'origin: http://localhost:5173' \
+  -H 'cookie: daymark_session=<value>' \
   --data-binary @/tmp/daylio-normalized.json
 ```
 
@@ -115,14 +118,8 @@ same name are told apart by their group, for example `Walk (Health)`. `save_day`
 accepts names or IDs, and it keeps goals and activities coupled the way the Log
 screen does: listing an activity completes the goals linked to it.
 
-Connect Claude Code to a local dev server, which needs no authentication:
-
-```bash
-claude mcp add --transport http daymark http://localhost:3000/api/mcp
-```
-
-In production the endpoint needs an OAuth access token. Add the server, then
-run `/mcp` in Claude Code and choose to authenticate:
+The endpoint needs an OAuth access token. Add the server, then run `/mcp` in
+Claude Code and choose to authenticate:
 
 ```bash
 claude mcp add --transport http daymark https://<your-host>/api/mcp
@@ -135,13 +132,14 @@ apps and disconnects them. The details are in [docs/sign-in.md](docs/sign-in.md)
 
 ## Cloudflare deployment
 
-`wrangler.jsonc` declares the D1 binding and migrations. The GitHub workflow
-`.github/workflows/deploy-production.yml` deploys production on pushes to
-`main` or `master`. It runs lint and the full test command, applies all checked-in
-D1 migrations to the remote `daylio-clone` database, and then runs `pnpm run deploy`.
-The Worker deploy does not start if lint, tests, or migrations fail. If the
-Worker deploy fails after migrations succeed, the database remains migrated and
-the next workflow run applies only pending migrations before retrying the deploy.
+`wrangler.jsonc` declares the Worker, the D1 binding and the migrations. The
+GitHub workflow `.github/workflows/deploy-production.yml` deploys production
+on pushes to `main` or `master`. It runs `pnpm run check`, and then
+`pnpm run deploy`, which builds, applies all checked-in D1 migrations to the
+remote `daylio-clone` database and deploys the Worker. The deploy does not
+start if a check fails. If the Worker deploy fails after migrations succeed,
+the database remains migrated and the next workflow run applies only pending
+migrations before retrying the deploy.
 
 Before the first production push:
 
@@ -162,55 +160,13 @@ The owner signs in with a passkey. Before the first sign-in, add a setup code
 with at least 12 characters as a secret of the Worker:
 
 ```bash
-pnpm exec wrangler secret put DAYMARK_SETUP_CODE --config vanilla/wrangler.jsonc
+pnpm exec wrangler secret put DAYMARK_SETUP_CODE
 ```
 
 Then open the app, type the setup code, and save a passkey. The setup code
 also adds a passkey after you lose all your devices. Sign-in, the OAuth server
 for MCP clients, and the move from Cloudflare Access are in
 [docs/sign-in.md](docs/sign-in.md).
-
-## Framework-free build
-
-The `vanilla/` directory is the production runtime. It has no React, no Next.js
-layer, and no Tailwind. The browser gets the page in `vanilla/site/index.html`,
-the scripts in `vanilla/site/js`, and the stylesheets in `app/`. The Worker in
-`vanilla/worker.ts` sends each `/api` request to the route handlers in
-`app/api/`.
-
-```bash
-pnpm run build:vanilla
-pnpm run dev
-```
-
-`pnpm run build:vanilla` does not use a bundler. It copies the scripts as they
-are, erases the type annotations from the `lib/` modules that the scripts import,
-and writes the result to `vanilla/dist/b/<build>/`. The build name in the path
-lets the browser cache each file for one year. `pnpm run deploy` deploys
-`vanilla/wrangler.jsonc` as the `daylio-clone` Worker.
-
-`tests/api.integration.test.mjs` runs against the vanilla Worker. To run it
-against the React Worker, set `DAYMARK_WRANGLER_CONFIG=dist/server/wrangler.json`.
-
-To compare the two runtimes, start each one on its own port with its own copy of
-the local D1 state. Then give the two URLs to the scripts in `vanilla/bench/`.
-The scripts that open a browser need Playwright on `NODE_PATH`, as the browser
-tests do.
-
-| Script            | What it does                                                                                                        |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `seed.mjs`        | Writes the same synthetic journal to a local server.                                                                |
-| `compare-dom.mjs` | Checks that both servers show the same elements, text, and boxes in each view.                                      |
-| `size.mjs`        | Reports the bytes for the browser and for the Worker, and the source lines.                                         |
-| `load.mjs`        | Measures a first visit and a repeat visit, with and without CPU and network throttling.                             |
-| `interact.mjs`    | Measures the main-thread time of 14 interactions.                                                                   |
-| `lighthouse.mjs`  | Runs Lighthouse on each server. Set `LIGHTHOUSE_BIN` to the Lighthouse command.                                     |
-| `bundle.mjs`      | Makes a bundled copy of the plain site in `vanilla/dist-bundled/`. This copy shows the effect of the request count. |
-
-```bash
-node vanilla/bench/seed.mjs http://localhost:3101
-node vanilla/bench/load.mjs react=http://localhost:3101 plain=http://localhost:3102
-```
 
 ## The template
 
@@ -219,6 +175,3 @@ changes. [`template-version.json`](template-version.json) names the template
 and the last template commit that the project has. The `sync-template`
 workflow takes the new commits, and
 [setup](docs/agents/setup.md#changes-from-the-template) has its commands.
-
-The port onto the template is in progress. Until it ends, the running app is
-the old app in [`legacy/`](legacy/README.md).
