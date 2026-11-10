@@ -9,6 +9,13 @@ import {
   useSearchParams,
 } from "react-router";
 import { AuthProvider, useAuth } from "../../auth/ui/auth-context.js";
+import { AddActivityPage } from "../../catalog/ui/add-activity-page.js";
+import {
+  CatalogSections,
+  CatalogSetupNotice,
+} from "../../catalog/ui/catalog-sections.js";
+import { CatalogSetupProvider } from "../../catalog/ui/catalog-setup-context.js";
+import { GoalSetupPage } from "../../catalog/ui/goal-setup-page.js";
 import { AccountSection } from "../../auth/ui/account-section.js";
 import { SessionGate } from "../../auth/ui/session-gate.js";
 import { SignInPage } from "../../auth/ui/sign-in-page.js";
@@ -80,6 +87,26 @@ function viewOfAddress({
     : "log";
 }
 
+/** The pages that open from another page. They have no button in the navigation. */
+function subViewOfAddress({
+  pathname,
+  search,
+}: {
+  pathname: string;
+  search: URLSearchParams;
+}): "add-activity" | "goal" | null {
+  const requested = search.get("view");
+  return pathname === "/" &&
+    (requested === "add-activity" || requested === "goal")
+    ? requested
+    : null;
+}
+
+const SUB_VIEW_TITLES = {
+  "add-activity": "Add activity",
+  goal: "Goal history",
+};
+
 /** The header and the navigation around the page in the outlet. */
 function JournalFrame() {
   const { logic: auth } = useAuth();
@@ -88,7 +115,10 @@ function JournalFrame() {
   const location = useLocation();
   const navigate = useNavigate();
   const [search] = useSearchParams();
-  const view = viewOfAddress({ pathname: location.pathname, search });
+  const subView = subViewOfAddress({ pathname: location.pathname, search });
+  const view = subView
+    ? null
+    : viewOfAddress({ pathname: location.pathname, search });
   // The session gate renders this layout only for a signed-in user.
   const pageContext = useMemo<ProtectedPageContext>(
     () => ({ authEvents: auth.events }),
@@ -102,7 +132,15 @@ function JournalFrame() {
   return (
     <AppShell
       view={view}
-      title={view === "log" ? <LogDateSwitcher /> : VIEW_TITLES[view ?? "log"]}
+      title={
+        view === "log" ? (
+          <LogDateSwitcher />
+        ) : subView ? (
+          SUB_VIEW_TITLES[subView]
+        ) : (
+          VIEW_TITLES[view ?? "log"]
+        )
+      }
       actions={view === "log" ? <LogDateActions /> : null}
       connection={state.connection}
       dayColor={dayColor}
@@ -116,11 +154,23 @@ function JournalFrame() {
   );
 }
 
+/** Go back to the page that opened this one. A page opened from outside goes to `fallback`. */
+function useGoBack(fallback: string): () => void {
+  const location = useLocation();
+  const navigate = useNavigate();
+  return () =>
+    location.key === "default"
+      ? navigate(fallback, { replace: true })
+      : navigate(-1);
+}
+
 /** The pages that share the address `/`, told apart by `?view=`. */
 function JournalViews() {
   const location = useLocation();
   const navigate = useNavigate();
   const [search] = useSearchParams();
+  const openedFromSetup = search.get("from") === "settings";
+  const goBack = useGoBack(openedFromSetup ? "/?view=settings" : "/");
   const app = useFrontendApp();
   const weekDeps = useMemo(
     () => ({ storage: {}, services: {}, api: { settings: app.api.settings } }),
@@ -129,12 +179,51 @@ function JournalViews() {
   // The calendar groups days into weeks that end on the stored day.
   const weekEndsOn = useLogic({ LogicClass: WeekLogic, deps: weekDeps }).state
     .weekEndsOn;
+  const subView = subViewOfAddress({ pathname: location.pathname, search });
+  if (subView === "add-activity") {
+    return (
+      <AddActivityPage
+        requestedGroupId={search.get("group") ?? undefined}
+        returnTo={openedFromSetup ? "settings" : "log"}
+        onClose={goBack}
+      />
+    );
+  }
+  if (subView === "goal") {
+    return (
+      <GoalSetupPage
+        key={search.get("goal") ?? ""}
+        goalId={search.get("goal") ?? ""}
+        returnTo={openedFromSetup ? "settings" : "log"}
+        onClose={goBack}
+      />
+    );
+  }
   const view = viewOfAddress({ pathname: location.pathname, search });
   if (view === "calendar") {
     return <CalendarPage weekEndsOn={weekEndsOn} />;
   }
   if (view === "settings") {
-    return <SetupPage account={<AccountSection />} />;
+    return (
+      <SetupPage
+        account={<AccountSection />}
+        catalogNotice={<CatalogSetupNotice />}
+        catalog={
+          <CatalogSections
+            onAddActivity={(groupId) =>
+              navigate(
+                `/?view=add-activity&group=${encodeURIComponent(groupId)}&from=settings`,
+              )
+            }
+            onConfigureGoal={(goalId) =>
+              navigate(
+                `/?view=goal&goal=${encodeURIComponent(goalId)}&from=settings`,
+              )
+            }
+          />
+        }
+      />
+    );
   }
   if (view === "insights") {
     return <InsightsPlaceholder />;
@@ -183,7 +272,9 @@ export function AppRoutes() {
             <Route
               element={
                 <JournalProvider>
-                  <JournalFrame />
+                  <CatalogSetupProvider>
+                    <JournalFrame />
+                  </CatalogSetupProvider>
                 </JournalProvider>
               }
             >

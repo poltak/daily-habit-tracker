@@ -55,3 +55,12 @@ export interface Catalog {
   activities: Activity[];
   goals: Goal[];
 }
+
+export type CatalogKind = "group" | "activity" | "goal";
+
+/** The sort values of a move: each item must still have `expectedSortOrder`. */
+export interface SortOrderUpdate {
+  id: string;
+  sortOrder: number;
+  expectedSortOrder: number;
+}

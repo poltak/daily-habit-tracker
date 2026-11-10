@@ -34,10 +34,14 @@ const THEME_OPTIONS: Array<{
 interface SetupPageProps {
   /** The sign-in part: the passkeys, the connected apps, and sign-out. The auth feature supplies it. */
   account: ReactNode;
+  /** The activity groups and the goals. The catalog feature supplies them. */
+  catalog: ReactNode;
+  /** The message about the last change of the catalog. */
+  catalogNotice: ReactNode;
 }
 
-/** The Setup page: the theme of this device, the week, and the account. */
-export function SetupPage({ account }: SetupPageProps) {
+/** The Setup page: the theme of this device, the week, the catalog, and the account. */
+export function SetupPage({ account, catalog, catalogNotice }: SetupPageProps) {
   const app = useFrontendApp();
   const theme = useTheme();
   const weekDeps = useMemo(
@@ -66,6 +70,8 @@ export function SetupPage({ account }: SetupPageProps) {
           Your space, your routines. Set up a journal that feels like you.
         </p>
       </div>
+
+      {catalogNotice}
 
       {weekNotice && (
         <output
@@ -142,6 +148,8 @@ export function SetupPage({ account }: SetupPageProps) {
           </select>
         </label>
       </section>
+
+      {catalog}
 
       {account}
     </section>

@@ -6,12 +6,14 @@ import {
   logicalDateInTimeZone,
 } from "@app/common/features/core/utils/logical-date";
 import type { DayState, Entry } from "@app/common/features/days/types";
+import { fetchDayState } from "../utils/fetch-day-state.js";
 import { LatestRequest } from "../../core/logic/latest-request.js";
 import { CatalogReadPlugin } from "./catalog-read-plugin.js";
 import { SelectionPlugin, type Outcome } from "./selection-plugin.js";
 import { DateSwipePlugin } from "./date-swipe-plugin.js";
 import { EntryActionsPlugin } from "./entry-actions-plugin.js";
 import type { FrontendLogicProps } from "../../core/logic/types.js";
+import type { App } from "../../core/types.js";
 import type { ConnectionState, Notice } from "../types.js";
 import {
   applyActivityResult,
@@ -44,7 +46,8 @@ type JournalProps = FrontendLogicProps<
   "days",
   "clock" | "dialogs" | "device" | "timers" | "windowFocus",
   "catalog" | "entries" | "day-selections"
->;
+> &
+  Pick<App, "catalogEvents">;
 
 const REFRESH_INTERVAL_MS = 15_000;
 const LOCAL_DAY_INTERVAL_MS = 60_000;
@@ -135,6 +138,14 @@ export class JournalLogic extends Logic<
       }),
     );
     this.registerCleanup(windowFocus.listen(() => this.refreshOnReturn()));
+    // A deleted activity leaves the open day.
+    this.listen(this.deps.catalogEvents, async (event) => {
+      await this.plugins.catalog.load();
+      await this.refreshDay();
+      if (event.notice?.target === "log") {
+        this.setState({ notice: { kind: "success", text: event.notice.text } });
+      }
+    });
     this.registerCleanup(
       device.listen(() => {
         this.setState({ connection: device.isOnline() ? "online" : "offline" });
@@ -591,29 +602,12 @@ export class JournalLogic extends Logic<
     );
   }
 
-  private async fetchDayState({
-    logicalDate,
-    errorText,
-    signal,
-  }: {
+  private fetchDayState(request: {
     logicalDate: string;
     errorText: string;
     signal: AbortSignal;
   }): Promise<DayState> {
-    const response = await this.deps.api.entries[":logicalDate"].$get(
-      { param: { logicalDate } },
-      { init: { signal } },
-    );
-    // A day without an entry answers 404 with the same body, and a route
-    // that is missing answers 404 with an error.
-    if (response.status !== 200 && response.status !== 404) {
-      throw new Error(errorText);
-    }
-    const body = await response.json();
-    if (!("daySelections" in body)) {
-      throw new Error(errorText);
-    }
-    return body;
+    return fetchDayState({ api: this.deps.api.entries, ...request });
   }
 
   private changeDraft(draft: Draft): void {

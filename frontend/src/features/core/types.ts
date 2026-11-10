@@ -1,6 +1,8 @@
+import type { EventEmitter } from "@app/common/features/core/events/event-emitter";
 import type { LoggerServiceInterface } from "@app/common/features/core/services/types";
 import type { BackendApi } from "../api/client/api-client.js";
 import type { ApiAccessEvents } from "../api/client/access-events.js";
+import type { CatalogEvent } from "../catalog/types.js";
 import type { DialogServiceInterface } from "../dialogs/services/types.js";
 import type { PasskeyServiceInterface } from "../auth/services/types.js";
 import type { ClockServiceInterface } from "../clock/services/types.js";
@@ -37,6 +39,8 @@ export interface FrontendServices extends FrontendCoreServices {
 export interface App {
   api: BackendApi;
   apiAccessEvents: ApiAccessEvents;
+  /** The pages that change the catalog tell the pages that show it. */
+  catalogEvents: EventEmitter<CatalogEvent>;
   storage: FrontendStorage;
   services: FrontendServices;
 }

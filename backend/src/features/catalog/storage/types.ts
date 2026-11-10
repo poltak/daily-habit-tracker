@@ -87,3 +87,17 @@ export interface SeedInsert {
   sql: string;
   rows: readonly (readonly (string | number | null)[])[];
 }
+
+/** The values of a goal that a create or an update writes. */
+export interface GoalWrite {
+  id: string;
+  name: string;
+  activityId: string | null;
+  materialIcon: string;
+  repeatType: string;
+  scheduleType: string;
+  targetPerWeek: number | null;
+  weekdaysMask: number | null;
+  reminderEnabled: boolean;
+  reminderTime: string | null;
+}

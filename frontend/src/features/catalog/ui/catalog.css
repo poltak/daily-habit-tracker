@@ -1,0 +1,521 @@
+/* The Setup catalog, the add-activity form, the goal settings and the icon dialog. */
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 12px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-subtle);
+  color: var(--muted);
+}
+.search-field input {
+  width: 100%;
+  padding: 13px 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--ink);
+}
+.search-field:focus-within {
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 26%, transparent);
+}
+.goal-config-field,
+.goal-icon-setting {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+.goal-config-field > span,
+.goal-icon-setting > span,
+.weekday-picker legend,
+.weekly-target-picker legend {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.goal-config-field input,
+.goal-config-field select,
+.inline-form input,
+.inline-form select,
+.auth-form input,
+.tiny-select {
+  min-width: 0;
+  min-height: 46px;
+  padding: 10px 13px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-subtle);
+  color: var(--ink);
+  outline: 0;
+}
+.goal-config-field input:focus,
+.goal-config-field select:focus,
+.inline-form input:focus,
+.inline-form select:focus,
+.auth-form input:focus {
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 26%, transparent);
+}
+.inline-form {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.inline-form input,
+.inline-form select {
+  flex: 1;
+}
+.tiny-select {
+  max-width: 124px;
+  min-height: 38px;
+  padding: 5px 9px;
+  border-radius: 10px;
+  font-size: 12px;
+}
+.tiny-select.pending-action {
+  border-color: var(--focus);
+}
+.goal-detail-intro,
+.activity-create-intro {
+  margin-bottom: 4px;
+}
+.goal-detail-title,
+.activity-create-title {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 10px;
+}
+.goal-detail-title h1,
+.activity-create-title h1 {
+  margin: 4px 0 6px;
+  font-size: clamp(30px, 7vw, 44px);
+}
+.goal-detail-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+  border-radius: 20px;
+  background: var(--surface-selected);
+  color: var(--positive);
+  font-size: 28px;
+}
+.activity-create-card {
+  max-width: 640px;
+}
+.goal-config-card {
+  display: grid;
+  gap: 16px;
+}
+.goal-config-card .section-heading {
+  margin-bottom: 0;
+}
+.goal-config-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+.goal-icon-button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 46px;
+  padding: 8px 13px;
+  white-space: nowrap;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-subtle);
+  color: var(--ink);
+  font-weight: 600;
+}
+.goal-icon-button .material-symbols-rounded {
+  color: var(--positive);
+  font-size: 22px;
+}
+.weekday-picker,
+.weekly-target-picker {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.weekday-picker legend,
+.weekly-target-picker legend {
+  margin-bottom: 9px;
+  padding: 0;
+}
+.weekday-picker small {
+  display: block;
+  margin-top: 8px;
+  font-size: 12px;
+}
+.weekday-options {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+.weekly-target-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+.weekday-option,
+.weekly-target-option {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  min-height: 46px;
+  padding: 6px 4px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-subtle);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+  text-align: center;
+  transition:
+    background-color 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease;
+}
+.weekday-option input,
+.weekly-target-option input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.weekday-option:focus-within,
+.weekly-target-option:focus-within {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+.weekday-option.selected,
+.weekly-target-option.selected {
+  border-color: var(--positive);
+  background: var(--positive);
+  color: var(--ink-inverse);
+}
+.goal-config-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.goal-manage-actions {
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.activity-create-actions {
+  justify-content: flex-start;
+}
+.management-list {
+  display: grid;
+  gap: 6px;
+}
+.management-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 8px 9px 10px;
+  border-radius: 16px;
+  background: var(--surface-subtle);
+}
+.management-row.archived {
+  opacity: 0.55;
+}
+.management-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--card);
+  color: var(--positive-muted);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.management-copy {
+  display: grid;
+  gap: 1px;
+  flex: 1 1 150px;
+  min-width: 0;
+}
+.management-copy strong {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.management-copy small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.management-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0;
+}
+.management-groups details {
+  border-top: 1px solid var(--line);
+}
+.management-groups details:first-child {
+  border-top: 0;
+}
+.management-groups details[open] {
+  padding-bottom: 12px;
+}
+.management-groups summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0 10px;
+  min-height: 54px;
+  padding: 6px 0;
+  cursor: pointer;
+  list-style: none;
+}
+.management-groups summary::-webkit-details-marker,
+.management-groups summary::marker {
+  display: none;
+  content: "";
+}
+.management-groups summary .management-copy strong {
+  font-size: 15px;
+}
+.management-groups details.archived > summary .management-copy {
+  opacity: 0.55;
+}
+.icon-picker-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: end center;
+  padding: 0;
+  background: var(--overlay);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  animation: fade 0.2s ease both;
+}
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes sheet {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+}
+.icon-picker {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 760px);
+  max-height: min(92dvh, 820px);
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 28px 28px 0 0;
+  background: var(--card);
+  box-shadow: var(--shadow-lg);
+  animation: sheet 0.26s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+.icon-picker > :not(.icon-picker-grid) {
+  flex-shrink: 0;
+}
+.icon-picker-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 22px 20px 0;
+}
+.icon-picker-header h2 {
+  margin: 4px 0 4px;
+  font-size: 26px;
+  letter-spacing: -0.02em;
+}
+.icon-picker-header .muted {
+  font-size: 13px;
+}
+.icon-picker-search {
+  margin: 16px 20px 12px;
+}
+.icon-picker-categories {
+  display: flex;
+  gap: 6px;
+  padding: 2px 20px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.icon-picker-categories button {
+  flex: 0 0 auto;
+  min-height: 38px;
+  padding: 7px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-subtle);
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 650;
+}
+.icon-picker-categories button.selected {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--ink-inverse);
+}
+.icon-picker-count {
+  margin: 14px 20px 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.icon-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 7px;
+  min-height: 0;
+  padding: 2px 20px 20px;
+  overflow-y: auto;
+}
+.icon-choice {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 7px;
+  min-height: 80px;
+  padding: 10px 6px;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  background: var(--surface-subtle);
+  color: var(--ink);
+  text-align: center;
+}
+.icon-choice.selected {
+  border-color: var(--positive);
+  background: var(--surface-selected);
+  color: var(--positive-strong);
+}
+.icon-choice .material-symbols-rounded {
+  font-size: 26px;
+}
+.icon-choice span:last-child {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.icon-picker-more {
+  align-self: flex-start;
+  margin: 0 20px 20px;
+}
+.icon-picker .empty-inline {
+  padding: 28px 20px 36px;
+}
+@media (hover: hover) {
+  .management-row:hover,
+  .icon-choice:hover {
+    border-color: var(--line-strong);
+    background: var(--surface-muted);
+  }
+}
+@media (min-width: 621px) {
+  .weekly-target-options {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .icon-picker-backdrop {
+    place-items: center;
+    padding: 20px;
+  }
+  .icon-picker {
+    max-height: min(88vh, 780px);
+    border-radius: 28px;
+  }
+  .icon-picker-grid {
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  }
+}
+@media (min-width: 1100px) {
+  .goal-detail-page {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0 20px;
+    align-items: start;
+  }
+  .goal-detail-page > .page-intro,
+  .goal-detail-page > .goal-week-history {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 360px) {
+  .management-actions {
+    width: 100%;
+  }
+}
+@media (max-width: 620px) {
+  .inline-form.stacked-mobile {
+    flex-direction: column;
+  }
+  .management-row {
+    flex-wrap: wrap;
+  }
+  .management-row:has(> .tiny-select) .management-copy {
+    flex-basis: 96px;
+  }
+  .management-actions {
+    margin-left: auto;
+  }
+  /* The group name and the arrow stay on the first line; the group actions go below. */
+  .management-groups summary {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .management-groups summary .management-group-meta {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-content: space-between;
+    margin-left: -9px;
+  }
+  .management-groups summary .management-actions {
+    width: auto;
+    margin-left: 0;
+  }
+}
+
+/* The icon dialog is a modal <dialog> that fills the screen. */
+dialog.icon-picker-backdrop {
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  border: 0;
+  color: inherit;
+}
+body:has(dialog.icon-picker-backdrop) {
+  overflow: hidden;
+}
+.icon-picker-scrim {
+  position: absolute;
+  inset: 0;
+}
+dialog.icon-picker-backdrop > .icon-picker {
+  position: relative;
+}

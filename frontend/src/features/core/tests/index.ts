@@ -3,6 +3,7 @@ import type { App } from "../types.js";
 import { EventEmitter } from "@app/common/features/core/events/event-emitter";
 import { MemoryLoggerService } from "@app/common/features/core/services/memory-logger-service";
 import type { ApiAccessEvent } from "../../api/client/access-events.js";
+import type { CatalogEvent } from "../../catalog/types.js";
 import { FakeClockService } from "../../clock/services/fake-clock-service.js";
 import { DaysStorage } from "../../days/storage/days-storage.js";
 import { FakeDeviceService } from "../../device/services/fake-device-service.js";
@@ -64,6 +65,7 @@ export function createApp({
       windowFocus: new FakeWindowFocusService(),
     },
     apiAccessEvents,
+    catalogEvents: new EventEmitter<CatalogEvent>(),
     api: createApiClient({
       fetch,
       baseUrl,

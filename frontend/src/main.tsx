@@ -41,7 +41,8 @@ createRoot(rootElement, {
   <StrictMode>
     <FrontendAppProvider app={app}>
       <ErrorBoundary Fallback={AppErrorFallback}>
-        <BrowserRouter>
+        {/* A page opens in the click that asked for it, as the old site did. */}
+        <BrowserRouter useTransitions={false}>
           <AppRoutes />
         </BrowserRouter>
       </ErrorBoundary>

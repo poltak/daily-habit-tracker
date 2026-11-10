@@ -16,6 +16,18 @@
       "types": "./dist/features/catalog/utils/activity-icon.d.ts",
       "default": "./dist/features/catalog/utils/activity-icon.js"
     },
+    "./features/catalog/utils/activity-icons": {
+      "types": "./dist/features/catalog/utils/activity-icons.d.ts",
+      "default": "./dist/features/catalog/utils/activity-icons.js"
+    },
+    "./features/catalog/utils/curated-icons": {
+      "types": "./dist/features/catalog/utils/curated-icons.d.ts",
+      "default": "./dist/features/catalog/utils/curated-icons.js"
+    },
+    "./features/catalog/utils/goal-config": {
+      "types": "./dist/features/catalog/utils/goal-config.d.ts",
+      "default": "./dist/features/catalog/utils/goal-config.js"
+    },
     "./features/core/events/event-emitter": {
       "types": "./dist/features/core/events/event-emitter.d.ts",
       "default": "./dist/features/core/events/event-emitter.js"

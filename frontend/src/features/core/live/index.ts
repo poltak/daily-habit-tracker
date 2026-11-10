@@ -8,6 +8,7 @@ import { EventEmitter } from "@app/common/features/core/events/event-emitter";
 import { ConsoleLoggerService } from "@app/common/features/core/services/console-logger-service";
 import type { LogLevel } from "@app/common/features/core/services/types";
 import type { ApiAccessEvent } from "../../api/client/access-events.js";
+import type { CatalogEvent } from "../../catalog/types.js";
 import { BrowserClockService } from "../../clock/services/browser-clock-service.js";
 import { DaysStorage } from "../../days/storage/days-storage.js";
 import { BrowserDeviceService } from "../../device/services/browser-device-service.js";
@@ -49,6 +50,7 @@ export function createApp({
     storage,
     services,
     apiAccessEvents,
+    catalogEvents: new EventEmitter<CatalogEvent>(),
     api: createApiClient({
       ...apiProps,
       onSessionRejected: () =>
