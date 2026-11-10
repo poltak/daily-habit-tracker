@@ -77,6 +77,13 @@ export interface EntryListRow extends EntryRow {
   effectiveMoodId: string;
 }
 
+/** A saved day of the analysis: its mood is the one the owner sees. */
+export interface EffectiveDayRow {
+  id: string;
+  logicalDate: string;
+  effectiveMoodId: string;
+}
+
 export interface ActivityLink {
   entryId: string;
   activityId: string;

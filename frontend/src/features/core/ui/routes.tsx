@@ -18,11 +18,12 @@ import {
   LogDateSwitcher,
 } from "../../days/ui/log-date-switcher.js";
 import { LogPage } from "../../days/ui/log-page.js";
+import { InsightsPage } from "../../insights/ui/insights-page.js";
 import { useLogicInstance } from "../logic/use-logic.js";
 import { AppShell, type ShellView } from "./app-shell.js";
 import { ErrorBoundary } from "./error-boundary.js";
 import { PageErrorFallback } from "./error-fallbacks.js";
-import { InsightsPlaceholder, SetupPlaceholder } from "./placeholder-pages.js";
+import { SetupPlaceholder } from "./placeholder-pages.js";
 import type { ProtectedPageContext } from "./signed-in-user.js";
 
 /** The sign-in page was at `/login`. Old links and bookmarks still arrive there. */
@@ -132,7 +133,8 @@ function JournalViews() {
     );
   }
   if (view === "insights") {
-    return <InsightsPlaceholder />;
+    // The day on which a week ends comes from the setup page of a later phase.
+    return <InsightsPage weekEndsOn={0} />;
   }
   return (
     <LogPage
@@ -182,7 +184,7 @@ export function AppRoutes() {
             }
           >
             <Route path="/" element={<JournalViews />} />
-            <Route path="/insights" element={<InsightsPlaceholder />} />
+            <Route path="/insights" element={<JournalViews />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
         </Route>
