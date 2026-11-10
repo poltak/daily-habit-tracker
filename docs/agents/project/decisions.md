@@ -235,3 +235,24 @@ activities, goals }` in the JSON of the old `/api/bootstrap`, without
   (`weekEndsOn` 0) until Setup gives the stored value. The header has no
   "Sign out" button. The Setup placeholder has one, so that a session can end,
   and `built-app.spec.ts` signs out from there.
+
+## MCP, the import and the export
+
+- **The MCP endpoint has no SDK.** It is a stateless JSON-RPC handler as in
+  the old app and in Calocount: each POST is one message or a batch, and the
+  answer is JSON. The tools read the days, the catalog and the settings
+  through their Logic classes. The summaries and the goal week results are
+  calculated in `mcp/utils/journal-calculations.ts`. The insights and goals
+  pages need the same rules, so a later merge can point this module at the
+  shared calculation.
+- **The import is one batch.** `POST /api/import` plans the catalog, the days
+  and the run record, and writes them with one `atomic` call. A statement
+  binds up to 200 records as JSON and reads them with `json_each`, so a backup
+  of several years is a few dozen statements. A refused backup changes
+  nothing. A batch that fails leaves a run with the status `failed`.
+- **The import keeps the old error body.** A refusal answers
+  `{ "error": "<text>" }` with status 400, because the client is a script
+  (`curl`) that reads that text. The other routes use the shared error body.
+- **The export reads each table through its Logic class.** The tables are not
+  read in one snapshot, so a save during an export can show in one table and
+  not in another.

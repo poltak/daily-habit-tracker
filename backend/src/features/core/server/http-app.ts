@@ -3,6 +3,8 @@ import { cors } from "hono/cors";
 import { requestId } from "hono/request-id";
 import { secureHeaders } from "hono/secure-headers";
 import { createCatalogHandlers } from "../../catalog/handlers/catalog-handlers.js";
+import { createExportHandlers } from "../../export/handlers/export-handlers.js";
+import { createImportHandlers } from "../../import/handlers/import-handlers.js";
 import { createDayHandlers } from "../../days/handlers/day-handlers.js";
 import { createBlackBoxHandlers } from "../../black-box/handlers/black-box-handlers.js";
 import { createOAuthHandlers } from "../../auth/handlers/oauth-handlers.js";
@@ -41,6 +43,8 @@ function createBusinessHttpApp({ app }: ApiHttpAppProps) {
     .use("*", requireSession())
     .get("/health", (context) => context.json({ ok: true as const }, 200))
     .route("/catalog", createCatalogHandlers({ logic: app.logic }))
+    .route("/export", createExportHandlers({ logic: app.logic }))
+    .route("/import", createImportHandlers({ logic: app.logic }))
     .route("/", createDayHandlers({ logic: app.logic }));
 }
 
@@ -100,7 +104,10 @@ export function createHttpApp({ app, clientAddressHeader }: HttpAppProps) {
       .use("*", resolveClientAddress({ header: clientAddressHeader }))
       // The routes for agents take a token, not the session cookie. The MCP
       // endpoint is under `/api`, so it comes before the session gate.
-      .route("/", createMcpHandlers({ logic: app.logic }))
+      .route(
+        "/",
+        createMcpHandlers({ logic: app.logic, services: app.services }),
+      )
       .route(
         "/",
         createOAuthHandlers({ logic: app.logic, services: app.services }),

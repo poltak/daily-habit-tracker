@@ -5,6 +5,7 @@ import {
   latestStartedDate,
   monthDateRange,
 } from "@app/common/features/core/utils/logical-date";
+import type { DaylioBackup, ImportIds } from "../../import/types.js";
 import type {
   CalendarEntryDay,
   DayActivitySelection,
@@ -19,6 +20,7 @@ import type {
   BackendLogicProps,
   PlanningStorage,
 } from "../../core/logic/types.js";
+import type { EntryPageRows } from "../storage/entry-read-storage.js";
 import type { EntryWrite } from "../storage/types.js";
 import { applySelections, toDayState, toEntry } from "../utils/day-rows.js";
 import type { DayInput, EntryInput } from "../utils/entry-input.js";
@@ -37,6 +39,36 @@ function versionConflict(): AppError {
   return new AppError({
     code: "CONFLICT",
     message: "This entry changed on another device.",
+  });
+}
+
+function idOf(map: ReadonlyMap<string, string>, sourceId: string): string {
+  return map.get(sourceId) ?? sourceId;
+}
+
+function toEntries(page: EntryPageRows): Entry[] {
+  const linksOf = new Map<string, string[]>();
+  for (const link of page.links) {
+    linksOf.set(link.entryId, [
+      ...(linksOf.get(link.entryId) ?? []),
+      link.activityId,
+    ]);
+  }
+  return page.entries.map((row) => {
+    const activityIds = applySelections({
+      saved: linksOf.get(row.id) ?? [],
+      selections: page.selections.filter(
+        (selection) => selection.logicalDate === row.logicalDate,
+      ),
+    });
+    return toEntry({
+      row,
+      activityIds: [...activityIds],
+      completedGoalIds: page.completions
+        .filter((completion) => completion.logicalDate === row.logicalDate)
+        .map((completion) => completion.goalId),
+      moodId: row.effectiveMoodId,
+    });
   });
 }
 
@@ -68,34 +100,64 @@ export class DaysLogic extends Logic<DaysProps, Record<string, never>> {
       limit: limit + 1,
       offset,
     });
-    const linksOf = new Map<string, string[]>();
-    for (const link of page.links) {
-      linksOf.set(link.entryId, [
-        ...(linksOf.get(link.entryId) ?? []),
-        link.activityId,
-      ]);
-    }
-    const entries = page.entries.map((row) => {
-      const activityIds = applySelections({
-        saved: linksOf.get(row.id) ?? [],
-        selections: page.selections.filter(
-          (selection) => selection.logicalDate === row.logicalDate,
-        ),
-      });
-      return toEntry({
-        row,
-        activityIds: [...activityIds],
-        completedGoalIds: page.completions
-          .filter((completion) => completion.logicalDate === row.logicalDate)
-          .map((completion) => completion.goalId),
-        moodId: row.effectiveMoodId,
-      });
-    });
+    const entries = toEntries(page);
     return {
       entries: entries.slice(0, limit),
       hasMore: entries.length > limit,
       nextOffset: offset + Math.min(entries.length, limit),
     };
+  }
+
+  /** The saved entries from `startDate` to `endDate`, oldest first. */
+  async listEntriesInRange({
+    startDate,
+    endDate,
+  }: {
+    startDate: string;
+    endDate: string;
+  }): Promise<Entry[]> {
+    if (!isLogicalDate(startDate) || !isLogicalDate(endDate)) {
+      throw invalid("Choose a valid date range.");
+    }
+    if (startDate > endDate) {
+      throw invalid("The start date must not be after the end date.");
+    }
+    return toEntries(
+      await this.deps.storage.days.readEntryRange({ startDate, endDate }),
+    );
+  }
+
+  /** The first and the last day with an entry, and how many days have one. */
+  historySpan() {
+    return this.deps.storage.days.readHistorySpan();
+  }
+
+  /**
+   * The days of a range on which a goal is complete, and the first day on
+   * which it was ever complete, also outside the range.
+   */
+  async goalCompletionDates({
+    goalId,
+    startDate,
+    endDate,
+  }: {
+    goalId: string;
+    startDate: string;
+    endDate: string;
+  }): Promise<{ dates: string[]; firstDate: string | null }> {
+    if (!isLogicalDate(startDate) || !isLogicalDate(endDate)) {
+      throw invalid("Choose a valid history range.");
+    }
+    return this.deps.storage.days.readGoalCompletionDates({
+      goalId,
+      startDate,
+      endDate,
+    });
+  }
+
+  /** The date on this server, which counts days in UTC. */
+  today(): string {
+    return this.timestamp().slice(0, 10);
   }
 
   /** The days of a `YYYY-MM` month that have an entry, with their moods. */
@@ -281,6 +343,65 @@ export class DaysLogic extends Logic<DaysProps, Record<string, never>> {
       })),
       affectedActivitySelections: [selection],
     };
+  }
+
+  /**
+   * The statements that write the days of a backup. A day that the owner
+   * recorded, or that another source imported, stays: the import is refused.
+   */
+  async planImport({
+    backup,
+    ids,
+  }: {
+    backup: DaylioBackup;
+    ids: ImportIds;
+  }): Promise<PlannedStatement<never>[]> {
+    const { storage } = this.deps;
+    const entryIdOfDate = new Map(
+      backup.entries.map((entry) => [
+        entry.logicalDate,
+        `daylio-entry-${entry.sourceId}`,
+      ]),
+    );
+    const existing = await storage.days.listEntryIdsOfDates({
+      dates: [...entryIdOfDate.keys()],
+    });
+    if (existing.some((row) => row.id !== entryIdOfDate.get(row.logicalDate))) {
+      throw invalid("Import would replace an entry from a different source.");
+    }
+    return [
+      ...storage.days.planImportEntries({
+        importedAt: this.timestamp(),
+        entries: backup.entries.map((entry) => ({
+          id: `daylio-entry-${entry.sourceId}`,
+          logicalDate: entry.logicalDate,
+          localTime: entry.localTime,
+          timezoneOffsetMinutes: entry.timezoneOffsetMinutes ?? null,
+          moodId: idOf(ids.moods, entry.moodSourceId),
+          legacyNoteTitle: entry.legacyNoteTitle ?? null,
+          legacyNote: entry.legacyNote ?? null,
+          sourceId: entry.sourceId,
+          activityIds: entry.activitySourceIds.map((sourceId) =>
+            idOf(ids.activities, sourceId),
+          ),
+        })),
+      }),
+      ...storage.days.planImportCompletions({
+        completions: backup.completions.map((completion) => ({
+          id: `daylio-completion-${completion.sourceId}`,
+          goalId: idOf(ids.goals, completion.goalSourceId),
+          logicalDate: completion.logicalDate,
+          localTime: completion.localTime ?? null,
+          entryId: entryIdOfDate.get(completion.logicalDate) ?? null,
+          sourceId: completion.sourceId,
+        })),
+      }),
+    ];
+  }
+
+  /** Every row of the tables of the days, for the export file. */
+  exportRows() {
+    return this.deps.storage.days.listAllForExport();
   }
 
   private timestamp(): string {
