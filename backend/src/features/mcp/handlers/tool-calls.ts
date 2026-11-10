@@ -1,10 +1,5 @@
 import { ToolInputError, checkArguments } from "../utils/check-arguments.js";
 import {
-  buildGoalWeeks,
-  round,
-  startOfWeek,
-} from "../utils/journal-calculations.js";
-import {
   describeDay,
   describeGoal,
   nameCatalog,
@@ -17,6 +12,7 @@ import { MAX_DAY_RANGE, TOOL_DEFINITIONS } from "../utils/tool-definitions.js";
 import { AppError } from "../../core/errors/app-error.js";
 import type { BackendLogic, BackendServices } from "../../core/types.js";
 import type { Mood } from "@app/common/features/catalog/types";
+import { buildGoalHistory } from "@app/common/features/goals/utils/goal-history";
 import type { EffectiveDay } from "@app/common/features/days/types";
 import { rankActivityMoodAssociations } from "@app/common/features/insights/utils/activity-associations";
 import { daysInInsightsRange } from "@app/common/features/insights/utils/date-range";
@@ -25,6 +21,7 @@ import {
   WEEKDAY_NAMES,
   addDays,
   dayOfWeek,
+  weekStartsOn,
   weekdayOrder,
 } from "@app/common/features/core/utils/logical-date";
 import type { CallTool } from "./mcp-protocol.js";
@@ -32,6 +29,24 @@ import type { CallTool } from "./mcp-protocol.js";
 type ToolLogic = Pick<BackendLogic, "catalog" | "days" | "settings">;
 
 type Args = Record<string, unknown>;
+
+function round(value: number | null, digits = 2): number | null {
+  return value === null ? null : Number(value.toFixed(digits));
+}
+
+/** The first day of the week that holds `logicalDate`. */
+function startOfWeek({
+  logicalDate,
+  weekEndsOn,
+}: {
+  logicalDate: string;
+  weekEndsOn: number;
+}): string {
+  return addDays(
+    logicalDate,
+    -((dayOfWeek(logicalDate) - weekStartsOn(weekEndsOn) + 7) % 7),
+  );
+}
 
 function checkDayRange({
   startDate,
@@ -284,21 +299,22 @@ export function createToolCaller({
         kind: "goal",
       });
       const today = (args["today"] as string | undefined) ?? logic.days.today();
-      const [completions, weekEndsOn] = await Promise.all([
+      const [dates, firstCompletedDate, weekEndsOn] = await Promise.all([
         // A week can reach six days outside the range on either side.
-        logic.days.goalCompletionDates({
+        logic.days.listCompletionDates({
           goalId: goal.id,
           startDate: addDays(startDate, -7),
           endDate: addDays(endDate, 7),
         }),
+        logic.days.findFirstCompletionDate({ goalId: goal.id }),
         logic.settings.readWeekEndsOn(),
       ]);
-      const weeks = buildGoalWeeks({
+      const { weeks, days } = buildGoalHistory({
         goal,
         startDate,
         endDate,
-        completedDates: completions.dates,
-        firstCompletedDate: completions.firstDate,
+        completedDates: dates,
+        firstCompletedDate,
         weekEndsOn,
         asOf: today,
       });
@@ -316,9 +332,9 @@ export function createToolCaller({
         start_date: startDate,
         end_date: endDate,
         today,
-        completed_dates: completions.dates.filter(
-          (date) => date >= startDate && date <= endDate,
-        ),
+        completed_dates: days
+          .filter((day) => day.completed)
+          .map((day) => day.logicalDate),
         week_results: results,
         weeks: weeks.map((week) => ({
           week_start: week.weekStart,

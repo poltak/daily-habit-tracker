@@ -158,38 +158,6 @@ export class DaysStorage {
     return rows[0] ?? { firstDate: null, lastDate: null, recordedDays: 0 };
   }
 
-  /** The days of a range on which a goal is complete, and the first such day on any date. */
-  async readGoalCompletionDates({
-    goalId,
-    startDate,
-    endDate,
-  }: {
-    goalId: string;
-    startDate: string;
-    endDate: string;
-  }): Promise<{ dates: string[]; firstDate: string | null }> {
-    const { db } = this.deps;
-    const [dates, first] = await Promise.all([
-      db
-        .selectFrom("goalCompletions")
-        .select("logicalDate")
-        .where("goalId", "=", goalId)
-        .where("logicalDate", ">=", startDate)
-        .where("logicalDate", "<=", endDate)
-        .orderBy("logicalDate")
-        .execute(),
-      db
-        .selectFrom("goalCompletions")
-        .select((builder) => builder.fn.min("logicalDate").as("logicalDate"))
-        .where("goalId", "=", goalId)
-        .executeTakeFirst(),
-    ]);
-    return {
-      dates: dates.map((row) => row.logicalDate),
-      firstDate: first?.logicalDate ?? null,
-    };
-  }
-
   /** The entry that each of `dates` has, also when it was deleted, with its ID. */
   async listEntryIdsOfDates({
     dates,
@@ -398,6 +366,43 @@ export class DaysStorage {
       activityId: row.activityId,
       archived: row.archivedAt !== null,
     }));
+  }
+
+  /** The days of a range on which the goal was completed, oldest first. */
+  async listCompletionDates({
+    goalId,
+    startDate,
+    endDate,
+  }: {
+    goalId: string;
+    startDate: string;
+    endDate: string;
+  }): Promise<string[]> {
+    const rows = await this.deps.db
+      .selectFrom("goalCompletions")
+      .select("logicalDate")
+      .where("goalId", "=", goalId)
+      .where("logicalDate", ">=", startDate)
+      .where("logicalDate", "<=", endDate)
+      .orderBy("logicalDate")
+      .execute();
+    return rows.map((row) => row.logicalDate);
+  }
+
+  /** The earliest day on which the goal was completed, on any date. */
+  async findFirstCompletionDate({
+    goalId,
+  }: {
+    goalId: string;
+  }): Promise<string | null> {
+    const row = await this.deps.db
+      .selectFrom("goalCompletions")
+      .select("logicalDate")
+      .where("goalId", "=", goalId)
+      .orderBy("logicalDate")
+      .limit(1)
+      .executeTakeFirst();
+    return row?.logicalDate ?? null;
   }
 
   /** True when a save failed because another save changed the entry first. */

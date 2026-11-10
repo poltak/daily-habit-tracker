@@ -1,3 +1,4 @@
+import { ALL_WEEKDAYS_MASK } from "@app/common/features/goals/utils/goal-history";
 import type { Catalog, Goal, Mood } from "@app/common/features/catalog/types";
 import {
   WEEKDAY_NAMES,
@@ -6,8 +7,6 @@ import {
 } from "@app/common/features/core/utils/logical-date";
 import type { Entry } from "@app/common/features/days/types";
 import { ToolInputError } from "./check-arguments.js";
-
-const ALL_WEEKDAYS_MASK = 0b1111111;
 
 /** The catalog with a name for each activity and goal that is unique in its list. */
 export interface NamedCatalog extends Catalog {

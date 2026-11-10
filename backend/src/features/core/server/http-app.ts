@@ -4,6 +4,7 @@ import { requestId } from "hono/request-id";
 import { secureHeaders } from "hono/secure-headers";
 import { createCatalogHandlers } from "../../catalog/handlers/catalog-handlers.js";
 import { createExportHandlers } from "../../export/handlers/export-handlers.js";
+import { createGoalHandlers } from "../../goals/handlers/goal-handlers.js";
 import { createImportHandlers } from "../../import/handlers/import-handlers.js";
 import { createDayHandlers } from "../../days/handlers/day-handlers.js";
 import { createInsightsHandlers } from "../../insights/handlers/insights-handlers.js";
@@ -49,6 +50,7 @@ function createBusinessHttpApp({ app }: ApiHttpAppProps) {
     .route("/insights", createInsightsHandlers({ logic: app.logic }))
     .route("/export", createExportHandlers({ logic: app.logic }))
     .route("/import", createImportHandlers({ logic: app.logic }))
+    .route("/", createGoalHandlers({ logic: app.logic }))
     .route("/", createDayHandlers({ logic: app.logic }));
 }
 

@@ -93,6 +93,12 @@ export class CatalogLogic extends Logic<CatalogProps, Record<string, never>> {
     super({ deps, initialState: {} });
   }
 
+  /** One goal, also an archived one, or `undefined` when no goal has the ID. */
+  async readGoal({ id }: { id: string }): Promise<Goal | undefined> {
+    const row = await this.deps.storage.catalog.findGoal({ id });
+    return row && toGoal(row);
+  }
+
   /**
    * The moods, groups, activities and goals as the journal shows them. A new
    * database has no mood, so the first read adds the starting catalog.

@@ -111,6 +111,14 @@
     "./features/insights/utils/summarize-mood": {
       "types": "./dist/features/insights/utils/summarize-mood.d.ts",
       "default": "./dist/features/insights/utils/summarize-mood.js"
+    },
+    "./features/goals/types": {
+      "types": "./dist/features/goals/types.d.ts",
+      "default": "./dist/features/goals/types.js"
+    },
+    "./features/goals/utils/goal-history": {
+      "types": "./dist/features/goals/utils/goal-history.d.ts",
+      "default": "./dist/features/goals/utils/goal-history.js"
     }
   },
   "scripts": {

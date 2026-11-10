@@ -1,10 +1,10 @@
+import { ALL_WEEKDAYS_MASK } from "@app/common/features/goals/utils/goal-history";
 import { isLogicalDate } from "@app/common/features/core/utils/logical-date";
 import type { DaylioBackup } from "../types.js";
 import { AppError } from "../../core/errors/app-error.js";
 
 type Item = Record<string, unknown>;
 
-const ALL_WEEKDAYS_MASK = 0b1111111;
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 const COMPLETION_TIME = /^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/;
 /** The names of the Material Symbols font are lower-case words joined by underscores. */
