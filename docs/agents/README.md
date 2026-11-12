@@ -12,6 +12,8 @@ instructions.
   before changing a table, a migration, or a transaction.
 - [Testing](testing.md): what a test contains and how to write one. Read
   before writing or changing a test.
+- [UI screens](ui-screens.md): the screenshots and measurements of each page
+  on fake data. Read before adding a route, or before a UI review.
 - [Decisions](decisions.md): the choices of the template and their reasons.
   Read before changing a framework, authentication, the API transport, or test
   setup.
