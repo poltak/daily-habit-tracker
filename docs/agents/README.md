@@ -14,6 +14,10 @@ instructions.
   before writing or changing a test.
 - [UI screens](ui-screens.md): the screenshots and measurements of each page
   on fake data. Read before adding a route, or before a UI review.
+- [UI review skill](../../.agents/skills/ui-review/SKILL.md): a fresh subagent
+  checks each UI change from the person's request, a base ref, and routes.
+  The [UI design skill](../../.agents/skills/ui-design/SKILL.md) ends with this
+  review. The reviewer reports findings and does not change code.
 - [Decisions](decisions.md): the choices of the template and their reasons.
   Read before changing a framework, authentication, the API transport, or test
   setup.
