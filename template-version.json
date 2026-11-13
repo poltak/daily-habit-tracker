@@ -136,6 +136,11 @@
       "commit": "e731890aef170a3b7fed5c6aa203a6455dda9514",
       "subject": "Keep page subtitles in the document text style",
       "reason": "It changes only the shared UI kit of 76154bd, which Daymark leaves out to keep its production stylesheet"
+    },
+    {
+      "commit": "335a8886ec255f1d1a068419be09a9bfff0e2737",
+      "subject": "Point the component table in the docs README to the current folders",
+      "reason": "It points the docs to the folders of the shared UI kit of 76154bd, which Daymark leaves out"
     }
   ],
   "conflicts": [
@@ -437,6 +442,10 @@
         "docs/agents/ui-components.md",
         "frontend/src/features/core/ui/core/page-header.tsx"
       ]
+    },
+    {
+      "commit": "335a8886ec255f1d1a068419be09a9bfff0e2737",
+      "files": ["docs/agents/README.md"]
     }
   ]
 }
