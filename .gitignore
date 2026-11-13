@@ -180,6 +180,9 @@ vite.config.ts.timestamp-*
 .beads/proxieddb/
 *.gate.lock*
 
+# The mutation script deletes these test copies after the run.
+*.mutated.spec.ts
+
 # Daymark
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
