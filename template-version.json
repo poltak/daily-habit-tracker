@@ -141,6 +141,11 @@
       "commit": "335a8886ec255f1d1a068419be09a9bfff0e2737",
       "subject": "Point the component table in the docs README to the current folders",
       "reason": "It points the docs to the folders of the shared UI kit of 76154bd, which Daymark leaves out"
+    },
+    {
+      "commit": "6f7795165a3ca3167485ea11ce7fbd7e71526c49",
+      "subject": "Allow projects to add generated shadcn components",
+      "reason": "It changes only the shared UI kit of 76154bd, which Daymark leaves out to keep its production stylesheet"
     }
   ],
   "conflicts": [
@@ -446,6 +451,21 @@
     {
       "commit": "335a8886ec255f1d1a068419be09a9bfff0e2737",
       "files": ["docs/agents/README.md"]
+    },
+    {
+      "commit": "8fc21a9e0a4e0835d28cefedda14d413fe6f337c",
+      "files": [
+        "backend/src/features/core/tests/index.ts",
+        "frontend/src/features/component-library/ui/component-library-logic.ts"
+      ]
+    },
+    {
+      "commit": "f5103416469230150d1f8f298ba28acb1c9984dc",
+      "files": [".gitignore"]
+    },
+    {
+      "commit": "6f7795165a3ca3167485ea11ce7fbd7e71526c49",
+      "files": ["docs/agents/ui-components.md"]
     }
   ]
 }
