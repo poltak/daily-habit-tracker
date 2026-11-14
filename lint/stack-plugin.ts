@@ -1,12 +1,34 @@
 /**
  * Lint rules tied to this project's technology choices. They are opinionated
- * and separate from the architecture rules in architecture-plugin.mjs: a
+ * and separate from the architecture rules in architecture-plugin.ts: a
  * project with the same architecture but another stack would replace this
  * plugin's configuration, not the architecture rules.
  */
-import { describeFile, importVisitors } from "./paths.mjs";
+import { describeFile, importVisitors } from "./paths.ts";
+import type {
+  CallExpression,
+  ExportAllDeclaration,
+  ExportNamedDeclaration,
+  ImportDeclaration,
+  ImportExpression,
+  Node,
+  Plugin,
+  Rule,
+  Specifier,
+  StackOptions,
+  Vendor,
+} from "./plugin-types.ts";
+import { pageClasses, pageImports, shadcnTypography } from "./ui-rules.ts";
 
-const vendorImports = {
+const matches = (vendor: Vendor, source: string) =>
+  vendor.packages.some(
+    (name) => source === name || source.startsWith(`${name}/`),
+  );
+
+const nameOf = (identifier: Specifier["local"]) =>
+  identifier?.name ?? identifier?.value;
+
+const vendorImports: Rule<StackOptions> = {
   meta: {
     type: "problem",
     docs: {
@@ -26,12 +48,8 @@ const vendorImports = {
       return {};
     }
 
-    const applies = (vendor) =>
+    const applies = (vendor: Vendor) =>
       !vendor.workspace || file.workspace.endsWith(`/${vendor.workspace}`);
-    const matches = (vendor, source) =>
-      vendor.packages.some(
-        (name) => source === name || source.startsWith(`${name}/`),
-      );
 
     return importVisitors((node, source) => {
       for (const vendor of options.vendors ?? []) {
@@ -53,7 +71,7 @@ const vendorImports = {
   },
 };
 
-const noComponentState = {
+const noComponentState: Rule<StackOptions> = {
   meta: {
     type: "problem",
     docs: {
@@ -76,17 +94,16 @@ const noComponentState = {
       return {};
     }
 
-    const checkName = (node, name) => {
+    const checkName = (node: Node, name: string | undefined) => {
       if (name === "default") {
         context.report({ node, messageId: "wholePackage" });
       } else if (hooks.includes(name)) {
         context.report({ node, messageId: "hook", data: { name } });
       }
     };
-    const nameOf = (identifier) => identifier.name ?? identifier.value;
 
     return {
-      ImportDeclaration(node) {
+      ImportDeclaration(node: ImportDeclaration) {
         if (node.source.value !== "react" || node.importKind === "type") {
           return;
         }
@@ -98,7 +115,7 @@ const noComponentState = {
           }
         }
       },
-      ExportNamedDeclaration(node) {
+      ExportNamedDeclaration(node: ExportNamedDeclaration) {
         if (node.source?.value !== "react" || node.exportKind === "type") {
           return;
         }
@@ -108,17 +125,17 @@ const noComponentState = {
           }
         }
       },
-      ExportAllDeclaration(node) {
+      ExportAllDeclaration(node: ExportAllDeclaration) {
         if (node.source.value === "react" && node.exportKind !== "type") {
           context.report({ node, messageId: "wholePackage" });
         }
       },
-      ImportExpression(node) {
+      ImportExpression(node: ImportExpression) {
         if (node.source.value === "react") {
           context.report({ node, messageId: "wholePackage" });
         }
       },
-      CallExpression(node) {
+      CallExpression(node: CallExpression) {
         if (
           node.callee.name === "require" &&
           node.arguments[0]?.value === "react"
@@ -130,10 +147,15 @@ const noComponentState = {
   },
 };
 
-export default {
+const plugin: Plugin = {
   meta: { name: "stack" },
   rules: {
     "vendor-imports": vendorImports,
     "no-component-state": noComponentState,
+    "page-imports": pageImports,
+    "page-classes": pageClasses,
+    "shadcn-typography": shadcnTypography,
   },
 };
+
+export default plugin;
