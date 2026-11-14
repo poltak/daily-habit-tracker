@@ -4,13 +4,16 @@ import { cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import type { TestContext } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const scriptsDirectory = path.dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS = "backend/src/features/core/database/migrations";
 const DEPLOYMENT = "backend/src/features/core/database/deployment.json";
 
-const migration = (...statements) => `import { sql } from "kysely";
+const migration = (
+  ...statements: string[]
+): string => `import { sql } from "kysely";
 import { defineMigration } from "../migration.js";
 
 export const migration = defineMigration({
@@ -26,19 +29,26 @@ ${statements.map((statement) => `    await sql\`${statement}\`.execute(db);`).jo
  * branch `feature` from it. Files that a test writes are not committed. A
  * `deployment` of `null` leaves out the deployment file.
  */
-async function createRepository(context, { deployment = false } = {}) {
+async function createRepository(
+  context: TestContext,
+  { deployment = false }: { deployment?: boolean | null } = {},
+): Promise<{
+  directory: string;
+  git: (...args: string[]) => string;
+  write: (file: string, text: string) => Promise<void>;
+}> {
   const directory = await mkdtemp(path.join(os.tmpdir(), "migrations-"));
   context.after(() => rm(directory, { recursive: true, force: true }));
-  const git = (...args) =>
+  const git = (...args: string[]): string =>
     execFileSync("git", ["-C", directory, ...args], { encoding: "utf8" });
-  const write = async (file, text) => {
+  const write = async (file: string, text: string): Promise<void> => {
     await mkdir(path.dirname(path.join(directory, file)), { recursive: true });
     await writeFile(path.join(directory, file), text);
   };
   git("init", "--quiet", "--initial-branch=main");
   for (const script of [
-    "check-migrations.mjs",
-    "migration-files.mjs",
+    "check-migrations.ts",
+    "migration-files.ts",
     "template-files.mjs",
   ]) {
     await cp(
@@ -71,8 +81,8 @@ async function createRepository(context, { deployment = false } = {}) {
   return { directory, git, write };
 }
 
-function check(directory) {
-  const result = spawnSync(process.execPath, ["scripts/check-migrations.mjs"], {
+function check(directory: string): { status: number | null; output: string } {
+  const result = spawnSync(process.execPath, ["scripts/check-migrations.ts"], {
     cwd: directory,
     encoding: "utf8",
   });
@@ -161,7 +171,13 @@ test("rejects a new migration that changes a table that another new migration cr
  * commit in common with `main`. The second template migration changes the
  * table of the first, as `set-note-updated-at-with-a-trigger` does.
  */
-async function adoptTemplate({ git, write }) {
+async function adoptTemplate({
+  git,
+  write,
+}: {
+  git: (...args: string[]) => string;
+  write: (file: string, text: string) => Promise<void>;
+}): Promise<string> {
   const person = ["-c", "user.name=Test", "-c", "user.email=test@example.test"];
   git("switch", "--quiet", "--orphan", "template");
   await write(
@@ -187,7 +203,7 @@ async function adoptTemplate({ git, write }) {
   return templateCommit;
 }
 
-const versionFile = (commit) =>
+const versionFile = (commit: string): string =>
   JSON.stringify({ template: "template-url", commit, skipped: [] });
 
 test("leaves out the template's migrations on the branch that adopts the template", async (context) => {

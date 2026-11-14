@@ -1,4 +1,4 @@
-// What `check-migrations.mjs` and `create-migration.mjs` share: the
+// What `check-migrations.ts` and `create-migration.ts` share: the
 // migrations that a branch adds or changes, and the tables that a migration
 // creates or changes.
 import path from "node:path";
@@ -35,20 +35,23 @@ const CHANGE_TABLE = [
 ].map((pattern) => new RegExp(pattern, "gi"));
 
 /** PostgreSQL keeps a quoted name as it is, and lowercases one without quotes. */
-function tableName(name) {
-  const last = name.split(/\s*\.\s*(?=(?:"[^"]+"|[\w$]+)$)/).at(-1);
+function tableName(name: string): string {
+  const last = name.split(/\s*\.\s*(?=(?:"[^"]+"|[\w$]+)$)/).at(-1) ?? name;
   return last.startsWith('"') ? last.slice(1, -1) : last.toLowerCase();
 }
 
 /** The tables that the SQL of one migration file creates, and those it changes. */
-export function tablesOf(source) {
+export function tablesOf(source: string): {
+  creates: Set<string>;
+  changes: Set<string>;
+} {
   const statements = [...source.matchAll(/\bsql`([^`]*)`/g)]
     .map(([, text]) =>
-      text.replace(/--[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, ""),
+      (text ?? "").replace(/--[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, ""),
     )
     .join(";\n");
-  const names = (pattern) =>
-    [...statements.matchAll(pattern)].map((match) => tableName(match[1]));
+  const names = (pattern: RegExp): string[] =>
+    [...statements.matchAll(pattern)].map((match) => tableName(match[1] ?? ""));
   return {
     creates: new Set(names(CREATE_TABLE)),
     changes: new Set(CHANGE_TABLE.flatMap(names)),
@@ -61,7 +64,7 @@ export function tablesOf(source) {
  * the template wrote them, and each can change a table that an earlier one
  * creates. A clone without that commit gets an empty list.
  */
-function templateMigrations({ root }) {
+function templateMigrations({ root }: { root: string }): Set<string> {
   const commit = readVersionFile({ root })?.commit;
   if (!commit) {
     return new Set();
@@ -90,7 +93,11 @@ function templateMigrations({ root }) {
  * migration of the branch. Returns `null` when the repository has no `main`
  * to compare with.
  */
-export function branchMigrations({ root }) {
+export function branchMigrations({ root }: { root: string }): {
+  added: string[];
+  changed: string[];
+  removed: string[];
+} | null {
   const base = ["origin/main", "main"]
     .map((ref) =>
       git({ root, args: ["merge-base", "HEAD", ref], allowFailure: true }),
@@ -99,11 +106,11 @@ export function branchMigrations({ root }) {
   if (!base) {
     return null;
   }
-  const migrationsOf = (output) =>
+  const migrationsOf = (output: string): string[] =>
     output
       .split("\n")
       .filter((file) => MIGRATION_FILE.test(path.posix.basename(file)));
-  const byStatus = (status) =>
+  const byStatus = (status: string): string[] =>
     migrationsOf(
       git({
         root,

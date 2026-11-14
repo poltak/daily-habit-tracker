@@ -1,7 +1,7 @@
 // Checks the migrations that a branch adds or changes. `pnpm run check` and CI
 // run it:
 //
-//   node scripts/check-migrations.mjs
+//   node scripts/check-migrations.ts
 //
 // - A migration of the branch must not change a table that another migration
 //   of the branch creates. Until the merge, such a change goes into the
@@ -26,26 +26,30 @@ import {
   DEPLOYMENT_FILE,
   branchMigrations,
   tablesOf,
-} from "./migration-files.mjs";
+} from "./migration-files.ts";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
-const listOf = (lines) => lines.map((line) => `  ${line}`).join("\n");
-const nameOf = (file) => path.posix.basename(file, ".ts");
+const listOf = (lines: string[]): string =>
+  lines.map((line) => `  ${line}`).join("\n");
+const nameOf = (file: string): string => path.posix.basename(file, ".ts");
 
 /** A missing or unreadable file counts as a deployed database, the strict case. */
-function hasDeployedDatabase() {
+function hasDeployedDatabase(): boolean {
   const file = path.join(root, DEPLOYMENT_FILE);
   if (!existsSync(file)) {
     return true;
   }
   try {
-    return JSON.parse(readFileSync(file, "utf8")).hasDeployedDatabase !== false;
+    const deployment = JSON.parse(readFileSync(file, "utf8")) as {
+      hasDeployedDatabase?: boolean;
+    };
+    return deployment.hasDeployedDatabase !== false;
   } catch {
     return true;
   }
 }
 
-function check() {
+function check(): boolean {
   const migrations = branchMigrations({ root });
   if (!migrations) {
     console.log(
@@ -71,7 +75,7 @@ function check() {
       .filter((table) => creators.has(table) && creators.get(table) !== file)
       .map(
         (table) =>
-          `${nameOf(file)} changes "${table}", which ${nameOf(creators.get(table))} creates.`,
+          `${nameOf(file)} changes "${table}", which ${nameOf(creators.get(table) ?? "")} creates.`,
       ),
   );
   if (changesOfNewTables.length > 0) {
