@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
-import { rm } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
+import type { TestContext } from "node:test";
 import {
   json,
   git,
@@ -14,12 +15,64 @@ import {
   short,
   createProject,
   TEMPLATE_PATHS,
-} from "./sync-template-fixtures.mjs";
+  scriptsDirectory,
+} from "./sync-template-fixtures.ts";
 
 const GUIDE = "docs/agents/guide.md";
 const OWNED = [GUIDE, "docs/agents/tests/", "backend/src/features/notes/"];
 
-async function createSyncedProject(context) {
+test("keeps project shadcn files and their list while protecting template shadcn files", async (context) => {
+  const { template, project } = await createProject(context);
+  const paths = JSON.parse(
+    await readFile(path.join(scriptsDirectory, "template-paths.json"), "utf8"),
+  );
+  const button = "frontend/src/features/core/ui/shadcn/button.tsx";
+  const avatar = "frontend/src/features/core/ui/shadcn/avatar.tsx";
+  const projectList = "scripts/shadcn-components.project.json";
+  await templateCommit({
+    template,
+    message: "Add component ownership rules",
+    files: {
+      "scripts/template-paths.json": json(paths),
+      [button]: "generated button\n",
+      [projectList]: "[]\n",
+    },
+  });
+  sync(project, "plan");
+  assert.equal(sync(project, "apply").status, 0);
+  assert.equal(sync(project, "finish").status, 0);
+  await write(project, {
+    [avatar]: "generated avatar\n",
+    [projectList]: '["avatar"]\n',
+    [button]: "hand edit\n",
+  });
+  commit(project, "Add a project component and edit a template component");
+  const tip = await templateCommit({
+    template,
+    message: "Change the template project list",
+    files: { [projectList]: '["kbd"]\n' },
+  });
+  sync(project, "plan");
+  assert.equal(sync(project, "apply").status, 0);
+  const rejected = sync(project, "finish");
+  assert.equal(rejected.status, 1, rejected.output);
+  assert.ok(
+    rejected.output.includes(`${button} (the file differs)`),
+    rejected.output,
+  );
+  assert.ok(
+    !rejected.output.includes(`${avatar} (the template does not have it)`),
+    rejected.output,
+  );
+  git(project, "checkout", tip, "--", button);
+  commit(project, "Restore the template component");
+  const result = sync(project, "finish");
+  assert.equal(result.status, 0, result.output);
+  assert.equal(await readProjectFile(project, avatar), "generated avatar\n");
+  assert.equal(await readProjectFile(project, projectList), '["avatar"]\n');
+});
+
+async function createSyncedProject(context: TestContext) {
   const created = await createProject(context);
   const { template, project } = created;
   const first = await templateCommit({
