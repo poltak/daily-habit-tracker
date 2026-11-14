@@ -12,10 +12,11 @@ import {
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import type { TestContext } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const scriptsDirectory = path.dirname(fileURLToPath(import.meta.url));
-const SCRIPT = "scripts/check-template-owned-files.mjs";
+const SCRIPT = "scripts/check-template-owned-files.ts";
 const REPOSITORY = "acme/project";
 const PULLS = `repos/${REPOSITORY}/pulls/7`;
 const ISSUES = `repos/${REPOSITORY}/issues/7`;
@@ -38,14 +39,24 @@ if (method === "GET") {
 }
 `;
 
-const files = (...names) => names.map((filename) => ({ filename }));
-const diff = ({ filename, patch, sha = "aaaaaaa", status = "modified" }) => ({
+const files = (...names: string[]) => names.map((filename) => ({ filename }));
+const diff = ({
+  filename,
+  patch,
+  sha = "aaaaaaa",
+  status = "modified",
+}: {
+  filename: string;
+  patch?: string;
+  sha?: string;
+  status?: string;
+}) => ({
   filename,
   patch,
   sha,
   status,
 });
-const labelled = (login) => ({
+const labelled = (login: string) => ({
   event: "labeled",
   label: { name: "template-change-approved" },
   actor: { login },
@@ -60,9 +71,19 @@ async function check({
   version = true,
   action = "opened",
   author = "contributor",
-  labels = [],
+  labels = [] as string[],
   answers = {},
   maintainers = "Owner, second-owner",
+  paths,
+}: {
+  context: TestContext;
+  version?: boolean | Record<string, unknown>;
+  action?: string;
+  author?: string;
+  labels?: string[];
+  answers?: Record<string, unknown>;
+  maintainers?: string;
+  paths?: { templateOwned: string[]; personOnly?: string[] };
 }) {
   const directory = await mkdtemp(
     path.join(os.tmpdir(), "template-owned-check-"),
@@ -70,7 +91,7 @@ async function check({
   context.after(() => rm(directory, { recursive: true, force: true }));
   await mkdir(path.join(directory, "scripts"));
   await mkdir(path.join(directory, "bin"));
-  for (const file of ["check-template-owned-files.mjs", "template-files.mjs"]) {
+  for (const file of ["check-template-owned-files.ts", "template-files.mjs"]) {
     await cp(
       path.join(scriptsDirectory, file),
       path.join(directory, "scripts", file),
@@ -78,10 +99,12 @@ async function check({
   }
   await writeFile(
     path.join(directory, "scripts/template-paths.json"),
-    JSON.stringify({
-      templateOwned: ["AGENTS.md", "lint/", ".agents/hooks/"],
-      personOnly: ["docs/agents/project/reversals.md", "lint.project.json"],
-    }),
+    JSON.stringify(
+      paths ?? {
+        templateOwned: ["AGENTS.md", "lint/", ".agents/hooks/"],
+        personOnly: ["docs/agents/project/reversals.md", "lint.project.json"],
+      },
+    ),
   );
   if (version) {
     await writeFile(
@@ -153,6 +176,36 @@ test("passes a pull request that changes no file from the template", async (cont
   });
 
   assert.equal(result.status, 0, result.output);
+});
+
+test("allows project shadcn additions but rejects changes to template shadcn files", async (context) => {
+  const paths = JSON.parse(
+    await readFile(path.join(scriptsDirectory, "template-paths.json"), "utf8"),
+  ) as { templateOwned: string[]; personOnly?: string[] };
+  const additions = await check({
+    context,
+    paths,
+    answers: {
+      [`GET ${PULLS}/files?per_page=100`]: files(
+        "frontend/src/features/core/ui/shadcn/avatar.tsx",
+        "scripts/shadcn-components.project.json",
+      ),
+    },
+  });
+  assert.equal(additions.status, 0, additions.output);
+  for (const file of [
+    "frontend/src/features/core/ui/shadcn/button.tsx",
+    "frontend/src/features/core/ui/shadcn/use-mobile.ts",
+    "scripts/shadcn-components.json",
+  ]) {
+    const edit = await check({
+      context,
+      paths,
+      answers: { [`GET ${PULLS}/files?per_page=100`]: files(file) },
+    });
+    assert.equal(edit.status, 1, edit.output);
+    assert.ok(edit.output.includes(file), edit.output);
+  }
 });
 
 test("fails a change to a file that only a person changes, and says why", async (context) => {
@@ -255,7 +308,7 @@ test("passes the change when a maintainer opened the pull request", async (conte
 });
 
 test("counts the approval label only when a maintainer added it last", async (context) => {
-  const approvedBy = (...logins) =>
+  const approvedBy = (...logins: string[]) =>
     check({
       context,
       action: "labeled",
@@ -282,7 +335,15 @@ test("counts the approval label only when a maintainer added it last", async (co
  * `before` and `after` are the files of the pull request's own diff at the
  * old and the new head. Without one of them, the compare fails.
  */
-const afterPush = ({ context, before, after }) =>
+const afterPush = ({
+  context,
+  before,
+  after,
+}: {
+  context: TestContext;
+  before?: unknown[];
+  after?: unknown[];
+}) =>
   check({
     context,
     action: "synchronize",
@@ -301,7 +362,7 @@ const afterPush = ({ context, before, after }) =>
   });
 const PUSH_LINK =
   /^The changes between the old and the new head commit: https:\/\/github\.com\/acme\/project\/compare\/1111111\.\.\.2222222$/m;
-const removedLabel = (result) =>
+const removedLabel = (result: { calls: string[] }) =>
   result.calls.includes(`DELETE ${ISSUES}/labels/template-change-approved`);
 
 const agentsRule = diff({
