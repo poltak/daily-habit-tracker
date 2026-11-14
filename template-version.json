@@ -146,6 +146,21 @@
       "commit": "6f7795165a3ca3167485ea11ce7fbd7e71526c49",
       "subject": "Allow projects to add generated shadcn components",
       "reason": "It changes only the shared UI kit of 76154bd, which Daymark leaves out to keep its production stylesheet"
+    },
+    {
+      "commit": "ccab3db53b61e78b73b7eda641e78328ed5940c1",
+      "subject": "Name the project list where the UI document says to list a new part",
+      "reason": "It changes only the shared UI kit of 76154bd, which Daymark leaves out to keep its production stylesheet"
+    },
+    {
+      "commit": "8b49cb668ccc5970e51dd9d1b3eaf00d198b69aa",
+      "subject": "Ignore the use client directive in the shadcn check",
+      "reason": "It changes the shadcn check of the shared UI kit of 76154bd, which Daymark leaves out"
+    },
+    {
+      "commit": "94ec27f14ca592ab0a2376fe8d48fe4c9dbcab92",
+      "subject": "Say that the shadcn check ignores the use client line",
+      "reason": "It changes only the shared UI kit of 76154bd, which Daymark leaves out to keep its production stylesheet"
     }
   ],
   "conflicts": [
@@ -465,6 +480,18 @@
     },
     {
       "commit": "6f7795165a3ca3167485ea11ce7fbd7e71526c49",
+      "files": ["docs/agents/ui-components.md"]
+    },
+    {
+      "commit": "ccab3db53b61e78b73b7eda641e78328ed5940c1",
+      "files": ["docs/agents/ui-components.md"]
+    },
+    {
+      "commit": "8b49cb668ccc5970e51dd9d1b3eaf00d198b69aa",
+      "files": ["scripts/check-shadcn.mjs", "scripts/check-shadcn.test.mjs"]
+    },
+    {
+      "commit": "94ec27f14ca592ab0a2376fe8d48fe4c9dbcab92",
       "files": ["docs/agents/ui-components.md"]
     }
   ]
