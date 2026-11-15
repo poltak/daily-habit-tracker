@@ -38,7 +38,23 @@ test.describe("swipe between days", () => {
     await log.waitForDay(LogPageObject.addDays(today, -1));
   });
 
-  test("should not change the day for a vertical drag or a short swipe", async ({
+  test("should not change the day for a drag that is mostly vertical", async ({
+    page,
+  }) => {
+    const log = new LogPageObject(page);
+    await log.goto();
+    const today = await log.currentDate();
+
+    // Long enough to count, but more vertical than horizontal: a page scroll.
+    await log.swipeDateSwitcher({ dx: 60, dy: 100 });
+
+    await expect(log.dateField).toHaveValue(today);
+    await expect(log.heading).toHaveText("How was your day?");
+  });
+
+  // A vertical drag can leave the page scrolling, so it is not in this test:
+  // a swipe during the scroll can count as part of it.
+  test("should not change the day for a short swipe, and change it for a long one after", async ({
     page,
   }) => {
     const log = new LogPageObject(page);
@@ -46,12 +62,10 @@ test.describe("swipe between days", () => {
     const today = await log.currentDate();
     const yesterday = LogPageObject.addDays(today, -1);
 
-    await log.swipeDateSwitcher({ dx: 10, dy: 150 });
     await log.swipeDateSwitcher({ dx: 30 });
 
     await expect(log.dateField).toHaveValue(today);
     await expect(log.heading).toHaveText("How was your day?");
-    // A swipe that is long enough still works after the drags that did nothing.
     await log.swipeDateSwitcher({ dx: 120 });
     await log.waitForDay(yesterday);
     await expect(log.dateField).toHaveValue(yesterday);
