@@ -101,6 +101,11 @@
       "commit": "87bf1434b36c94428e44a2b3c84d62728ad4e01a",
       "subject": "Point the class-name guide to the cn package",
       "reason": "It changes only the shared UI kit of 76154bd, which Daymark leaves out to keep its production stylesheet"
+    },
+    {
+      "commit": "548d0c527017507b4b3e700c4ade95b0606bc94f",
+      "subject": "Allow theme utilities on native text",
+      "reason": "It changes only the shared UI kit of 76154bd, which Daymark leaves out to keep its production stylesheet"
     }
   ],
   "conflicts": [
@@ -332,6 +337,10 @@
     },
     {
       "commit": "87bf1434b36c94428e44a2b3c84d62728ad4e01a",
+      "files": ["docs/agents/ui-components.md"]
+    },
+    {
+      "commit": "548d0c527017507b4b3e700c4ade95b0606bc94f",
       "files": ["docs/agents/ui-components.md"]
     }
   ]
