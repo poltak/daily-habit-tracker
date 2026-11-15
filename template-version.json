@@ -6,6 +6,11 @@
       "commit": "76154bdb5df6de15ad6a0176052fb130f89fec2a",
       "subject": "Add the shared UI components and the theme",
       "reason": "Daymark keeps the stylesheet of its production app verbatim, so that it looks the same as before the port; this UI kit restyles every page and adds Tailwind, Base UI and Lucide, which need the owner's approval"
+    },
+    {
+      "commit": "7edc785f421dbfbb987b66acbdc37b08b1bc076b",
+      "subject": "Build the example pages from the shared components",
+      "reason": "It builds the pages on the shared UI components of 76154bd, which Daymark leaves out to keep its production stylesheet"
     }
   ],
   "conflicts": [
@@ -14,6 +19,16 @@
       "files": [
         "frontend/src/features/core/ui/app.css",
         "frontend/src/main.tsx"
+      ]
+    },
+    {
+      "commit": "7edc785f421dbfbb987b66acbdc37b08b1bc076b",
+      "files": [
+        "frontend/src/features/auth/ui/login-page.tsx",
+        "frontend/src/features/auth/ui/session-gate.tsx",
+        "frontend/src/features/auth/ui/sign-up-page.tsx",
+        "frontend/src/features/core/ui/error-fallbacks.tsx",
+        "frontend/src/features/core/ui/routes.tsx"
       ]
     }
   ]
