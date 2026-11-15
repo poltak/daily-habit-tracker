@@ -16,6 +16,7 @@ run Swamp.
 | `pr-ready`         | `pnpm run pr:ready`, step by step                          | A branch before a PR |
 | `issues-join`      | `pnpm run issues:join`                                     | The main checkout    |
 | `black-box-mutate` | `pnpm run test:browser:mutate`, with `--input spec=<path>` | Any checkout         |
+| `ui-screens`       | `pnpm run ui:screens`                                      | Any checkout         |
 | `check-shadcn`     | `pnpm run check:shadcn`                                    | Any checkout         |
 
 Each script has a comment at its start that tells what it does. A person or

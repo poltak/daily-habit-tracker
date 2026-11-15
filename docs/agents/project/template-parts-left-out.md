@@ -8,20 +8,27 @@ these parts in the same way.
 ## The shared UI kit
 
 The template has a UI kit: shared components on Base UI and shadcn, Tailwind
-CSS 4, Lucide icons, a theme, a component registry, a component library page,
-the `ui-design` skill, and lint rules and checks for them.
+CSS 4, Lucide icons, a theme, a component registry, the `ui-design` skill, and
+lint rules and checks for them.
 
+- **The kit is in the project, and no page uses it.** The gate files of the
+  template (`scripts/template-paths.json` and its hook test) list the kit's
+  files in `templateOwned`, and a project cannot take over a gate file. So the
+  kit's files, its dependencies (Tailwind CSS, Base UI, Lucide, shadcn CLI) and
+  its checks (`check:shadcn`, `check:registry`) are here, at the template's
+  versions.
 - **Daymark keeps the stylesheet of its production app.** The pages must look
   the same as before the port, so the old CSS is in
   `frontend/src/features/core/ui/styles/` without change (see
-  [decisions](decisions.md)). The kit restyles each page.
-- **The kit adds dependencies** (Tailwind CSS, Base UI, Lucide), and a new
-  dependency needs the owner's approval.
-- So the kit files are not in the project, and `templateOwned` of
-  `scripts/template-paths.json` does not list them. The two tests of the sync
-  scripts about project shadcn files are removed, because the project has no
-  shadcn list. `lint/ui-rules.ts` stays, because the lint plugin imports it;
-  `.oxlintrc.json` does not turn on its rules.
+  [decisions](decisions.md)). No page, no `main.tsx` import and no CSS of the
+  app uses the kit, and `vite.config.ts` has no Tailwind plugin. The built
+  stylesheet is the same as before.
+- `knip.jsonc` lists the kit's files and dependencies as entries or ignores,
+  because nothing imports them. `.prettierignore` skips the generated
+  `shadcn/` folder, as the template does. `.oxlintrc.json` turns on the kit's
+  lint rules, as the template does, and they find nothing in the app's code.
+- To use the kit on a page, import `theme.css` and the others from `main.tsx`
+  and decide how the old stylesheet and the kit live together.
 
 ## The screenshot tool
 
@@ -29,7 +36,9 @@ the `ui-design` skill, and lint rules and checks for them.
 the template's browser-test backend: a Node backend and the built frontend on
 two origins (`core/tests/browser/origins.ts`). Daymark runs its pages on one
 Worker (`scripts/black-box-next.mjs`), and has no such backend. The tool, its
-`*.screens.ts` files, its workflow, its document and the skill are removed.
+`*.screens.ts` files and its workflow are removed. The `ui-review` skill is in
+the project because the gate files list it, but it refers to this tool, so it
+does not work.
 To use it, give it a fixture on the Worker first.
 
 ## Scripts that the project owns

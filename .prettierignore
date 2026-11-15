@@ -18,3 +18,5 @@ DAYLIO_DISCOVERY.md
 MVP_IMPLEMENTATION_PLAN.md
 # Copies of the old stylesheet. Prettier would change their text.
 frontend/src/features/core/ui/styles/
+# The generation check compares these files with the CLI output, byte for byte.
+frontend/src/features/core/ui/shadcn/
