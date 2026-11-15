@@ -126,6 +126,11 @@
       "commit": "608f6b58828aebff136e4c02ce3b673a8a431138",
       "subject": "Replace the UI guides with one component reference",
       "reason": "It replaces the guides of the shared UI kit of 76154bd, which Daymark leaves out"
+    },
+    {
+      "commit": "f01fef2da68619309e5a04e26659830fd2bfbdf1",
+      "subject": "Let shadcn presets control dark palettes and subtitle type",
+      "reason": "It adds the dark class and the typography rules of the shared UI kit of 76154bd; Daymark keeps its own theme service and stylesheet"
     }
   ],
   "conflicts": [
@@ -406,6 +411,18 @@
         ".agents/skills/ui-design/SKILL.md",
         "AGENTS.md",
         "docs/agents/ui-components.md",
+        "lint/ui-rules.mjs"
+      ]
+    },
+    {
+      "commit": "f01fef2da68619309e5a04e26659830fd2bfbdf1",
+      "files": [
+        ".oxlintrc.json",
+        "docs/agents/ui-components.md",
+        "frontend/src/features/core/live/index.ts",
+        "frontend/src/features/core/ui/core/page-header.tsx",
+        "lint/stack-plugin.mjs",
+        "lint/ui-foundation.test.mjs",
         "lint/ui-rules.mjs"
       ]
     }
