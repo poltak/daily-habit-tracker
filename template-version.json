@@ -161,6 +161,11 @@
       "commit": "94ec27f14ca592ab0a2376fe8d48fe4c9dbcab92",
       "subject": "Say that the shadcn check ignores the use client line",
       "reason": "It changes only the shared UI kit of 76154bd, which Daymark leaves out to keep its production stylesheet"
+    },
+    {
+      "commit": "a9ddc986b20d926eec0fc896d572cacacfe425b5",
+      "subject": "Stop a fixed calendar date in an expected test value",
+      "reason": "Its conflict was only in a test of the component library, which Daymark leaves out. Its lint rule, its tests and its skill text came in by hand with c1c880c, and its rule entry in .oxlintrc.json too"
     }
   ],
   "conflicts": [
@@ -493,6 +498,57 @@
     {
       "commit": "94ec27f14ca592ab0a2376fe8d48fe4c9dbcab92",
       "files": ["docs/agents/ui-components.md"]
+    },
+    {
+      "commit": "fff0a677eb6c018b5d1d651336a6d0e0497def93",
+      "files": ["scripts/sync-template-owned-files.test.ts"]
+    },
+    {
+      "commit": "f1f348148b75f1994cc525a147d8427fc93dba2d",
+      "files": ["scripts/check-live-start.ts", "scripts/dev-database.ts"]
+    },
+    {
+      "commit": "2693907476680e11475211df80f95818f4738d30",
+      "files": [
+        "scripts/check-shadcn.test.ts",
+        "scripts/check-shadcn.ts",
+        "scripts/check-template-owned-files.test.ts"
+      ]
+    },
+    {
+      "commit": "f16d730dc2a7f9ae2aa322742915e23ef756180b",
+      "files": [
+        "backend/package.json",
+        "docs/agents/README.md",
+        "package.json",
+        "scripts/template-paths.json"
+      ]
+    },
+    {
+      "commit": "f78da0404eacf28a057a58a1c7e087318830b9ef",
+      "files": [
+        "lint/lint-fixture.ts",
+        "lint/paths.ts",
+        "lint/stack-plugin.ts",
+        "lint/ui-foundation.test.ts",
+        "lint/ui-rules.ts",
+        "scripts/check-shadcn.test.ts",
+        "scripts/check-shadcn.ts"
+      ]
+    },
+    {
+      "commit": "1496be6cec71e82adb82c67d5a4d527778af36d8",
+      "files": [
+        "backend/src/features/core/server/http-app.ts",
+        "frontend/src/features/core/tests/backend-http.test.ts"
+      ]
+    },
+    {
+      "commit": "a9ddc986b20d926eec0fc896d572cacacfe425b5",
+      "files": [
+        "frontend/src/features/component-library/black-box-tests/containers.spec.ts"
+      ]
     }
-  ]
+  ],
+  "unchanged": ["87496d340cf49d1706a96e5b0c9efbdab0be7570"]
 }
