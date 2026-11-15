@@ -2,6 +2,8 @@ import { expect } from "@playwright/test";
 import { test } from "../../core/api-tests/api-test.js";
 
 const JSON_HEADERS = { "content-type": "application/json" };
+// A protocol version is a label that the server compares, not a calendar date.
+const CURRENT_PROTOCOL_VERSION = "2025-06-18";
 const TOOLS = [
   "get_overview",
   "get_days",
@@ -15,7 +17,11 @@ test.describe("MCP protocol", () => {
   test("should agree on a protocol version and describe the server", async ({
     agent,
   }) => {
-    for (const version of ["2025-06-18", "2025-03-26", "2024-11-05"]) {
+    for (const version of [
+      CURRENT_PROTOCOL_VERSION,
+      "2025-03-26",
+      "2024-11-05",
+    ]) {
       const response = await agent.send("initialize", {
         protocolVersion: version,
         capabilities: {},
@@ -28,7 +34,7 @@ test.describe("MCP protocol", () => {
       await agent.send("initialize", { protocolVersion: "2099-01-01" })
     ).json();
 
-    expect(future.result.protocolVersion).toBe("2025-06-18");
+    expect(future.result.protocolVersion).toBe(CURRENT_PROTOCOL_VERSION);
     expect(future.result.capabilities).toEqual({
       tools: { listChanged: false },
     });

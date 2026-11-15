@@ -1,5 +1,8 @@
 import { Logic, type TaskState } from "@app/common/features/core/logic/logic";
-import { requireApiSuccess } from "../../api/client/api-client.js";
+import {
+  encodeApiParam,
+  requireApiSuccess,
+} from "../../api/client/api-client.js";
 import type { FrontendLogicProps } from "../../core/logic/types.js";
 import type { App } from "../../core/types.js";
 import { LeaveLockPlugin } from "../../core/ui/leave-lock-plugin.js";
@@ -99,7 +102,7 @@ export class ConnectionsLogic extends Logic<
     this.setState({ notice: null });
     await this.executeTask("removeConnection", async () => {
       const response = await this.deps.api.auth.connections[":id"].$delete(
-        { param: { id: encodeURIComponent(id) } },
+        { param: { id: encodeApiParam(id) } },
         { init: { signal: this.signal } },
       );
       await requireApiSuccess(response);

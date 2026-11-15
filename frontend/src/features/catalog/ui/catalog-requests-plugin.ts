@@ -7,7 +7,10 @@ import type {
   Goal,
   SortOrderUpdate,
 } from "@app/common/features/catalog/types";
-import { requireApiSuccess } from "../../api/client/api-client.js";
+import {
+  encodeApiParam,
+  requireApiSuccess,
+} from "../../api/client/api-client.js";
 import type { FrontendLogicProps } from "../../core/logic/types.js";
 
 export type CatalogRequestsProps = FrontendLogicProps<never, never, "catalog">;
@@ -107,7 +110,7 @@ export class CatalogRequestsPlugin extends LogicPlugin<
     const response =
       kind === "group"
         ? await catalog.group[":id"].$patch({
-            param: { id },
+            param: { id: encodeApiParam(id) },
             json: {
               ...(patch.name === undefined ? {} : { name: patch.name }),
               ...(patch.archived === undefined
@@ -116,7 +119,7 @@ export class CatalogRequestsPlugin extends LogicPlugin<
             },
           })
         : await catalog.activity[":id"].$patch({
-            param: { id },
+            param: { id: encodeApiParam(id) },
             json: patch,
           });
     await requireApiSuccess(response);
@@ -130,7 +133,7 @@ export class CatalogRequestsPlugin extends LogicPlugin<
     patch: GoalPatch;
   }): Promise<Goal> {
     const response = await this.deps.api.catalog.goal[":id"].$patch({
-      param: { id },
+      param: { id: encodeApiParam(id) },
       json: patch,
     });
     await requireApiSuccess(response);
@@ -139,13 +142,13 @@ export class CatalogRequestsPlugin extends LogicPlugin<
 
   async remove({ kind, id }: { kind: CatalogKind; id: string }): Promise<void> {
     const { catalog } = this.deps.api;
-    const param = { param: { id } };
+    const request = { param: { id: encodeApiParam(id) } };
     const response =
       kind === "group"
-        ? await catalog.group[":id"].$delete(param)
+        ? await catalog.group[":id"].$delete(request)
         : kind === "activity"
-          ? await catalog.activity[":id"].$delete(param)
-          : await catalog.goal[":id"].$delete(param);
+          ? await catalog.activity[":id"].$delete(request)
+          : await catalog.goal[":id"].$delete(request);
     await requireApiSuccess(response);
   }
 
