@@ -156,7 +156,89 @@ The project's own choices, with their reasons. Read this file when you read
   activity is stored on the server at once, so a draft stays only when a
   request is lost, and the page clears it then. The UI Logic tests of the new
   app cover the storage.
-- The service worker is off on `localhost`, so the offline shell is not tested.
+- The service worker (`frontend/public/sw.js`) registers only in a production
+  build, so the Vite dev server does not get it. The black-box Worker serves
+  the built app, so `offline-shell.spec.ts` tests the offline shell there.
+- The refresh of the day when the window gets focus has no black-box test.
+  The app listens to the `focus` event of `window`, and `page.bringToFront()`
+  does not fire it in the Chromium of Playwright. The 15-second refresh has
+  one (`other-device.spec.ts`), and `journal-logic-refresh.test.ts` covers the
+  focus.
+- The navigation lock has no black-box test. A page holds it only while a
+  request is in flight, and no control that a black-box test may use holds a
+  request (`page.route` and `page.evaluate` are not allowed). The UI Logic
+  tests in `core/ui/navigation-lock-logic.test.ts` hold the request.
+
+## The navigation lock
+
+- **A page with a request in flight holds the navigation.** The Logic of the
+  page has a `LeaveLockPlugin` (`core/ui/leave-lock-plugin.ts`). When the Logic
+  is busy, the plugin sends `held` on `App.navigationLockEvents`, and when it is
+  done or cleaned up, it sends `released`. The old app locked the goal page, the
+  add-activity page and Setup in the same way, with the same three messages.
+- **`NavigationLockLogic` owns the lock.** `NavigationLockProvider` in
+  `core/ui/` creates it above the journal in `routes.tsx`. It keeps the list of
+  holders. The shell disables the navigation buttons while the list is not
+  empty, and sends the notice of the newest holder to the message slot. The back buttons of the
+  pages call `canLeave()` first.
+- **The back button of the browser needs a guard.** While a holder exists,
+  `BrowserHistoryService` refuses each move through the history. Its `popstate`
+  listener is added in the capture phase when `createApp` runs, which is before
+  React Router adds its own. It calls `stopImmediatePropagation()`, so the
+  router does not change its location and the page stays mounted. A page that
+  unmounted would clean up its Logic, and that cancels the request that the lock
+  waits for. Then the service calls `history.go(delta)` to undo the move, and
+  ignores the `popstate` event of that undo.
+- **The guard depends on `history.state.idx` of React Router.** `delta` is the
+  `idx` of the guarded page minus the `idx` of the page that the move opened.
+  If an entry has no `idx`, the service goes one step forward and logs a
+  warning. A change of the router that drops `idx` breaks the guard.
+
+## The message slot
+
+- **Each page except the log has one message slot.** The old app had one
+  `message` in its state, and the shell showed it as the first child of
+  `main`, above the page. The shell does the same now (`app-shell.tsx`). A
+  new message replaces the old one, and the log keeps its own messages.
+- **Pages send, one Logic keeps.** A Logic sends its message through a
+  `PageNoticePlugin` (`core/ui/page-notice-plugin.js`) on
+  `App.pageNoticeEvents`. `PageNoticeLogic` (`core/ui/`) keeps the newest one,
+  and `JournalFrame` tells it which page is open. A plugin takes the notice of
+  a Logic with `follow()`, or sends it with `show()`. `clear()` is for the
+  places where the old app emptied the slot.
+- **A change of page empties the slot,** unless the message is for the page
+  that opens. "Activity added." is for Setup, so the Setup Logic sends it with
+  `view: "settings"` while the form is still open.
+- **A view keeps its own error when the old one did.** The load error of the
+  catalog with a Retry button, the Insights errors and the sign-out error stay
+  in the page. The goal history had a Retry button only in the new app, so
+  its error goes to the slot, and the month buttons read the month again.
+
+## Changes to the old API that stay
+
+The port changed three details of the old API. None of them changes what a
+client can do, so they stay, and a later audit must not report them as gaps.
+
+- A request with a method that a route does not have gets 404. The old Worker
+  answered 405 with an `Allow` header.
+- `/api/auth/*` refusals have the shared error body (`error.code`,
+  `error.message`). The old Worker sent `{ error, code }`. Only the app's own
+  pages read these answers.
+- The origin check of a write runs before the session check, so a write from
+  another site without a session gets 403, not 401.
+
+## Sign-in headers and caches
+
+- **`/sign-in` and `/login` have anti-framing headers and `no-store`.** The
+  Worker adds `X-Frame-Options`, `Content-Security-Policy: frame-ancestors`,
+  `Referrer-Policy: same-origin` and `Cache-Control: no-store` to the asset
+  answer, as the old `_headers` file did.
+- **Every `/api/auth/*` answer has `Cache-Control: no-store`**, and so has the
+  303 from `/oauth/authorize` to `/sign-in`. A request with a stale session
+  cookie that gets a 401 also clears the cookie.
+- **The fixture removes the virtual passkey device before it closes a
+  context.** Without this, `context.close()` hung after the service worker and
+  the `no-store` answers.
 
 ## The log, the days and the catalog
 
@@ -197,12 +279,15 @@ activities, goals }` in the JSON of the old `/api/bootstrap`, without
   (`daymark:draft:v1:<date>` and `daymark:active-draft-date:v1`).
   `DaysStorage` of the frontend reads and writes them through the injected
   `localStorage`.
-- **The styles of the template are in the `template` layer.** `app.css` has its
-  rules inside `@layer template`, so that the styles of the journal win:
-  `journal-base.css` (tokens and a reset that has no weight and covers only
-  `.journal-shell`), `journal-shell.css` and `days/ui/days.css`. They come from
-  the old stylesheet, with `.app-shell` renamed to `.journal-shell`,
-  because the template uses `.app-shell` for the sign-in page.
+- **The styles are the stylesheet of the old app, unchanged.**
+  `core/ui/styles/` holds the files `01-reset.css` to `05-insights.css`. They
+  are the old `reset.css`, `globals.css` (without the Tailwind import) and
+  the three Insights files, in the order of `vanilla/build.mjs`. Only the
+  limit of 20,000 bytes for a file splits `globals.css`. `main.tsx` imports
+  them in order. `.prettierignore` lists the folder, so that Prettier keeps
+  their text. The template styles of bare elements are gone. The markup uses
+  the old class names, `.app-shell` included. `06-port-additions.css` holds
+  the rules for UI that only the new app has, each with a comment.
 
 ## MCP, the import and the export
 

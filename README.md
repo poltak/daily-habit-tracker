@@ -81,6 +81,18 @@ keeps unsaved drafts per logical date in device-local storage and reports
 online, offline, and failed-save states. A successful save clears that local
 draft.
 
+Setup also holds the theme (device, light or dark; a change in one tab
+applies in the other tabs), the day on which the week ends, the passkeys of
+the owner, the connected agent apps, the JSON export and sign-out. While a
+Setup, goal or new-activity change runs, the navigation waits for it.
+
+A goal opens its own page from the log or from Setup. The page shows the
+completed days of each month and the result of each week, and holds the goal
+settings: name, schedule, linked activity, icon, archive and delete.
+
+The built app registers a service worker. It keeps the app shell, so a reload
+without a connection still opens the journal. It never keeps API answers.
+
 ## Insights
 
 Open `/insights` from the journal navigation to analyze the full saved-entry
