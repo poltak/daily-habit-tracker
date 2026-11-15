@@ -51,6 +51,11 @@
       "commit": "b3be3a0518ecf94a8ba60d153ec259c77ae06ea8",
       "subject": "Replace shared controls with shadcn base-mira parts",
       "reason": "It moves the pages to the shadcn parts of the shared UI kit of 76154bd, which Daymark leaves out"
+    },
+    {
+      "commit": "915d2a55a1c08f26fdfb77ab5691a0e7501b5d84",
+      "subject": "Fix control migration faults found in the UI review",
+      "reason": "It fixes the shadcn migration of the shared UI kit of 76154bd and the notes example, which Daymark leaves out"
     }
   ],
   "conflicts": [
@@ -158,6 +163,16 @@
         "frontend/src/features/core/ui/worldbrain.css",
         "lint/ui-foundation.test.mjs",
         "lint/ui-legacy.mjs"
+      ]
+    },
+    {
+      "commit": "915d2a55a1c08f26fdfb77ab5691a0e7501b5d84",
+      "files": [
+        ".agents/skills/ui-design/SKILL.md",
+        "frontend/src/features/component-library/ui/control-examples.tsx",
+        "frontend/src/features/core/ui/app.css",
+        "frontend/src/features/core/ui/components/components-forms.css",
+        "frontend/src/features/core/ui/routes.tsx"
       ]
     }
   ]
