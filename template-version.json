@@ -131,6 +131,11 @@
       "commit": "f01fef2da68619309e5a04e26659830fd2bfbdf1",
       "subject": "Let shadcn presets control dark palettes and subtitle type",
       "reason": "It adds the dark class and the typography rules of the shared UI kit of 76154bd; Daymark keeps its own theme service and stylesheet"
+    },
+    {
+      "commit": "e731890aef170a3b7fed5c6aa203a6455dda9514",
+      "subject": "Keep page subtitles in the document text style",
+      "reason": "It changes only the shared UI kit of 76154bd, which Daymark leaves out to keep its production stylesheet"
     }
   ],
   "conflicts": [
@@ -424,6 +429,13 @@
         "lint/stack-plugin.mjs",
         "lint/ui-foundation.test.mjs",
         "lint/ui-rules.mjs"
+      ]
+    },
+    {
+      "commit": "e731890aef170a3b7fed5c6aa203a6455dda9514",
+      "files": [
+        "docs/agents/ui-components.md",
+        "frontend/src/features/core/ui/core/page-header.tsx"
       ]
     }
   ]
