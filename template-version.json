@@ -66,6 +66,11 @@
       "commit": "9bfafced8b7bcedb318d69e5e02940d2937a8658",
       "subject": "Keep legacy Select colors and measure portal states correctly",
       "reason": "It changes the Select colors and the screens of the shared UI kit of 76154bd, which Daymark leaves out"
+    },
+    {
+      "commit": "8250ca0a70e467095e47b56d6d96f9317eba708d",
+      "subject": "Replace shared form parts with shadcn fields",
+      "reason": "It moves the template's own sign-in pages to the shadcn fields of the shared UI kit of 76154bd, which Daymark leaves out"
     }
   ],
   "conflicts": [
@@ -201,6 +206,24 @@
         "frontend/src/features/component-library/black-box-tests/component-library.screens.ts",
         "frontend/src/features/core/ui/components/components-forms.css",
         "frontend/src/features/core/ui/worldbrain.css"
+      ]
+    },
+    {
+      "commit": "8250ca0a70e467095e47b56d6d96f9317eba708d",
+      "files": [
+        "docs/agents/ui-components.md",
+        "docs/agents/ui-shadcn.md",
+        "frontend/src/features/auth/ui/login-page.tsx",
+        "frontend/src/features/auth/ui/sign-up-page.tsx",
+        "frontend/src/features/component-library/black-box-tests/component-library-page-object.ts",
+        "frontend/src/features/component-library/black-box-tests/component-library.screens.ts",
+        "frontend/src/features/component-library/black-box-tests/component-library.spec.ts",
+        "frontend/src/features/component-library/ui/component-library-page.tsx",
+        "frontend/src/features/core/ui/components/components-forms.css",
+        "frontend/src/features/core/ui/components/components-layout.css",
+        "frontend/src/features/core/ui/components/page-header.tsx",
+        "frontend/src/features/core/ui/worldbrain.css",
+        "lint/ui-legacy.mjs"
       ]
     }
   ]
