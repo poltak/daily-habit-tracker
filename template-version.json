@@ -116,6 +116,11 @@
       "commit": "53187b09f548c7403d11acc9595a9a92cfc41b01",
       "subject": "Keep the shell notice gap when Page supplies its inset",
       "reason": "It changes only the shared UI kit of 76154bd, which Daymark leaves out to keep its production stylesheet"
+    },
+    {
+      "commit": "64ac1506d403696cf292ba8410ef9469dee816d5",
+      "subject": "Remove unused UI styles and theme tokens",
+      "reason": "It changes only the shared UI kit of 76154bd, which Daymark leaves out to keep its production stylesheet"
     }
   ],
   "conflicts": [
@@ -379,6 +384,15 @@
         "frontend/src/features/core/tests/browser/screens.ts",
         "frontend/src/features/core/ui/core/app-layout.tsx",
         "frontend/src/features/core/ui/core/page.tsx"
+      ]
+    },
+    {
+      "commit": "64ac1506d403696cf292ba8410ef9469dee816d5",
+      "files": [
+        "frontend/src/features/core/ui/app.css",
+        "frontend/src/features/core/ui/error-fallbacks.tsx",
+        "frontend/src/features/core/ui/routes.tsx",
+        "frontend/src/features/core/ui/worldbrain.css"
       ]
     }
   ]
