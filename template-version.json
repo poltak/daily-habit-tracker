@@ -16,6 +16,11 @@
       "commit": "314d8ce004ccf50c9b422a80787ad2ca22403fbb",
       "subject": "Document the UI components and add the ui-design skill",
       "reason": "It documents the shared UI components of 76154bd, which Daymark leaves out"
+    },
+    {
+      "commit": "4b049ee384eab26da71ba401c1e616a5bb6e9d57",
+      "subject": "Split the shared component CSS into three files under the size limit",
+      "reason": "It changes only the shared UI kit of 76154bd, which Daymark leaves out to keep its production stylesheet"
     }
   ],
   "conflicts": [
@@ -39,6 +44,13 @@
     {
       "commit": "314d8ce004ccf50c9b422a80787ad2ca22403fbb",
       "files": ["AGENTS.md", "docs/agents/README.md"]
+    },
+    {
+      "commit": "4b049ee384eab26da71ba401c1e616a5bb6e9d57",
+      "files": [
+        "docs/agents/ui-components.md",
+        "frontend/src/features/core/ui/components/components.css"
+      ]
     }
   ]
 }
