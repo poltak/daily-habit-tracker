@@ -1,3 +1,4 @@
+import { encodeApiParam } from "../../api/client/api-client.js";
 import type { DayState } from "@app/common/features/days/types";
 import type { BackendApi } from "../../api/client/api-client.js";
 
@@ -14,7 +15,7 @@ export async function fetchDayState({
   signal: AbortSignal;
 }): Promise<DayState> {
   const response = await api.entries[":logicalDate"].$get(
-    { param: { logicalDate } },
+    { param: { logicalDate: encodeApiParam(logicalDate) } },
     { init: { signal } },
   );
   // A day without an entry answers 404 with the same body, and a route

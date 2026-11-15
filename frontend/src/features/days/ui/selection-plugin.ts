@@ -3,7 +3,10 @@ import type {
   DayActivitySelection,
   GoalCompletion,
 } from "@app/common/features/days/types";
-import { requireApiSuccess } from "../../api/client/api-client.js";
+import {
+  encodeApiParam,
+  requireApiSuccess,
+} from "../../api/client/api-client.js";
 import type { Draft } from "../utils/draft.js";
 import type { FrontendLogicProps } from "../../core/logic/types.js";
 import { isExpectedGoalResult, type GoalResult } from "../utils/goal-change.js";
@@ -118,7 +121,10 @@ export class SelectionPlugin extends LogicPlugin<
       const response = await this.deps.api["day-selections"][
         ":logicalDate"
       ].mood.$put(
-        { param: { logicalDate }, json: { moodId } },
+        {
+          param: { logicalDate: encodeApiParam(logicalDate) },
+          json: { moodId },
+        },
         { init: { signal: this.signal } },
       );
       await requireApiSuccess(response);
@@ -149,7 +155,13 @@ export class SelectionPlugin extends LogicPlugin<
         const response = await this.deps.api["day-selections"][
           ":logicalDate"
         ].activities[":activityId"].$put(
-          { param: { logicalDate, activityId }, json: { selected } },
+          {
+            param: {
+              logicalDate: encodeApiParam(logicalDate),
+              activityId: encodeApiParam(activityId),
+            },
+            json: { selected },
+          },
           { init: { signal: this.signal } },
         );
         await requireApiSuccess(response);
@@ -190,7 +202,13 @@ export class SelectionPlugin extends LogicPlugin<
         const response = await this.deps.api["goal-completions"][
           ":logicalDate"
         ][":goalId"].$put(
-          { param: { logicalDate, goalId }, json: { completed } },
+          {
+            param: {
+              logicalDate: encodeApiParam(logicalDate),
+              goalId: encodeApiParam(goalId),
+            },
+            json: { completed },
+          },
           { init: { signal: this.signal } },
         );
         await requireApiSuccess(response);

@@ -5,7 +5,10 @@ import {
   shiftMonth,
 } from "@app/common/features/core/utils/logical-date";
 import type { GoalHistory } from "@app/common/features/goals/types";
-import { requireApiSuccess } from "../../api/client/api-client.js";
+import {
+  encodeApiParam,
+  requireApiSuccess,
+} from "../../api/client/api-client.js";
 import type { FrontendLogicProps } from "../../core/logic/types.js";
 import type { App } from "../../core/types.js";
 import { PageNoticePlugin } from "../../core/ui/page-notice-plugin.js";
@@ -83,7 +86,10 @@ export class GoalLogic extends Logic<
     });
     await this.executeTask("loadHistory", async () => {
       const history = await this.deps.api.goals[":goalId"].history.$get(
-        { param: { goalId: this.deps.goalId }, query: { month, asOf } },
+        {
+          param: { goalId: encodeApiParam(this.deps.goalId) },
+          query: { month, asOf },
+        },
         { init: { signal: this.signal } },
       );
       await requireApiSuccess(history);

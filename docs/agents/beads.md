@@ -48,16 +48,18 @@ same for all.
 
 Do this one time on each machine, in the main checkout, on a branch that has
 `.beads/`. `git worktree list` shows the main checkout first. An agent can do
-these steps.
+this step.
 
 ```sh
 pnpm install
-pnpm exec bd metrics off
-pnpm exec bd bootstrap
-chmod 700 .beads
-git config beads.role maintainer
-pnpm exec bd list
+pnpm run issues:join
 ```
+
+[`scripts/issues-join.ts`](../../scripts/issues-join.ts) turns off the usage
+metrics of `bd`, runs `bd bootstrap`, sets the mode of `.beads/` to `700`, sets
+`git config beads.role maintainer`, and then lists the issues. It refuses to
+run in a linked worktree, and it names the main checkout. It is safe to run
+again. `swamp workflow run issues-join` runs the same command.
 
 - The usage metrics of `bd` are on by default. They send the name of each
   command, the `bd` version, and the operating system. The setting is for
@@ -82,7 +84,7 @@ pnpm exec bd dolt push
 git push
 ```
 
-[`scripts/issues-init.mjs`](../../scripts/issues-init.mjs) runs `bd init` with
+[`scripts/issues-init.ts`](../../scripts/issues-init.ts) runs `bd init` with
 two flags, and the project name from `package.json` as the prefix. Give another
 prefix with `--prefix <name>`.
 

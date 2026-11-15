@@ -3,17 +3,18 @@
   // no package of the repository has it. `script` comes with the system, and
   // the sync tests use it to get a real terminal.
   "ignoreBinaries": ["codex", "script"],
-  // People, agents, and `scripts/issues-init.mjs` run bd with `pnpm exec bd`,
+  // People, agents, and `scripts/issues-init.ts` run bd with `pnpm exec bd`,
   // and knip reads no code that imports it.
   "ignoreDependencies": ["@beads/bd"],
   "workspaces": {
     ".": {
       "entry": [
-        ".agents/hooks/check-branch-is-current.mjs",
-        ".agents/hooks/format-edited-files.mjs",
-        ".agents/hooks/guard-template-owned-files.mjs",
+        ".agents/hooks/check-branch-is-current.ts",
+        ".agents/hooks/format-edited-files.ts",
+        ".agents/hooks/guard-template-owned-files.ts",
+        ".agents/hooks/run-project-hooks.ts",
       ],
-      "project": [".agents/hooks/**/*.mjs", "lint/**/*.mjs"],
+      "project": [".agents/hooks/**/*.ts", "lint/**/*.ts"],
     },
     "backend": {
       "entry": [
@@ -50,6 +51,22 @@
         // The browser loads the service worker by its address, so no module
         // imports it.
         "public/sw.js",
+        // The CLI of the kit writes these files.
+        "src/features/core/ui/shadcn/*.{ts,tsx}",
+      ],
+      // The template's kit is in the project because the template's gate
+      // files require it, and no page imports it (see
+      // docs/agents/project/template-parts-left-out.md).
+      "ignore": [
+        "src/features/core/ui/core/*.tsx",
+        "src/features/core/ui/shadcn.css",
+        "src/features/core/ui/theme.css",
+        "src/features/core/ui/worldbrain.css",
+      ],
+      "ignoreDependencies": [
+        "tw-animate-css",
+        "tailwindcss",
+        "@tailwindcss/vite",
       ],
     },
   },

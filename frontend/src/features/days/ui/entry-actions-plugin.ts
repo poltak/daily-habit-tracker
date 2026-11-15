@@ -1,7 +1,10 @@
 import { LogicPlugin } from "@app/common/features/core/logic/logic-plugin";
 import type { TaskState } from "@app/common/features/core/logic/logic";
 import type { Entry } from "@app/common/features/days/types";
-import { requireApiSuccess } from "../../api/client/api-client.js";
+import {
+  encodeApiParam,
+  requireApiSuccess,
+} from "../../api/client/api-client.js";
 import type { FrontendLogicProps } from "../../core/logic/types.js";
 import { entryInputFromDraft, type Draft } from "../utils/draft.js";
 
@@ -53,7 +56,10 @@ export class EntryActionsPlugin extends LogicPlugin<
     this.deps.services.device.setLeaveWarning(true);
     await this.executeTask("save", async () => {
       const response = await this.deps.api.entries[":logicalDate"].$put(
-        { param: { logicalDate }, json: entryInputFromDraft(draft) },
+        {
+          param: { logicalDate: encodeApiParam(logicalDate) },
+          json: entryInputFromDraft(draft),
+        },
         { init: { signal: this.signal } },
       );
       await requireApiSuccess(response);
@@ -78,7 +84,7 @@ export class EntryActionsPlugin extends LogicPlugin<
     await this.executeTask("delete", async () => {
       const response = await this.deps.api.entries[":logicalDate"].$delete(
         {
-          param: { logicalDate },
+          param: { logicalDate: encodeApiParam(logicalDate) },
           query: { expectedVersion: String(version) },
         },
         { init: { signal: this.signal } },

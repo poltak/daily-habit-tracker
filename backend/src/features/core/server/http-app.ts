@@ -22,6 +22,7 @@ import {
   createErrorHandler,
   handleNotFound,
 } from "../handlers/error-responses.js";
+import { privateJsonHeaders } from "../handlers/private-json-headers.js";
 import { logRequests } from "../handlers/request-log.js";
 import type { RequestEnvironment } from "../handlers/types.js";
 import { createHealthHandlers } from "../../health/handlers/health-handlers.js";
@@ -61,6 +62,7 @@ function createBusinessHttpApp({ app }: ApiHttpAppProps) {
  */
 export function createApiHttpApp({ app }: ApiHttpAppProps) {
   return new Hono<AuthEnvironment>()
+    .use("*", privateJsonHeaders())
     .use("*", requireTrustedOrigin({ config: app.config }))
     .use("*", resolveSession({ services: app.services, logic: app.logic }))
     .route("/auth", createAuthHandlers({ logic: app.logic }))
