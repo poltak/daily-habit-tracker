@@ -96,6 +96,11 @@
       "commit": "0ba4f901664da41e180984aab378c284584b9224",
       "subject": "Move text and page layout to shadcn",
       "reason": "It moves text and page layout to the shadcn parts of the shared UI kit of 76154bd, which Daymark leaves out"
+    },
+    {
+      "commit": "87bf1434b36c94428e44a2b3c84d62728ad4e01a",
+      "subject": "Point the class-name guide to the cn package",
+      "reason": "It changes only the shared UI kit of 76154bd, which Daymark leaves out to keep its production stylesheet"
     }
   ],
   "conflicts": [
@@ -324,6 +329,10 @@
         "frontend/src/features/core/ui/routes.tsx",
         "frontend/src/features/core/ui/worldbrain.css"
       ]
+    },
+    {
+      "commit": "87bf1434b36c94428e44a2b3c84d62728ad4e01a",
+      "files": ["docs/agents/ui-components.md"]
     }
   ]
 }
