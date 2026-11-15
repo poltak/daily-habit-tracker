@@ -91,6 +91,11 @@
       "commit": "a19ab2b6d34bed449091e1451ab344204fb3f11c",
       "subject": "Keep the loading skeleton theme tokens",
       "reason": "It changes only the shared UI kit of 76154bd, which Daymark leaves out to keep its production stylesheet"
+    },
+    {
+      "commit": "0ba4f901664da41e180984aab378c284584b9224",
+      "subject": "Move text and page layout to shadcn",
+      "reason": "It moves text and page layout to the shadcn parts of the shared UI kit of 76154bd, which Daymark leaves out"
     }
   ],
   "conflicts": [
@@ -288,6 +293,35 @@
       "files": [
         "docs/agents/ui-components.md",
         "docs/agents/ui-shadcn.md",
+        "frontend/src/features/core/ui/worldbrain.css"
+      ]
+    },
+    {
+      "commit": "0ba4f901664da41e180984aab378c284584b9224",
+      "files": [
+        "docs/agents/ui-components.md",
+        "docs/agents/ui-screens.md",
+        "docs/agents/ui-shadcn.md",
+        "frontend/src/features/auth/ui/login-page.tsx",
+        "frontend/src/features/auth/ui/session-gate.tsx",
+        "frontend/src/features/auth/ui/sign-up-page.tsx",
+        "frontend/src/features/component-library/black-box-tests/component-library-page-object.ts",
+        "frontend/src/features/component-library/black-box-tests/component-library.spec.ts",
+        "frontend/src/features/component-library/ui/component-library-page.tsx",
+        "frontend/src/features/component-library/ui/control-examples.tsx",
+        "frontend/src/features/component-library/ui/form-examples.tsx",
+        "frontend/src/features/component-library/ui/icon-examples.tsx",
+        "frontend/src/features/component-library/ui/overlay-examples.tsx",
+        "frontend/src/features/core/black-box-tests/app-shell-page-object.ts",
+        "frontend/src/features/core/tests/browser/screens.ts",
+        "frontend/src/features/core/ui/app.css",
+        "frontend/src/features/core/ui/components/app-layout.tsx",
+        "frontend/src/features/core/ui/components/components-base.css",
+        "frontend/src/features/core/ui/components/components-forms.css",
+        "frontend/src/features/core/ui/components/layout.tsx",
+        "frontend/src/features/core/ui/components/page-header.tsx",
+        "frontend/src/features/core/ui/error-fallbacks.tsx",
+        "frontend/src/features/core/ui/routes.tsx",
         "frontend/src/features/core/ui/worldbrain.css"
       ]
     }
