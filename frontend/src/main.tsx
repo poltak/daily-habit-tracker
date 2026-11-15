@@ -5,14 +5,14 @@ import { ErrorBoundary } from "./features/core/ui/error-boundary.js";
 import { AppErrorFallback } from "./features/core/ui/error-fallbacks.js";
 import { FrontendAppProvider } from "./features/core/ui/frontend-app-context.js";
 import { AppRoutes } from "./features/core/ui/routes.js";
-import "./features/core/ui/app.css";
-import "./features/core/ui/journal-base.css";
-import "./features/core/ui/journal-shell.css";
-import "./features/days/ui/days.css";
-import "./features/insights/ui/insights.css";
-import "./features/insights/ui/insights-relationships.css";
-import "./features/insights/ui/insights-rhythms.css";
-import "./features/goals/ui/goals.css";
+import "./features/core/ui/styles/01-reset.css";
+import "./features/core/ui/styles/02-globals-a.css";
+import "./features/core/ui/styles/02-globals-b.css";
+import "./features/core/ui/styles/02-globals-c.css";
+import "./features/core/ui/styles/03-insights-relationships.css";
+import "./features/core/ui/styles/04-insights-rhythms.css";
+import "./features/core/ui/styles/05-insights.css";
+import "./features/core/ui/styles/06-port-additions.css";
 import { createApp } from "./features/core/live/index.js";
 
 const rootElement = document.getElementById("root");
@@ -28,6 +28,15 @@ const app = createApp({
   logLevel: import.meta.env.DEV ? "debug" : "warn",
 });
 const { logger } = app.services;
+
+// The Vite dev server must not get a worker: it would serve old files.
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    void navigator.serviceWorker
+      .register("/sw.js", { scope: "/" })
+      .catch(() => undefined);
+  });
+}
 
 createRoot(rootElement, {
   // React reports every rendering error here: one that an error boundary

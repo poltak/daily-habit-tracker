@@ -38,12 +38,12 @@ function LoadServerPage({ path }: { path: string }) {
 export function SignInPage() {
   const { logic, state } = useAuth();
   const location = useLocation();
+  const name = APP_NAME.toLowerCase();
   const brand = (
-    <span className="brand-mark auth-brand" aria-hidden="true">
-      <span />
-      <span />
-      <span />
-    </span>
+    <p className="auth-brand">
+      <span className="brand-mark" aria-hidden="true" />
+      <span>{name}</span>
+    </p>
   );
 
   // The consent page of an app sends the owner here with `returnTo` in the
@@ -55,8 +55,8 @@ export function SignInPage() {
   // The text is fixed, so a link cannot put its own words on this page.
   const notice = returnTo.startsWith("/oauth/authorize") ? (
     <p className="auth-notice">
-      An app wants to connect to your {APP_NAME}. Sign in first, then {APP_NAME}{" "}
-      asks you to allow it.
+      An app wants to connect to your {name}. Sign in first, then {name} asks
+      you to allow it.
     </p>
   ) : null;
 
@@ -69,26 +69,29 @@ export function SignInPage() {
   }
   if (!logic.canUsePasskeys) {
     return (
-      <section className="login-panel auth-panel">
+      <section className="auth-panel" aria-live="polite">
         {brand}
         <h1>This browser cannot use passkeys</h1>
-        <p>
-          Open {APP_NAME} in a current version of Safari, Chrome, Edge or
-          Firefox.
+        <p className="muted">
+          Open {name} in a current version of Safari, Chrome, Edge or Firefox.
         </p>
       </section>
     );
   }
   if (state.loadSessionState === "error") {
     return (
-      <section className="login-panel auth-panel">
+      <section className="auth-panel" aria-live="polite">
         {brand}
         <h1>Sign-in is unavailable</h1>
         <p className="auth-error" role="alert">
           {state.loadSessionError}
         </p>
         <div className="auth-actions">
-          <button type="button" onClick={() => void logic.refresh()}>
+          <button
+            type="button"
+            className="primary-button"
+            onClick={() => void logic.refresh()}
+          >
             Try again
           </button>
         </div>
@@ -100,10 +103,10 @@ export function SignInPage() {
     state.loadSessionState === "running"
   ) {
     return (
-      <section className="login-panel auth-panel" aria-live="polite">
+      <section className="auth-panel" aria-live="polite">
         {brand}
-        <h1>Sign in to {APP_NAME}</h1>
-        <p className="auth-status">Checking sign-in…</p>
+        <h1>Sign in to {name}</h1>
+        <p className="muted">Checking sign-in…</p>
       </section>
     );
   }
@@ -111,17 +114,18 @@ export function SignInPage() {
   if (state.view === "sign-in") {
     const signingIn = state.signInState === "running";
     return (
-      <section className="login-panel auth-panel" aria-live="polite">
+      <section className="auth-panel" aria-live="polite">
         {brand}
-        <h1>Sign in to {APP_NAME}</h1>
+        <h1>Sign in to {name}</h1>
         {notice}
-        <p>
+        <p className="muted">
           Use your passkey. Your device asks for your face, fingerprint or
           screen lock.
         </p>
         <div className="auth-actions">
           <button
             type="button"
+            className="primary-button"
             disabled={signingIn}
             aria-busy={signingIn}
             onClick={() => void logic.signIn()}
@@ -154,14 +158,14 @@ export function SignInPage() {
         ? serverMessage("SETUP_CODE_TOO_SHORT")
         : null;
   return (
-    <section className="login-panel auth-panel" aria-live="polite">
+    <section className="auth-panel" aria-live="polite">
       {brand}
-      <h1>{state.recovery ? "Add a passkey" : `Set up ${APP_NAME}`}</h1>
+      <h1>{state.recovery ? "Add a passkey" : `Set up ${name}`}</h1>
       {notice}
-      <p>
+      <p className="muted">
         {state.recovery
           ? "Type your setup code. Then this device saves a new passkey."
-          : `Type the setup code that you chose for this ${APP_NAME}. Then this device saves a passkey, and you sign in with your face, fingerprint or screen lock.`}
+          : `Type the setup code that you chose for this ${name}. Then this device saves a passkey, and you sign in with your face, fingerprint or screen lock.`}
       </p>
       {setupCodeProblem ? (
         <p className="auth-error" role="alert">
@@ -188,7 +192,12 @@ export function SignInPage() {
               onChange={(event) => logic.setSetupCode(event.target.value)}
             />
           </label>
-          <button type="submit" disabled={creating} aria-busy={creating}>
+          <button
+            type="submit"
+            className="primary-button"
+            disabled={creating}
+            aria-busy={creating}
+          >
             {creating ? WAITING : "Create passkey"}
           </button>
         </form>

@@ -66,7 +66,7 @@
   color: var(--ink);
   font-size: 15px;
   line-height: 1.35;
-  letter-spacing: -0.015em;
+  letter-spacing: -.015em;
 }
 
 .insight-rhythm-chart-heading p,
@@ -343,7 +343,7 @@
   color: var(--muted);
   font-size: 10px;
   font-weight: 800;
-  letter-spacing: 0.03em;
+  letter-spacing: .03em;
   text-transform: uppercase;
 }
 
@@ -357,7 +357,7 @@
   border-top: 0;
   color: var(--positive-muted);
   font-size: 10px;
-  letter-spacing: 0.08em;
+  letter-spacing: .08em;
   text-transform: uppercase;
 }
 
@@ -404,3 +404,4 @@
     grid-template-columns: 1fr;
   }
 }
+

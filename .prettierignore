@@ -16,3 +16,5 @@ pnpm-lock.yaml
 docs/*.md
 DAYLIO_DISCOVERY.md
 MVP_IMPLEMENTATION_PLAN.md
+# Copies of the old stylesheet. Prettier would change their text.
+frontend/src/features/core/ui/styles/

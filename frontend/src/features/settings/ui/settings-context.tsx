@@ -2,7 +2,6 @@ import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { useLogic } from "../../core/logic/use-logic.js";
 import { useFrontendApp } from "../../core/ui/frontend-app-context.js";
 import { ThemeLogic } from "./theme-logic.js";
-import "./settings.css";
 
 interface ThemeContextValue {
   logic: ThemeLogic;
