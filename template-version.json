@@ -41,6 +41,11 @@
       "commit": "9f78019da1bd5fd61e70d784f473c73955206a01",
       "subject": "Add Base UI shadcn controls and split the theme",
       "reason": "It adds Base UI shadcn controls to the shared UI kit of 76154bd, which Daymark leaves out"
+    },
+    {
+      "commit": "5f067ec380024a8312dd03acb34486d225b5b4b0",
+      "subject": "Document the shadcn component workflow",
+      "reason": "It documents the shadcn workflow of the shared UI kit of 76154bd, which Daymark leaves out"
     }
   ],
   "conflicts": [
@@ -114,6 +119,14 @@
         ".prettierignore",
         "frontend/src/features/core/ui/theme.css",
         "frontend/src/features/core/utils/class-names.ts"
+      ]
+    },
+    {
+      "commit": "5f067ec380024a8312dd03acb34486d225b5b4b0",
+      "files": [
+        ".agents/skills/ui-design/SKILL.md",
+        "AGENTS.md",
+        "docs/agents/ui-components.md"
       ]
     }
   ]
