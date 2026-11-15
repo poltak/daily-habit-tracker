@@ -76,6 +76,11 @@
       "commit": "931e2c5dbf5aa1b63b4a9fc6af3cd396565c1094",
       "subject": "Replace shared containers with shadcn parts",
       "reason": "It moves the containers to the shadcn parts of the shared UI kit of 76154bd, which Daymark leaves out"
+    },
+    {
+      "commit": "bec19e24d7da6ac02b019a5b0897559cf4995b3c",
+      "subject": "Keep card headings in the generated title style",
+      "reason": "It changes only the shared UI kit of 76154bd, which Daymark leaves out to keep its production stylesheet"
     }
   ],
   "conflicts": [
@@ -251,6 +256,13 @@
         "frontend/src/features/core/ui/worldbrain.css",
         "lint/ui-foundation.test.mjs",
         "lint/ui-rules.mjs"
+      ]
+    },
+    {
+      "commit": "bec19e24d7da6ac02b019a5b0897559cf4995b3c",
+      "files": [
+        "docs/agents/ui-components.md",
+        "frontend/src/features/core/ui/app.css"
       ]
     }
   ]
