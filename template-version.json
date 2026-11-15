@@ -71,6 +71,11 @@
       "commit": "8250ca0a70e467095e47b56d6d96f9317eba708d",
       "subject": "Replace shared form parts with shadcn fields",
       "reason": "It moves the template's own sign-in pages to the shadcn fields of the shared UI kit of 76154bd, which Daymark leaves out"
+    },
+    {
+      "commit": "931e2c5dbf5aa1b63b4a9fc6af3cd396565c1094",
+      "subject": "Replace shared containers with shadcn parts",
+      "reason": "It moves the containers to the shadcn parts of the shared UI kit of 76154bd, which Daymark leaves out"
     }
   ],
   "conflicts": [
@@ -224,6 +229,28 @@
         "frontend/src/features/core/ui/components/page-header.tsx",
         "frontend/src/features/core/ui/worldbrain.css",
         "lint/ui-legacy.mjs"
+      ]
+    },
+    {
+      "commit": "931e2c5dbf5aa1b63b4a9fc6af3cd396565c1094",
+      "files": [
+        "docs/agents/ui-components.md",
+        "docs/agents/ui-screens.md",
+        "docs/agents/ui-shadcn.md",
+        "frontend/src/features/auth/ui/login-page.tsx",
+        "frontend/src/features/auth/ui/sign-up-page.tsx",
+        "frontend/src/features/component-library/black-box-tests/component-library-page-object.ts",
+        "frontend/src/features/component-library/black-box-tests/component-library.screens.ts",
+        "frontend/src/features/component-library/black-box-tests/component-library.spec.ts",
+        "frontend/src/features/component-library/ui/component-library-page.tsx",
+        "frontend/src/features/component-library/ui/control-examples.tsx",
+        "frontend/src/features/component-library/ui/form-examples.tsx",
+        "frontend/src/features/core/ui/components/components.css",
+        "frontend/src/features/core/ui/components/icon.tsx",
+        "frontend/src/features/core/ui/components/page-header.tsx",
+        "frontend/src/features/core/ui/worldbrain.css",
+        "lint/ui-foundation.test.mjs",
+        "lint/ui-rules.mjs"
       ]
     }
   ]
