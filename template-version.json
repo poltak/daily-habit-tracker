@@ -21,6 +21,11 @@
       "commit": "4b049ee384eab26da71ba401c1e616a5bb6e9d57",
       "subject": "Split the shared component CSS into three files under the size limit",
       "reason": "It changes only the shared UI kit of 76154bd, which Daymark leaves out to keep its production stylesheet"
+    },
+    {
+      "commit": "41d272b2b8d51d01e823d727c355876230df5d45",
+      "subject": "Keep a visible focus outline on buttons and fix the notes list padding",
+      "reason": "It changes only the shared UI kit of 76154bd, which Daymark leaves out to keep its production stylesheet"
     }
   ],
   "conflicts": [
@@ -51,6 +56,10 @@
         "docs/agents/ui-components.md",
         "frontend/src/features/core/ui/components/components.css"
       ]
+    },
+    {
+      "commit": "41d272b2b8d51d01e823d727c355876230df5d45",
+      "files": ["frontend/src/features/core/ui/components/button.tsx"]
     }
   ]
 }
