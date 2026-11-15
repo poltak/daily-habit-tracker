@@ -21,6 +21,11 @@ export class SettingsStorage {
     }
   }
 
+  /** True when a change of `key` in the storage, made by another tab, can change the theme. A `null` key is a cleared storage. */
+  changesTheme(key: string | null): boolean {
+    return key === THEME_KEY || key === null;
+  }
+
   writeTheme({ theme }: { theme: ThemePreference }): void {
     try {
       this.deps.store.setItem(THEME_KEY, theme);

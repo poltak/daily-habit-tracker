@@ -25,6 +25,10 @@ export class BrowserDeviceService implements DeviceServiceInterface {
     };
   }
 
+  scrollToTop(): void {
+    window.scrollTo(0, 0);
+  }
+
   setLeaveWarning(active: boolean): void {
     if (active) {
       window.addEventListener("beforeunload", warnBeforeLeaving);

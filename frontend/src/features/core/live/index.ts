@@ -2,7 +2,13 @@ import {
   createApiClient,
   type ApiClientProps,
 } from "../../api/client/api-client.js";
-import type { App, FrontendServices, FrontendStorage } from "../types.js";
+import type {
+  App,
+  FrontendServices,
+  FrontendStorage,
+  NavigationLockEvent,
+  PageNoticeEvent,
+} from "../types.js";
 import type { BrowserKeyValueStore } from "../storage/types.js";
 import { EventEmitter } from "@app/common/features/core/events/event-emitter";
 import { ConsoleLoggerService } from "@app/common/features/core/services/console-logger-service";
@@ -13,6 +19,7 @@ import { BrowserClockService } from "../../clock/services/browser-clock-service.
 import { DaysStorage } from "../../days/storage/days-storage.js";
 import { BrowserDeviceService } from "../../device/services/browser-device-service.js";
 import { BrowserDownloadService } from "../../downloads/services/browser-download-service.js";
+import { BrowserHistoryService } from "../../history/services/browser-history-service.js";
 import { BrowserDialogService } from "../../dialogs/services/browser-dialog-service.js";
 import { BrowserThemeService } from "../../settings/services/browser-theme-service.js";
 import { SettingsStorage } from "../../settings/storage/settings-storage.js";
@@ -35,12 +42,14 @@ export function createApp({
     days: new DaysStorage({ store: browserStorage }),
     settings: new SettingsStorage({ store: browserStorage }),
   };
+  const logger = new ConsoleLoggerService({ minLevel: logLevel });
   const services: FrontendServices = {
-    logger: new ConsoleLoggerService({ minLevel: logLevel }),
+    logger,
     clock: new BrowserClockService(),
     device: new BrowserDeviceService(),
     dialogs: new BrowserDialogService(),
     downloads: new BrowserDownloadService(),
+    history: new BrowserHistoryService({ logger }),
     passkeys: new BrowserPasskeyService(),
     theme: new BrowserThemeService(),
     timers: new BrowserTimerService(),
@@ -53,6 +62,8 @@ export function createApp({
     services,
     apiAccessEvents,
     catalogEvents: new EventEmitter<CatalogEvent>(),
+    navigationLockEvents: new EventEmitter<NavigationLockEvent>(),
+    pageNoticeEvents: new EventEmitter<PageNoticeEvent>(),
     api: createApiClient({
       ...apiProps,
       onSessionRejected: () =>

@@ -7,6 +7,8 @@ export class FakeDeviceService implements DeviceServiceInterface {
   private online = true;
   private visible = true;
   leaveWarning = false;
+  /** How many times the page scrolled to its top. */
+  scrolledToTop = 0;
 
   isOnline(): boolean {
     return this.online;
@@ -19,6 +21,10 @@ export class FakeDeviceService implements DeviceServiceInterface {
   listen(listener: () => void): Unsubscribe {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+
+  scrollToTop(): void {
+    this.scrolledToTop += 1;
   }
 
   setLeaveWarning(active: boolean): void {

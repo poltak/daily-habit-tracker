@@ -1,5 +1,5 @@
 import { createApiClient } from "../../api/client/api-client.js";
-import type { App } from "../types.js";
+import type { App, NavigationLockEvent, PageNoticeEvent } from "../types.js";
 import { EventEmitter } from "@app/common/features/core/events/event-emitter";
 import { MemoryLoggerService } from "@app/common/features/core/services/memory-logger-service";
 import type { ApiAccessEvent } from "../../api/client/access-events.js";
@@ -8,6 +8,7 @@ import { FakeClockService } from "../../clock/services/fake-clock-service.js";
 import { DaysStorage } from "../../days/storage/days-storage.js";
 import { FakeDeviceService } from "../../device/services/fake-device-service.js";
 import { FakeDownloadService } from "../../downloads/services/fake-download-service.js";
+import { FakeHistoryService } from "../../history/services/fake-history-service.js";
 import { FakeDialogService } from "../../dialogs/services/fake-dialog-service.js";
 import { FakeThemeService } from "../../settings/services/fake-theme-service.js";
 import { SettingsStorage } from "../../settings/storage/settings-storage.js";
@@ -28,6 +29,8 @@ export interface TestApp extends App {
     dialogs: FakeDialogService;
     /** The files that the page saved. */
     downloads: FakeDownloadService;
+    /** The back and forward buttons. A test presses back with `goBack`. */
+    history: FakeHistoryService;
     /** The device's passkeys. A test gives it the owner's passkey, or makes it fail. */
     passkeys: SoftPasskeyService;
     theme: FakeThemeService;
@@ -62,6 +65,7 @@ export function createApp({
       device: new FakeDeviceService(),
       dialogs: new FakeDialogService(),
       downloads: new FakeDownloadService(),
+      history: new FakeHistoryService(),
       theme: new FakeThemeService(),
       timers: new FakeTimerService(),
       // The page's origin is the one of the backend in these tests.
@@ -70,6 +74,8 @@ export function createApp({
     },
     apiAccessEvents,
     catalogEvents: new EventEmitter<CatalogEvent>(),
+    navigationLockEvents: new EventEmitter<NavigationLockEvent>(),
+    pageNoticeEvents: new EventEmitter<PageNoticeEvent>(),
     api: createApiClient({
       fetch,
       baseUrl,

@@ -12,4 +12,6 @@ export interface DeviceServiceInterface {
    * a save in progress turns it on.
    */
   setLeaveWarning(active: boolean): void;
+  /** Scroll the page to its top. */
+  scrollToTop(): void;
 }

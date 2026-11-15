@@ -1,3 +1,4 @@
+import type { Unsubscribe } from "@app/common/features/core/events/event-emitter";
 import type { ThemeServiceInterface } from "./types.js";
 import type { ThemePreference } from "../utils/theme.js";
 
@@ -25,5 +26,11 @@ export class BrowserThemeService implements ThemeServiceInterface {
     sync();
     query.addEventListener("change", sync);
     this.stopFollowing = () => query.removeEventListener("change", sync);
+  }
+
+  listenToOtherTabs(listener: (key: string | null) => void): Unsubscribe {
+    const onStorage = (event: StorageEvent) => listener(event.key);
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }
 }
