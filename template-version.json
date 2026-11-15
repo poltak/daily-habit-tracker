@@ -121,6 +121,11 @@
       "commit": "64ac1506d403696cf292ba8410ef9469dee816d5",
       "subject": "Remove unused UI styles and theme tokens",
       "reason": "It changes only the shared UI kit of 76154bd, which Daymark leaves out to keep its production stylesheet"
+    },
+    {
+      "commit": "608f6b58828aebff136e4c02ce3b673a8a431138",
+      "subject": "Replace the UI guides with one component reference",
+      "reason": "It replaces the guides of the shared UI kit of 76154bd, which Daymark leaves out"
     }
   ],
   "conflicts": [
@@ -393,6 +398,15 @@
         "frontend/src/features/core/ui/error-fallbacks.tsx",
         "frontend/src/features/core/ui/routes.tsx",
         "frontend/src/features/core/ui/worldbrain.css"
+      ]
+    },
+    {
+      "commit": "608f6b58828aebff136e4c02ce3b673a8a431138",
+      "files": [
+        ".agents/skills/ui-design/SKILL.md",
+        "AGENTS.md",
+        "docs/agents/ui-components.md",
+        "lint/ui-rules.mjs"
       ]
     }
   ]
