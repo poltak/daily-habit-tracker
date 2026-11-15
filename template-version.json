@@ -11,6 +11,11 @@
       "commit": "7edc785f421dbfbb987b66acbdc37b08b1bc076b",
       "subject": "Build the example pages from the shared components",
       "reason": "It builds the pages on the shared UI components of 76154bd, which Daymark leaves out to keep its production stylesheet"
+    },
+    {
+      "commit": "314d8ce004ccf50c9b422a80787ad2ca22403fbb",
+      "subject": "Document the UI components and add the ui-design skill",
+      "reason": "It documents the shared UI components of 76154bd, which Daymark leaves out"
     }
   ],
   "conflicts": [
@@ -30,6 +35,10 @@
         "frontend/src/features/core/ui/error-fallbacks.tsx",
         "frontend/src/features/core/ui/routes.tsx"
       ]
+    },
+    {
+      "commit": "314d8ce004ccf50c9b422a80787ad2ca22403fbb",
+      "files": ["AGENTS.md", "docs/agents/README.md"]
     }
   ]
 }
