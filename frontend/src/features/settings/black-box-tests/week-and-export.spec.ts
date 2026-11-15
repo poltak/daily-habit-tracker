@@ -1,5 +1,6 @@
 import { expect } from "@playwright/test";
 import { test } from "../../core/black-box-tests/black-box-test.js";
+import { CalendarPageObject } from "../../days/black-box-tests/calendar-page-object.js";
 import { GoalPageObject } from "../../goals/black-box-tests/goal-page-object.js";
 import { LogPageObject } from "../../days/black-box-tests/log-page-object.js";
 import { SetupPageObject } from "./setup-page-object.js";
@@ -26,6 +27,24 @@ test.describe("week", () => {
     await setup.goto();
     await expect(setup.weekEndsField).toHaveValue("6");
     await expect(setup.weekDescription("Sunday–Saturday")).toBeVisible();
+  });
+
+  test("should show the message of a change above the page, until another page opens", async ({
+    page,
+  }) => {
+    const setup = new SetupPageObject(page);
+    const calendar = new CalendarPageObject(page);
+    await setup.goto();
+
+    await setup.chooseWeekEnd("Saturday");
+    const notice = setup.notice("Weeks now run Sunday–Saturday.");
+    await expect(notice).toBeVisible();
+
+    const noticeBox = await notice.boundingBox();
+    const headingBox = await setup.heading.boundingBox();
+    expect(noticeBox?.y).toBeLessThan(headingBox?.y ?? 0);
+    await calendar.open();
+    await expect(notice).toBeHidden();
   });
 
   test("should change the weeks in the history of a goal", async ({ page }) => {

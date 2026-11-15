@@ -30,6 +30,13 @@ describe("GoalLogic tests", () => {
     const app = await setupTest({ skipInitialization: true });
     const { backend, logic, transport } = app;
     const today = todayOf(app);
+    // The goal needs 3 days of a week. Near the end of a week they are out of
+    // reach, so the week ends yesterday and the week of today is still open.
+    await backend.logic.settings.update({
+      patch: {
+        weekEndsOn: new Date(`${addDays(today, -1)}T00:00:00Z`).getUTCDay(),
+      },
+    });
     await backend.logic.days.setGoalCompletion({
       logicalDate: today,
       goalId: "goal-move",

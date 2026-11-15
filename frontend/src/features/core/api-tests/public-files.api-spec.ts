@@ -38,4 +38,32 @@ test.describe("public files", () => {
     expect(response.status()).toBe(404);
     expect(response.headers()["content-type"]).toContain("text/html");
   });
+
+  test("should serve the service worker as JavaScript without a session", async ({
+    anonymousRequest,
+    apiOrigin,
+  }) => {
+    const response = await anonymousRequest.get(`${apiOrigin}/sw.js`);
+
+    expect(response.status()).toBe(200);
+    expect(response.headers()["content-type"]).toContain("javascript");
+    expect(await response.text()).toContain("daymark-shell-");
+  });
+
+  test("should forbid a frame and a cache on the sign-in page", async ({
+    anonymousRequest,
+    apiOrigin,
+  }) => {
+    for (const path of ["/sign-in", "/login"]) {
+      const response = await anonymousRequest.get(`${apiOrigin}${path}`);
+
+      expect(response.status(), path).toBe(200);
+      expect(response.headers(), path).toMatchObject({
+        "x-frame-options": "DENY",
+        "content-security-policy": "frame-ancestors 'none'",
+        "referrer-policy": "same-origin",
+        "cache-control": "no-store",
+      });
+    }
+  });
 });

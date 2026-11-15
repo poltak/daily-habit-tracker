@@ -99,6 +99,21 @@ test.describe("add an activity", () => {
     await expect(setup.renameButton("Neighbours")).toBeVisible();
   });
 
+  test("should open the form from its old address", async ({ page }) => {
+    const setup = new SetupPageObject(page);
+    const form = new AddActivityPageObject(page);
+    await setup.goto();
+    await setup.startAddActivity("People");
+    await form.heading.waitFor();
+    const groupId = new URL(page.url()).searchParams.get("group") ?? "";
+    expect(groupId).not.toEqual("");
+
+    await page.goto(`/?view=activity&groupId=${groupId}`);
+
+    await expect(form.heading).toBeVisible();
+    await expect(form.groupField).toHaveValue(groupId);
+  });
+
   test("should go back with the back button", async ({ page }) => {
     const log = new LogPageObject(page);
     const form = new AddActivityPageObject(page);

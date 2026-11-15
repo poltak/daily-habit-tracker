@@ -40,6 +40,23 @@ test.describe("the list of activities", () => {
     await expect(log.activity(GYM)).toBeHidden();
   });
 
+  test("should show Add new only while its group is open", async ({ page }) => {
+    const log = new LogPageObject(page);
+    await log.goto();
+    await expect(log.groupSummary("Health", 3)).toBeVisible();
+    await expect(log.addActivityButton("Health")).toBeHidden();
+    await expect(log.addActivityButton("Leisure")).toBeHidden();
+
+    await log.openGroup(GYM);
+
+    await expect(log.activity(GYM)).toBeVisible();
+    await expect(log.addActivityButton("Health")).toBeVisible();
+    await expect(log.addActivityButton("Leisure")).toBeHidden();
+    await log.closeGroup(GYM);
+    await expect(log.activity(GYM)).toBeHidden();
+    await expect(log.addActivityButton("Health")).toBeHidden();
+  });
+
   test("should open the groups that have a match for a search", async ({
     page,
   }) => {

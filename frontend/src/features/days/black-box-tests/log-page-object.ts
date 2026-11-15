@@ -92,6 +92,11 @@ export class LogPageObject {
     return this.page.getByLabel("Journal date");
   }
 
+  /** The row of the header that the swipe starts on: the arrows and the day. */
+  get dateSwitcher(): Locator {
+    return this.page.getByLabel("Choose the journal day");
+  }
+
   /** The day in the header, such as "Monday, November 9, 2026". */
   dayLabel(iso: string): Locator {
     return this.page
@@ -274,6 +279,13 @@ export class LogPageObject {
     await this.addActivityButton(group).click();
   }
 
+  /** Close the group of an activity, unless it is closed. */
+  async closeGroup({ group, name }: ActivityRef): Promise<void> {
+    if (await this.activity({ group, name }).isVisible()) {
+      await this.group(group).getByText(group).first().click();
+    }
+  }
+
   async toggleActivity(activity: ActivityRef): Promise<void> {
     await this.openGroup(activity);
     await this.activity(activity).click();
@@ -286,6 +298,27 @@ export class LogPageObject {
         disabled: false,
       })
       .waitFor();
+  }
+
+  /** Tap each activity at once, without waiting for the day to store the one before. */
+  async tapActivitiesQuickly(activities: ActivityRef[]): Promise<void> {
+    for (const activity of activities) {
+      await this.openGroup(activity);
+    }
+    for (const activity of activities) {
+      await this.activity(activity).click();
+    }
+    for (const activity of activities) {
+      await this.page
+        .getByRole("group", { name: activity.group, exact: true })
+        .getByRole("button", {
+          name: activity.name,
+          exact: true,
+          pressed: true,
+          disabled: false,
+        })
+        .waitFor();
+    }
   }
 
   async completeGoal(name: string): Promise<void> {
@@ -354,6 +387,48 @@ export class LogPageObject {
     const before = await this.dateField.inputValue();
     await this.nextDayButton.click();
     await this.waitForDay(LogPageObject.addDays(before, 1));
+  }
+
+  /**
+   * Drag a finger over the day switcher from its middle, by `dx` and `dy`
+   * pixels. A positive `dx` is to the right. Playwright has no swipe, so the
+   * steps are touch events of the browser's own input.
+   */
+  async swipeDateSwitcher(input: { dx: number; dy?: number }): Promise<void> {
+    const box = await this.dateSwitcher.boundingBox();
+    if (!box) {
+      throw new Error("The day switcher is not on the page.");
+    }
+    const startX = box.x + box.width / 2;
+    const startY = box.y + box.height / 2;
+    const dy = input.dy ?? 0;
+    const touchAt = (fraction: number) => [
+      {
+        x: startX + input.dx * fraction,
+        y: startY + dy * fraction,
+      },
+    ];
+    const session = await this.page.context().newCDPSession(this.page);
+    try {
+      await session.send("Input.dispatchTouchEvent", {
+        type: "touchStart",
+        touchPoints: touchAt(0),
+      });
+      await session.send("Input.dispatchTouchEvent", {
+        type: "touchMove",
+        touchPoints: touchAt(0.5),
+      });
+      await session.send("Input.dispatchTouchEvent", {
+        type: "touchMove",
+        touchPoints: touchAt(1),
+      });
+      await session.send("Input.dispatchTouchEvent", {
+        type: "touchEnd",
+        touchPoints: [],
+      });
+    } finally {
+      await session.detach();
+    }
   }
 
   async goToToday(): Promise<void> {

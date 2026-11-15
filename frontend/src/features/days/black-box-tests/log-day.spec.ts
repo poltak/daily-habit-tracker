@@ -4,6 +4,7 @@ import { LogPageObject } from "./log-page-object.js";
 
 const GYM = { group: "Health", name: "Gym" };
 const WALK = { group: "Health", name: "Walk" };
+const SLEEP = { group: "Health", name: "Sleep" };
 const MUSIC = { group: "Leisure", name: "Music" };
 
 test.describe("log a day", () => {
@@ -87,6 +88,21 @@ test.describe("log a day", () => {
     await expect(log.doneGoalSwitch("Move your body")).toBeVisible();
     await expect(log.saveTitle).toHaveText("Ready to save your day?");
     await expect(log.saveButton).toBeEnabled();
+  });
+
+  test("should keep activities that the owner taps one after the other without waiting", async ({
+    page,
+  }) => {
+    const log = new LogPageObject(page);
+    await log.goto();
+
+    await log.tapActivitiesQuickly([WALK, SLEEP, MUSIC]);
+    await log.goto();
+
+    await expect(log.selectedCount("3 selected")).toBeVisible();
+    await expect(log.selectedActivity("Walk")).toBeVisible();
+    await expect(log.selectedActivity("Sleep")).toBeVisible();
+    await expect(log.selectedActivity("Music")).toBeVisible();
   });
 
   test("should delete a saved day after the owner agrees", async ({ page }) => {

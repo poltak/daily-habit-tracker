@@ -68,6 +68,19 @@ test.describe("theme", () => {
     await expect(setup.main).toHaveCSS("color", DARK_TEXT);
   });
 
+  test("should follow a theme that another tab chose", async ({ page }) => {
+    const setup = new SetupPageObject(page);
+    await setup.goto();
+    const otherTab = new SetupPageObject(await page.context().newPage());
+    await otherTab.goto();
+    await expect(otherTab.themeOption("System")).toBeChecked();
+
+    await setup.chooseTheme("Dark");
+
+    await expect(otherTab.themeOption("Dark")).toBeChecked();
+    await expect(otherTab.main).toHaveCSS("color", DARK_TEXT);
+  });
+
   test("should describe each theme", async ({ page }) => {
     const setup = new SetupPageObject(page);
     await setup.goto();

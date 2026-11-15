@@ -1,6 +1,7 @@
 import { expect } from "@playwright/test";
 import { test } from "../../core/black-box-tests/black-box-test.js";
 import { LogPageObject } from "../../days/black-box-tests/log-page-object.js";
+import { SetupPageObject } from "../../settings/black-box-tests/setup-page-object.js";
 import { GoalPageObject } from "./goal-page-object.js";
 
 test.describe("goal history", () => {
@@ -33,15 +34,24 @@ test.describe("goal history", () => {
     page,
   }) => {
     const log = new LogPageObject(page);
+    const setup = new SetupPageObject(page);
     const goal = new GoalPageObject(page);
     await log.goto();
     const today = await log.currentDate();
-    const weekStart = GoalPageObject.weekStart(today);
+    // The goal needs 3 days. Near the end of a week, 3 days are out of reach
+    // and the week is not accomplished. So the week starts today.
+    const yesterday = LogPageObject.addDays(today, -1);
+    await setup.open();
+    await setup.chooseWeekEnd(weekdayName(yesterday));
+    await expect(
+      setup.weekDescription(`${weekdayName(today)}–${weekdayName(yesterday)}`),
+    ).toBeVisible();
+    await log.open();
     await log.completeGoal("Move your body");
 
     await goal.openFromLog("Move your body");
 
-    await expect(goal.week(weekRange(weekStart))).toContainText(
+    await expect(goal.week(weekRange(today))).toContainText(
       "In progress · 1/3 days",
     );
   });
@@ -101,4 +111,11 @@ test.describe("goal history", () => {
 /** The dates of a week as the page writes them, such as "Nov 2 – Nov 8". */
 function weekRange(start: string): string {
   return `${LogPageObject.shortDate(start)} – ${LogPageObject.shortDate(LogPageObject.addDays(start, 6))}`;
+}
+
+function weekdayName(iso: string): string {
+  return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", {
+    weekday: "long",
+    timeZone: "UTC",
+  });
 }

@@ -293,6 +293,11 @@ export class SetupPageObject {
     });
   }
 
+  /** Scroll down to the sign-in part, which is the end of the page. */
+  async scrollToAccount(): Promise<void> {
+    await this.signInHeading.scrollIntoViewIfNeeded();
+  }
+
   get addPasskeyButton(): Locator {
     return this.page.getByRole("button", {
       name: "Add a passkey on this device",

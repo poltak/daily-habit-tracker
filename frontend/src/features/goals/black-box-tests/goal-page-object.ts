@@ -101,6 +101,39 @@ export class GoalPageObject {
     });
   }
 
+  /** The cell of a day that the goal expects, which has a dash or a check. */
+  expectedDay(iso: string, state: "completed" | "not completed"): Locator {
+    return this.page.getByRole("img", {
+      name: `${iso}: ${state}, expected`,
+      exact: true,
+    });
+  }
+
+  /** The cell of a day on which the goal does not count. */
+  unexpectedDay(iso: string): Locator {
+    return this.page.getByRole("img", {
+      name: `${iso}: not completed`,
+      exact: true,
+    });
+  }
+
+  /** Show the month of `iso`, which is the shown month or an earlier one. */
+  async showMonthOf(iso: string): Promise<void> {
+    const heading = new Date(`${iso}T12:00:00Z`).toLocaleDateString("en", {
+      month: "long",
+      year: "numeric",
+      timeZone: "UTC",
+    });
+    for (let step = 0; step < 3; step += 1) {
+      const shown = await this.monthHeading.innerText();
+      if (shown === heading) {
+        return;
+      }
+      await this.previousMonthButton.click();
+      await this.monthHeading.filter({ hasNotText: shown }).waitFor();
+    }
+  }
+
   /** The row of a week, such as "Nov 2 – Nov 8". It holds the result, such as "Accomplished · 3/3 days". */
   week(dates: string): Locator {
     return this.page.getByRole("group", { name: dates, exact: true });

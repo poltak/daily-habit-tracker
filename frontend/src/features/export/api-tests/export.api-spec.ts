@@ -20,6 +20,7 @@ test.describe("owner export", () => {
 
     expect(response.status()).toBe(200);
     expect(response.headers()["content-type"]).toContain("application/json");
+    expect(response.headers()["cache-control"]).toBe("no-store");
     expect(response.headers()["content-disposition"]).toBe(
       'attachment; filename="daylio-clone-export.json"',
     );
@@ -197,5 +198,28 @@ test.describe("owner export", () => {
     expect(file.tables["entries"]).toEqual([
       expect.objectContaining({ logical_date: "2026-02-04" }),
     ]);
+  });
+
+  test("should hold the reminder of a goal", async ({
+    ownerRequest,
+    apiOrigin,
+  }) => {
+    await ownerRequest.patch(`${apiOrigin}/api/catalog/goal/goal-read`, {
+      data: { reminderEnabled: true, reminderTime: "08:30" },
+    });
+
+    const file = (await (
+      await ownerRequest.get(`${apiOrigin}/api/export`)
+    ).json()) as ExportFile;
+
+    const goals = file.tables["goals"] ?? [];
+    expect(goals.find((goal) => goal["id"] === "goal-read")).toMatchObject({
+      reminder_enabled: 1,
+      reminder_time: "08:30",
+    });
+    expect(goals.find((goal) => goal["id"] === "goal-move")).toMatchObject({
+      reminder_enabled: 0,
+      reminder_time: null,
+    });
   });
 });

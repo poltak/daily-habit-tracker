@@ -106,6 +106,18 @@ test.describe("navigation", () => {
     await expect(calendar.heading).toBeVisible();
   });
 
+  test("should show the top of each page that it opens", async ({ page }) => {
+    const calendar = new CalendarPageObject(page);
+    const setup = new SetupPageObject(page);
+    await setup.goto();
+    await setup.scrollToAccount();
+    await expect(setup.heading).not.toBeInViewport();
+
+    await calendar.open();
+
+    await expect(calendar.heading).toBeInViewport();
+  });
+
   test("should have a link that skips to the content", async ({ page }) => {
     const navigation = new NavigationPageObject(page);
     const log = new LogPageObject(page);

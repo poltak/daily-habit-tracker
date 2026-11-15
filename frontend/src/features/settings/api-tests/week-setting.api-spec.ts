@@ -15,9 +15,11 @@ test.describe("week setting", () => {
   });
 
   for (const [name, data] of [
+    ["a day below the weekdays", { weekEndsOn: -1 }],
     ["a day that is not a weekday", { weekEndsOn: 7 }],
-    ["a day that is not a whole number", { weekEndsOn: 2.5 }],
-    ["a day that is a text", { weekEndsOn: "3" }],
+    ["a day that is not a whole number", { weekEndsOn: 1.5 }],
+    ["a day that is a text", { weekEndsOn: "1" }],
+    ["a day that is null", { weekEndsOn: null }],
     ["a setting that does not exist", { timezone: "UTC" }],
   ] as const) {
     test(`should refuse ${name}`, async ({ ownerRequest, apiOrigin }) => {

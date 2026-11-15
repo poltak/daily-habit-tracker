@@ -103,6 +103,23 @@ test.describe("activity icons", () => {
     await expect(picker.chosenIcon("restaurant")).toBeVisible();
   });
 
+  test("should return focus to the icon button when the dialog closes", async ({
+    page,
+  }) => {
+    const setup = new SetupPageObject(page);
+    const picker = new IconPickerPageObject(page);
+    await setup.goto();
+    await setup.openGroup("Home", setup.chooseIconButton("Cook"));
+    await setup.chooseIconButton("Cook").click();
+
+    await picker.closeWithEscape();
+
+    await expect(setup.chooseIconButton("Cook")).toBeFocused();
+    await setup.chooseIconButton("Cook").click();
+    await picker.close();
+    await expect(setup.chooseIconButton("Cook")).toBeFocused();
+  });
+
   test("should choose the icon of a new activity", async ({ page }) => {
     const setup = new SetupPageObject(page);
     const form = new AddActivityPageObject(page);
