@@ -111,6 +111,11 @@
       "commit": "6123d5a041c1a09cc9c4a8b70ad822b9fbec1401",
       "subject": "Move page and app frame parts into the WorldBrain core",
       "reason": "It moves the page and app frame parts of the shared UI kit of 76154bd, which Daymark leaves out"
+    },
+    {
+      "commit": "53187b09f548c7403d11acc9595a9a92cfc41b01",
+      "subject": "Keep the shell notice gap when Page supplies its inset",
+      "reason": "It changes only the shared UI kit of 76154bd, which Daymark leaves out to keep its production stylesheet"
     }
   ],
   "conflicts": [
@@ -364,6 +369,16 @@
         "frontend/src/features/core/ui/error-fallbacks.tsx",
         "frontend/src/features/core/ui/routes.tsx",
         "frontend/src/features/core/ui/worldbrain.css"
+      ]
+    },
+    {
+      "commit": "53187b09f548c7403d11acc9595a9a92cfc41b01",
+      "files": [
+        "docs/agents/ui-screens.md",
+        "docs/agents/ui-shadcn.md",
+        "frontend/src/features/core/tests/browser/screens.ts",
+        "frontend/src/features/core/ui/core/app-layout.tsx",
+        "frontend/src/features/core/ui/core/page.tsx"
       ]
     }
   ]
