@@ -34,11 +34,12 @@ return this.deps.transaction(async (storage) => {
   there.
 - Do not call a Service inside the callback, except a Core Service. An
   external effect cannot roll back, and the transaction stays open while the
-  Service runs. Call the Service before or after the transaction.
+  Service runs. Call the Service before or after the transaction. Lint rejects
+  it.
 - Keep the callback short. It holds reads, decisions, and writes, and nothing
   that waits for another system.
 - A Storage method does not start a transaction. Atomic writes always start in
-  Logic, so one operation has one transaction.
+  Logic, so one operation has one transaction. Lint rejects it.
 
 ## Database schema
 
