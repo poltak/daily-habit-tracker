@@ -1,7 +1,8 @@
 # Daymark decisions
 
 The project's own choices, with their reasons. Read this file when you read
-[decisions](../decisions.md).
+[decisions](../decisions.md). The parts of the template that Daymark leaves out
+are in [template parts left out](template-parts-left-out.md).
 
 ## The port onto the template
 

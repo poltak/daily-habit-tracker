@@ -51,10 +51,6 @@
         // The browser loads the service worker by its address, so no module
         // imports it.
         "public/sw.js",
-        // `pnpm run ui:screens` runs this config, and it runs each
-        // `*.screens.ts` file. knip reads only `playwright.config.ts`.
-        "playwright.screens.config.ts",
-        "src/features/**/*.screens.ts",
       ],
     },
   },
