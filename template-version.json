@@ -1,5 +1,20 @@
 {
   "template": "git@github.com:WorldBrain/worldbrain-boilerplate.git",
   "commit": "e49b735c774d7ebabc2f09ce98d5f71fdb4df603",
-  "skipped": []
+  "skipped": [
+    {
+      "commit": "76154bdb5df6de15ad6a0176052fb130f89fec2a",
+      "subject": "Add the shared UI components and the theme",
+      "reason": "Daymark keeps the stylesheet of its production app verbatim, so that it looks the same as before the port; this UI kit restyles every page and adds Tailwind, Base UI and Lucide, which need the owner's approval"
+    }
+  ],
+  "conflicts": [
+    {
+      "commit": "76154bdb5df6de15ad6a0176052fb130f89fec2a",
+      "files": [
+        "frontend/src/features/core/ui/app.css",
+        "frontend/src/main.tsx"
+      ]
+    }
+  ]
 }
