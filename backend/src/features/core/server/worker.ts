@@ -33,6 +33,17 @@ const httpApp = createHttpApp({
  */
 const APP_PAGES = new Set(["/", "/insights", "/sign-in", "/login"]);
 
+/**
+ * The sign-in page must not show in a frame of another site, where a click
+ * could be hijacked, and the browser must not keep it.
+ */
+const SIGN_IN_HEADERS = [
+  ["X-Frame-Options", "DENY"],
+  ["Content-Security-Policy", "frame-ancestors 'none'"],
+  ["Referrer-Policy", "same-origin"],
+  ["Cache-Control", "no-store"],
+] as const;
+
 /** A 404 under these paths comes from a backend route, so it stays JSON. */
 const BACKEND_PREFIXES = [
   "/api/",
@@ -58,7 +69,19 @@ export default {
     }
     const indexRequest = new Request(new URL("/", url), request);
     if (APP_PAGES.has(url.pathname)) {
-      return env.ASSETS.fetch(indexRequest);
+      const page = await env.ASSETS.fetch(indexRequest);
+      if (url.pathname !== "/sign-in" && url.pathname !== "/login") {
+        return page;
+      }
+      const headers = new Headers(page.headers);
+      for (const [name, value] of SIGN_IN_HEADERS) {
+        headers.set(name, value);
+      }
+      return new Response(page.body, {
+        status: page.status,
+        statusText: page.statusText,
+        headers,
+      });
     }
     // `run_worker_first` is `true`, so a file comes through here too.
     const asset = await env.ASSETS.fetch(request);

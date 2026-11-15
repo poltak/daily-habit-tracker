@@ -69,12 +69,15 @@ output of `openssl rand -base64 24`, and keep it in a password manager.
 ## Pages
 
 The pages and static files do not need sign-in. They hold no journal data:
-the app gets all data from `/api`. The service worker keeps the app shell for
-offline use. It does not keep `/sign-in` or the OAuth pages as the shell.
+the app gets all data from `/api`. The service worker (`frontend/public/sw.js`,
+registered only in a production build) keeps the app shell for offline use. It
+does not keep `/sign-in`, `/login` or the OAuth pages as the shell, and it
+never handles `/api/`, `/oauth/`, `/.well-known/`, `/health` or `/mcp`.
 
-`/sign-in` and the OAuth pages send `X-Frame-Options: DENY`,
+`/sign-in`, `/login` and the OAuth pages send `X-Frame-Options: DENY`,
 `Content-Security-Policy: frame-ancestors 'none'` and
-`Referrer-Policy: same-origin`. Do not change the referrer policy to
+`Referrer-Policy: same-origin`. `/sign-in` and `/login` also send
+`Cache-Control: no-store`. Do not change the referrer policy to
 `no-referrer`: with it, browsers send `Origin: null` with the consent form,
 and the same-origin check refuses the owner's answer.
 
@@ -92,8 +95,12 @@ and the same-origin check refuses the owner's answer.
 | `GET /api/auth/connections`, `DELETE /api/auth/connections/:id` | A session | List and disconnect OAuth apps |
 | `POST /api/mcp` | An OAuth access token | The MCP endpoint. A session cookie does not work here. |
 
-Every other `/api/*` route needs a session. `tests/worker-routes.test.mjs`
-checks this for each route file.
+Every `/api/auth/*` answer has `Cache-Control: no-store`. Every other
+`/api/*` route needs a session. `PUBLIC_ROUTES` in
+`frontend/src/features/core/tests/backend-http.test.ts` checks this for each
+route, and the API specs in `frontend/src/features/auth/api-tests/` check the
+headers. A request with a session cookie but no live session gets `401` and a
+`Set-Cookie` that clears the cookie.
 
 ## OAuth for the MCP endpoint
 

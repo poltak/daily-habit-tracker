@@ -208,10 +208,12 @@ export function createOAuthHandlers({ logic, services }: OAuthHandlerProps) {
     if (!context.get("session")) {
       // After sign-in, the sign-in page loads this request again.
       const returnTo = `/oauth/authorize?${params.toString()}`;
-      return context.redirect(
+      const response = context.redirect(
         `/sign-in?returnTo=${encodeURIComponent(returnTo)}`,
         303,
       );
+      response.headers.set("cache-control", "no-store");
+      return response;
     }
     const { request } = check;
     if (decision === null) {

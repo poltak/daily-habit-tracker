@@ -47,6 +47,12 @@ interface AuthHandlerProps {
 export function createAuthHandlers({ logic }: AuthHandlerProps) {
   return (
     new Hono<AuthEnvironment>()
+      // Set before the handler, so an error answer carries it too. A shared
+      // cache must not keep a sign-in state or a passkey list.
+      .use("*", async (context, next) => {
+        context.header("cache-control", "no-store");
+        await next();
+      })
       .get("/status", async (context) =>
         context.json(
           await logic.authPasskey.status({
