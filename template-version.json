@@ -61,6 +61,11 @@
       "commit": "c5811a2fa974d6fc819b9d55931cce7371124186",
       "subject": "Preserve the external link icon and capture open controls",
       "reason": "It changes only the shared UI kit of 76154bd, which Daymark leaves out to keep its production stylesheet"
+    },
+    {
+      "commit": "9bfafced8b7bcedb318d69e5e02940d2937a8658",
+      "subject": "Keep legacy Select colors and measure portal states correctly",
+      "reason": "It changes the Select colors and the screens of the shared UI kit of 76154bd, which Daymark leaves out"
     }
   ],
   "conflicts": [
@@ -185,6 +190,17 @@
       "files": [
         ".agents/skills/ui-design/SKILL.md",
         "frontend/src/features/component-library/ui/control-examples.tsx"
+      ]
+    },
+    {
+      "commit": "9bfafced8b7bcedb318d69e5e02940d2937a8658",
+      "files": [
+        ".agents/skills/ui-design/SKILL.md",
+        "docs/agents/ui-screens.md",
+        "docs/agents/ui-shadcn.md",
+        "frontend/src/features/component-library/black-box-tests/component-library.screens.ts",
+        "frontend/src/features/core/ui/components/components-forms.css",
+        "frontend/src/features/core/ui/worldbrain.css"
       ]
     }
   ]
