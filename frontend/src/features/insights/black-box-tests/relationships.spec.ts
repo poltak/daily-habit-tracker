@@ -8,7 +8,9 @@ const COOK = { group: "Home", name: "Cook" };
 const MUSIC = { group: "Leisure", name: "Music" };
 
 test.describe("what an activity does to the days around it", () => {
-  test.beforeEach(async ({ page }) => {
+  test("should compare the days around an activity, and let the owner explore a pair that has too few days for a suggestion", async ({
+    page,
+  }) => {
     test.slow();
     const log = new LogPageObject(page);
     await log.goto();
@@ -25,11 +27,6 @@ test.describe("what an activity does to the days around it", () => {
       await log.goToDay(LogPageObject.addDays(today, -day.back));
       await log.logDay({ mood: day.mood, activities: day.activities });
     }
-  });
-
-  test("should compare the mood on the day after each day with an activity, and each day without it", async ({
-    page,
-  }) => {
     const insights = new InsightsPageObject(page);
     await insights.open();
     await insights.chooseNextDayActivity("Gym");
@@ -60,13 +57,6 @@ test.describe("what an activity does to the days around it", () => {
     await expect(
       insights.calendarWindowMoods("Next calendar day", "Good 2"),
     ).toBeVisible();
-  });
-
-  test("should let the owner explore a pair that has too few days for a suggestion", async ({
-    page,
-  }) => {
-    const insights = new InsightsPageObject(page);
-    await insights.open();
 
     await expect(insights.noPairSuggestions).toBeVisible();
     await insights.choosePair({ first: "Gym", second: "Cook" });

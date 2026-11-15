@@ -90,13 +90,22 @@ test.describe("summaries through MCP", () => {
     });
   });
 
-  test("should refuse a grouping that does not exist", async ({ agent }) => {
-    const result = await agent.callTool("summarize_mood", {
+  test("should refuse a grouping that does not exist and a minimum of zero days", async ({
+    agent,
+  }) => {
+    const grouping = await agent.callTool("summarize_mood", {
       group_by: "decade",
     });
 
-    expect(result.isError).toBe(true);
-    expect(result.text).toContain("one of: month, year, week, weekday, none");
+    expect(grouping.isError).toBe(true);
+    expect(grouping.text).toContain("one of: month, year, week, weekday, none");
+
+    const minimum = await agent.callTool("summarize_activities", {
+      min_days: 0,
+    });
+
+    expect(minimum.isError).toBe(true);
+    expect(minimum.text).toContain("at least 1");
   });
 
   test("should rank the activities by their link to the mood", async ({
@@ -134,15 +143,6 @@ test.describe("summaries through MCP", () => {
     expect(
       (frequent.data as { activities: Array<{ activity: string }> }).activities,
     ).toMatchObject([{ activity: "Gym" }]);
-  });
-
-  test("should refuse a minimum of zero days", async ({ agent }) => {
-    const result = await agent.callTool("summarize_activities", {
-      min_days: 0,
-    });
-
-    expect(result.isError).toBe(true);
-    expect(result.text).toContain("at least 1");
   });
 
   test("should show the owner the days that the agent recorded", async ({
