@@ -79,7 +79,7 @@ export function isExpectedActivityResult({
 }
 
 /** The activities and the goals that the server changed, applied to a draft or an entry. */
-export function applyActivityResult<
+function applyActivityResult<
   Target extends Pick<Draft | Entry, "activityIds" | "completedGoalIds">,
 >({ target, result }: { target: Target; result: ActivityResult }): Target {
   return {
@@ -110,5 +110,21 @@ export function undoActivityChange({
     ...draft,
     activityIds: applyToggles(draft.activityIds, [undo.activity]),
     completedGoalIds: applyToggles(draft.completedGoalIds, undo.goals),
+  };
+}
+
+/** The answer of the server, applied to the draft and to the saved entry. */
+export function applyAnswer({
+  draft,
+  entry,
+  result,
+}: {
+  draft: Draft;
+  entry: Entry | null;
+  result: ActivityResult;
+}): { draft: Draft; entry: Entry | null } {
+  return {
+    draft: applyActivityResult({ target: draft, result }),
+    entry: entry && applyActivityResult({ target: entry, result }),
   };
 }

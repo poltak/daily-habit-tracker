@@ -5,6 +5,7 @@ import {
 import { useMemo, type ReactNode } from "react";
 import { useLogic } from "../../core/logic/use-logic.js";
 import { useFrontendApp } from "../../core/ui/frontend-app-context.js";
+import { MaterialIcon } from "../../core/ui/material-icon.js";
 import type { ThemePreference } from "../utils/theme.js";
 import { ExportSection } from "./export-section.js";
 import { useTheme } from "./settings-context.js";
@@ -14,19 +15,23 @@ const THEME_OPTIONS: Array<{
   value: ThemePreference;
   label: string;
   description: string;
+  icon: string;
 }> = [
   {
     value: "system",
+    icon: "settings_brightness",
     label: "System",
     description: "Follow your device setting",
   },
   {
     value: "light",
+    icon: "light_mode",
     label: "Light",
     description: "Keep the warm Daymark palette",
   },
   {
     value: "dark",
+    icon: "dark_mode",
     label: "Dark",
     description: "Use a softer low-light palette",
   },
@@ -37,16 +42,20 @@ interface SetupPageProps {
   account: ReactNode;
   /** The activity groups and the goals. The catalog feature supplies them. */
   catalog: ReactNode;
-  /** The message about the last change of the catalog. */
-  catalogNotice: ReactNode;
 }
 
 /** The Setup page: the theme of this device, the week, the catalog, and the account. */
-export function SetupPage({ account, catalog, catalogNotice }: SetupPageProps) {
+export function SetupPage({ account, catalog }: SetupPageProps) {
   const app = useFrontendApp();
   const theme = useTheme();
   const weekDeps = useMemo(
-    () => ({ storage: {}, services: {}, api: { settings: app.api.settings } }),
+    () => ({
+      storage: {},
+      services: {},
+      api: { settings: app.api.settings },
+      navigationLockEvents: app.navigationLockEvents,
+      pageNoticeEvents: app.pageNoticeEvents,
+    }),
     [app],
   );
   const { logic: week, state: weekState } = useLogic({
@@ -55,12 +64,6 @@ export function SetupPage({ account, catalog, catalogNotice }: SetupPageProps) {
   });
   const weekBusy =
     weekState.loadState === "running" || weekState.saveState === "running";
-  const weekNotice =
-    weekState.saveError ??
-    weekState.loadError ??
-    (weekState.saveState === "success"
-      ? `Weeks now run ${weekRangeLabel(weekState.weekEndsOn)}.`
-      : null);
 
   return (
     <section className="page-section settings-page">
@@ -72,23 +75,15 @@ export function SetupPage({ account, catalog, catalogNotice }: SetupPageProps) {
         </p>
       </div>
 
-      {catalogNotice}
-
-      {weekNotice && (
-        <output
-          className={`settings-notice ${(weekState.saveError ?? weekState.loadError) ? "error" : "success"}`}
-        >
-          {weekNotice}
-        </output>
-      )}
-
       <section className="settings-card appearance-card">
-        <div>
-          <p className="eyebrow">Appearance</p>
-          <h2>Choose your theme</h2>
-          <p className="muted">
-            System follows your device. Your choice is saved on this device.
-          </p>
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Appearance</p>
+            <h2>Choose your theme</h2>
+            <p className="muted small-copy">
+              System follows your device. Your choice is saved on this device.
+            </p>
+          </div>
         </div>
         <div
           className="theme-options"
@@ -96,6 +91,7 @@ export function SetupPage({ account, catalog, catalogNotice }: SetupPageProps) {
           aria-label="Appearance theme"
         >
           {THEME_OPTIONS.map((option) => (
+            // oxlint-disable-next-line jsx-a11y/label-has-associated-control -- The text of the label is in the nested spans of the old markup, and the rule does not read it.
             <label
               key={option.value}
               className={`theme-option ${theme.state.preference === option.value ? "selected" : ""}`}
@@ -112,10 +108,22 @@ export function SetupPage({ account, catalog, catalogNotice }: SetupPageProps) {
               <span
                 className={`theme-preview theme-preview-${option.value}`}
                 aria-hidden="true"
-              />
-              <span className="theme-option-copy">
-                <strong>{option.label}</strong>{" "}
-                <small>{option.description}</small>
+              >
+                <i />
+                <i />
+                <i />
+              </span>
+              <span className="theme-option-content">
+                <span className="theme-option-icon">
+                  <MaterialIcon name={option.icon} />
+                </span>
+                <span className="theme-option-copy">
+                  <strong>{option.label}</strong>
+                  <small>{option.description}</small>
+                </span>
+                <span className="theme-option-check">
+                  <MaterialIcon name="check" />
+                </span>
               </span>
             </label>
           ))}
@@ -123,14 +131,16 @@ export function SetupPage({ account, catalog, catalogNotice }: SetupPageProps) {
       </section>
 
       <section className="settings-card week-card" aria-busy={weekBusy}>
-        <div>
-          <p className="eyebrow">Week</p>
-          <h2>Choose when your week ends</h2>
-          <p className="muted">
-            {`Weekly goal results, weekly insights, and calendars run ${weekRangeLabel(weekState.weekEndsOn)}. This applies on every device.`}
-          </p>
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Week</p>
+            <h2>Choose when your week ends</h2>
+            <p className="muted small-copy">
+              {`Weekly goal results, weekly insights, and calendars run ${weekRangeLabel(weekState.weekEndsOn)}. This applies on every device.`}
+            </p>
+          </div>
         </div>
-        <label className="week-end-field">
+        <label className="goal-config-field week-end-field">
           <span>Week ends on</span>
           <select
             value={String(weekState.weekEndsOn)}

@@ -1,26 +1,28 @@
 import { LogicPlugin } from "@app/common/features/core/logic/logic-plugin";
-import type { TaskState } from "@app/common/features/core/logic/logic";
 import type {
   DayActivitySelection,
   GoalCompletion,
 } from "@app/common/features/days/types";
 import { requireApiSuccess } from "../../api/client/api-client.js";
+import type { Draft } from "../utils/draft.js";
 import type { FrontendLogicProps } from "../../core/logic/types.js";
-import type { PendingSelection } from "../types.js";
 import { isExpectedGoalResult, type GoalResult } from "../utils/goal-change.js";
 import { isExpectedActivityResult } from "../utils/selection-change.js";
+import {
+  activityTapKeys,
+  goalTapKeys,
+  MOOD_KEY,
+} from "../utils/selection-keys.js";
 
 export type SelectionProps = FrontendLogicProps<
-  never,
-  never,
+  "days",
+  "clock",
   "day-selections" | "goal-completions"
 >;
 
 interface SelectionState {
-  /** The tap that waits for the server. */
-  pending: PendingSelection | null;
-  selectionState: TaskState;
-  selectionError: string | null;
+  /** The items that the taps waiting for the server change. Waiting taps share no item. */
+  pendingKeys: string[];
 }
 
 /** What the server answers to the tap on an activity. */
@@ -36,7 +38,8 @@ export type Outcome<Result> =
 
 /**
  * The taps on the mood and on the activities of a day. The server keeps each
- * tap at once, also before the day is saved. One tap runs at a time.
+ * tap at once, also before the day is saved. Taps on different items run at
+ * the same time.
  */
 export class SelectionPlugin extends LogicPlugin<
   SelectionProps,
@@ -45,16 +48,63 @@ export class SelectionPlugin extends LogicPlugin<
   constructor(deps: SelectionProps) {
     super({
       deps,
-      initialState: {
-        pending: null,
-        selectionState: "pristine",
-        selectionError: null,
-      },
+      initialState: { pendingKeys: [] },
     });
   }
 
   get isRunning(): boolean {
-    return this.state.selectionState === "running";
+    return this.state.pendingKeys.length > 0;
+  }
+
+  /** True when a tap that waits changes one of the items. */
+  isBlocked(keys: readonly string[]): boolean {
+    return keys.some((key) => this.state.pendingKeys.includes(key));
+  }
+
+  /** Keep the draft of the day on this device, until the server has every tap. */
+  storeDraft({
+    logicalDate,
+    draft,
+  }: {
+    logicalDate: string;
+    draft: Draft;
+  }): void {
+    this.deps.storage.days.writeDraft({
+      logicalDate,
+      draft,
+      savedAt: this.timestamp(),
+    });
+  }
+
+  /** The stored draft goes when no other tap waits and the draft is not on this device only. */
+  settleSaved({
+    logicalDate,
+    hasLocalDraft,
+  }: {
+    logicalDate: string;
+    hasLocalDraft: boolean;
+  }): void {
+    if (!hasLocalDraft && !this.isRunning) {
+      this.deps.storage.days.clearDraft({ logicalDate });
+    }
+  }
+
+  /** The stored draft stays when the day had one before, or another tap waits. */
+  settleFailed({
+    logicalDate,
+    draft,
+    hadLocalDraft,
+  }: {
+    logicalDate: string;
+    draft: Draft;
+    hadLocalDraft: boolean;
+  }): void {
+    this.deps.storage.days.settleDraft({
+      logicalDate,
+      draft,
+      savedAt: this.timestamp(),
+      keep: hadLocalDraft || this.isRunning,
+    });
   }
 
   async chooseMood({
@@ -64,7 +114,7 @@ export class SelectionPlugin extends LogicPlugin<
     logicalDate: string;
     moodId: string;
   }): Promise<Outcome<void>> {
-    return this.run({ pending: { kind: "mood" } }, async () => {
+    return this.run({ keys: [MOOD_KEY] }, async () => {
       const response = await this.deps.api["day-selections"][
         ":logicalDate"
       ].mood.$put(
@@ -94,7 +144,7 @@ export class SelectionPlugin extends LogicPlugin<
     linkedGoalIds: readonly string[];
   }): Promise<Outcome<ActivityResult>> {
     return this.run(
-      { pending: { kind: "activity", id: activityId } },
+      { keys: activityTapKeys({ activityId, linkedGoalIds }) },
       async () => {
         const response = await this.deps.api["day-selections"][
           ":logicalDate"
@@ -134,44 +184,55 @@ export class SelectionPlugin extends LogicPlugin<
     activityId: string | null;
     affectedGoalIds: readonly string[];
   }): Promise<Outcome<GoalResult>> {
-    return this.run({ pending: { kind: "goal", id: goalId } }, async () => {
-      const response = await this.deps.api["goal-completions"][":logicalDate"][
-        ":goalId"
-      ].$put(
-        { param: { logicalDate, goalId }, json: { completed } },
-        { init: { signal: this.signal } },
-      );
-      await requireApiSuccess(response);
-      const result = response.status === 200 ? await response.json() : null;
-      if (
-        !result?.completion ||
-        !isExpectedGoalResult({
-          result: { ...result, completion: result.completion },
-          goalId,
-          completed,
-          activityId,
-          affectedGoalIds,
-        })
-      ) {
-        throw new Error("The goal update was out of date.");
-      }
-      return { ...result, completion: result.completion };
-    });
+    return this.run(
+      { keys: goalTapKeys({ goalId, activityId, affectedGoalIds }) },
+      async () => {
+        const response = await this.deps.api["goal-completions"][
+          ":logicalDate"
+        ][":goalId"].$put(
+          { param: { logicalDate, goalId }, json: { completed } },
+          { init: { signal: this.signal } },
+        );
+        await requireApiSuccess(response);
+        const result = response.status === 200 ? await response.json() : null;
+        if (
+          !result?.completion ||
+          !isExpectedGoalResult({
+            result: { ...result, completion: result.completion },
+            goalId,
+            completed,
+            activityId,
+            affectedGoalIds,
+          })
+        ) {
+          throw new Error("The goal update was out of date.");
+        }
+        return { ...result, completion: result.completion };
+      },
+    );
+  }
+
+  private timestamp(): string {
+    return new Date(this.deps.services.clock.now()).toISOString();
   }
 
   private async run<Result>(
-    { pending }: { pending: PendingSelection },
+    { keys }: { keys: readonly string[] },
     request: () => Promise<Result>,
   ): Promise<Outcome<Result>> {
-    const settled: { result: Result }[] = [];
-    this.setState({ pending });
-    await this.executeTask("selection", async () => {
-      settled.push({ result: await request() });
+    this.setState({ pendingKeys: [...this.state.pendingKeys, ...keys] });
+    let outcome: Outcome<Result>;
+    try {
+      outcome = { ok: true, result: await request() };
+    } catch (error) {
+      outcome = {
+        ok: false,
+        message: error instanceof Error ? error.message : String(error),
+      };
+    }
+    this.setState({
+      pendingKeys: this.state.pendingKeys.filter((key) => !keys.includes(key)),
     });
-    this.setState({ pending: null });
-    const [value] = settled;
-    return value
-      ? { ok: true, result: value.result }
-      : { ok: false, message: this.state.selectionError ?? "" };
+    return outcome;
   }
 }

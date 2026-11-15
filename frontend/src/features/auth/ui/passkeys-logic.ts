@@ -1,10 +1,14 @@
 import { Logic, type TaskState } from "@app/common/features/core/logic/logic";
 import { requireApiSuccess } from "../../api/client/api-client.js";
 import type { FrontendLogicProps } from "../../core/logic/types.js";
+import type { App } from "../../core/types.js";
+import { LeaveLockPlugin } from "../../core/ui/leave-lock-plugin.js";
+import { PageNoticePlugin } from "../../core/ui/page-notice-plugin.js";
 import type { PasskeyRegistrationOptions } from "../services/types.js";
 import { ceremonyMessage } from "../utils/passkey-messages.js";
 
-type PasskeysProps = FrontendLogicProps<never, "passkeys" | "dialogs", "auth">;
+type PasskeysProps = FrontendLogicProps<never, "passkeys" | "dialogs", "auth"> &
+  Pick<App, "navigationLockEvents" | "pageNoticeEvents">;
 
 interface PasskeyInfo {
   id: string;
@@ -35,10 +39,26 @@ interface PasskeysState {
 }
 
 /** The passkeys of the signed-in owner, for the settings page: list, add, and remove. */
-export class PasskeysLogic extends Logic<PasskeysProps, PasskeysState> {
+export class PasskeysLogic extends Logic<
+  PasskeysProps,
+  PasskeysState,
+  never,
+  { leaveLock: LeaveLockPlugin; pageNotice: PageNoticePlugin }
+> {
   constructor(deps: PasskeysProps) {
     super({
       deps,
+      plugins: {
+        leaveLock: (pluginDeps) =>
+          new LeaveLockPlugin({
+            navigationLockEvents: pluginDeps.navigationLockEvents,
+            reason: "setup",
+          }),
+        pageNotice: (pluginDeps) =>
+          new PageNoticePlugin({
+            pageNoticeEvents: pluginDeps.pageNoticeEvents,
+          }),
+      },
       initialState: {
         passkeys: [],
         loadPasskeysState: "pristine",
@@ -53,11 +73,26 @@ export class PasskeysLogic extends Logic<PasskeysProps, PasskeysState> {
   }
 
   protected override async onInitialize(): Promise<void> {
+    this.registerCleanup(
+      this.subscribe(() => {
+        this.plugins.leaveLock.update({
+          busy:
+            this.state.addPasskeyState === "running" ||
+            this.state.removePasskeyState === "running",
+        });
+        this.plugins.pageNotice.follow({ notice: this.state.notice });
+      }),
+    );
     await this.loadPasskeys();
   }
 
   async loadPasskeys(): Promise<void> {
     await this.executeTask("loadPasskeys", () => this.readPasskeys());
+    if (this.state.loadPasskeysError) {
+      this.plugins.pageNotice.show({
+        notice: { kind: "error", text: this.state.loadPasskeysError },
+      });
+    }
   }
 
   /** Save a passkey for this device. The owner has a session, so no setup code is needed. */

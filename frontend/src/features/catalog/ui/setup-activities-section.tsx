@@ -190,7 +190,10 @@ export function SetupActivitiesSection({
                     </button>
                   )}
                 </span>
-                <MaterialIcon name="expand_more" />
+                <MaterialIcon
+                  name="expand_more"
+                  className="group-expand-icon"
+                />
               </summary>
               <div className="management-list">
                 {result.activities.length === 0 && (

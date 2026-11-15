@@ -18,7 +18,17 @@ export class ThemeLogic extends Logic<ThemeProps, ThemeState> {
   }
 
   protected override async onInitialize(): Promise<void> {
-    this.deps.services.theme.apply(this.state.preference);
+    const { storage, services } = this.deps;
+    services.theme.apply(this.state.preference);
+    this.registerCleanup(
+      services.theme.listenToOtherTabs((key) => {
+        if (storage.settings.changesTheme(key)) {
+          const preference = storage.settings.readTheme();
+          services.theme.apply(preference);
+          this.setState({ preference });
+        }
+      }),
+    );
   }
 
   select({ preference }: { preference: ThemePreference }): void {

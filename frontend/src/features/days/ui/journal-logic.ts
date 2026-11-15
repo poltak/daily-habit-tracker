@@ -15,7 +15,7 @@ import type { FrontendLogicProps } from "../../core/logic/types.js";
 import type { App } from "../../core/types.js";
 import type { ConnectionState, Notice } from "../types.js";
 import {
-  applyActivityResult,
+  applyAnswer,
   planActivityChange,
   undoActivityChange,
 } from "../utils/selection-change.js";
@@ -30,6 +30,11 @@ import {
 import { recoverDraft } from "../utils/recover-draft.js";
 import { fetchDayState } from "../utils/fetch-day-state.js";
 import { planGoalChange } from "../utils/goal-change.js";
+import {
+  activityTapKeys,
+  goalTapKeys,
+  MOOD_KEY,
+} from "../utils/selection-keys.js";
 import {
   errorNotice,
   infoNotice,
@@ -91,6 +96,8 @@ export class JournalLogic extends Logic<
   private hasLocalDraft = false;
   // Counts the changes of the owner, so that a refresh does not undo one.
   private localMutationEpoch = 0;
+  // A tap that ends after a failed one must keep the message of the failure.
+  private showsSelectionFailure = false;
 
   constructor(deps: JournalProps) {
     const today = logicalDateInTimeZone({
@@ -139,7 +146,11 @@ export class JournalLogic extends Logic<
       }),
     );
     this.registerCleanup(windowFocus.listen(() => this.refreshOnReturn()));
-    this.listen(this.deps.catalogEvents, async ({ notice }) => {
+    this.listen(this.deps.catalogEvents, async (event) => {
+      if (event.type !== "catalogChanged") {
+        return;
+      }
+      const { notice } = event;
       await this.plugins.catalog.load();
       await this.refreshDay();
       if (notice?.target === "log") {
@@ -207,8 +218,7 @@ export class JournalLogic extends Logic<
       this.setState({ notice: infoNotice(WAIT_FOR_ENTRY) });
       return;
     }
-    if (this.plugins.selection.isRunning) {
-      this.setState({ notice: infoNotice(WAIT_FOR_SELECTION) });
+    if (this.waitsForTap(WAIT_FOR_SELECTION)) {
       return;
     }
     this.dayRefreshes.cancel();
@@ -329,7 +339,7 @@ export class JournalLogic extends Logic<
   /** Tap a mood. The server keeps it at once, also before the day is saved. */
   async toggleMood({ moodId }: { moodId: string }): Promise<void> {
     const { selectedDate: logicalDate, draft } = this.state;
-    if (!this.canChangeSelection() || draft.moodId === moodId) {
+    if (!this.canChangeSelection([MOOD_KEY]) || draft.moodId === moodId) {
       return;
     }
     await this.changeSelection({
@@ -346,14 +356,14 @@ export class JournalLogic extends Logic<
 
   async toggleActivity({ activityId }: { activityId: string }): Promise<void> {
     const { selectedDate: logicalDate, draft } = this.state;
-    if (!this.canChangeSelection()) {
-      return;
-    }
     const change = planActivityChange({
       draft,
       goals: this.plugins.catalog.state.goals,
       activityId,
     });
+    if (!this.canChangeSelection(activityTapKeys({ activityId, ...change }))) {
+      return;
+    }
     await this.changeSelection({
       nextDraft: change.nextDraft,
       undo: (current) =>
@@ -366,12 +376,8 @@ export class JournalLogic extends Logic<
           selected: change.selected,
           linkedGoalIds: change.linkedGoalIds,
         }),
-      apply: (current, result) => ({
-        draft: applyActivityResult({ target: current, result }),
-        entry:
-          this.state.entry &&
-          applyActivityResult({ target: this.state.entry, result }),
-      }),
+      apply: (current, result) =>
+        applyAnswer({ draft: current, entry: this.state.entry, result }),
     });
   }
 
@@ -380,7 +386,10 @@ export class JournalLogic extends Logic<
     const { selectedDate: logicalDate, draft } = this.state;
     const goals = this.plugins.catalog.state.goals;
     const change = planGoalChange({ draft, goals, goalId });
-    if (!change || !this.canChangeSelection()) {
+    if (
+      !change ||
+      !this.canChangeSelection(goalTapKeys({ goalId, ...change }))
+    ) {
       return;
     }
     if (!this.deps.services.device.isOnline()) {
@@ -396,12 +405,8 @@ export class JournalLogic extends Logic<
       failure: "The goal was restored.",
       send: () =>
         this.plugins.selection.chooseGoal({ logicalDate, goalId, ...change }),
-      apply: (current, result) => ({
-        draft: applyActivityResult({ target: current, result }),
-        entry:
-          this.state.entry &&
-          applyActivityResult({ target: this.state.entry, result }),
-      }),
+      apply: (current, result) =>
+        applyAnswer({ draft: current, entry: this.state.entry, result }),
     });
   }
 
@@ -430,20 +435,35 @@ export class JournalLogic extends Logic<
     const { services } = this.deps;
     this.localMutationEpoch += 1;
     this.changeDraft(nextDraft);
+    this.showsSelectionFailure = false;
     this.setState({ notice: null });
     services.device.setLeaveWarning(true);
-    // The owner cannot open another day while the tap waits.
+    // The owner cannot open another day while a tap waits.
     const outcome = await send();
-    services.device.setLeaveWarning(false);
+    if (!this.plugins.selection.isRunning) {
+      services.device.setLeaveWarning(false);
+    }
     if (outcome.ok) {
       const next = apply(this.state.draft, outcome.result);
       this.setState({ entry: next.entry });
       this.changeDraft(next.draft);
-      this.settleSaved({ logicalDate });
+      this.plugins.selection.settleSaved({
+        logicalDate,
+        hasLocalDraft: this.hasLocalDraft,
+      });
+      if (!this.showsSelectionFailure) {
+        this.setState({ connection: "online", notice: null });
+      }
       return;
     }
     this.changeDraft(undo(this.state.draft));
-    this.settleFailed({ logicalDate, hadLocalDraft });
+    this.plugins.selection.settleFailed({
+      logicalDate,
+      draft: this.state.draft,
+      hadLocalDraft,
+    });
+    this.hasLocalDraft = hadLocalDraft;
+    this.showsSelectionFailure = true;
     this.setState({
       connection: this.offlineOrError(),
       notice: errorNotice(`${outcome.message} ${failure}`),
@@ -456,8 +476,7 @@ export class JournalLogic extends Logic<
     if (!this.canChangeEntry()) {
       return;
     }
-    if (this.plugins.selection.isRunning) {
-      this.setState({ notice: infoNotice(WAIT_BEFORE_SAVE) });
+    if (this.waitsForTap(WAIT_BEFORE_SAVE)) {
       return;
     }
     if (!draft.moodId) {
@@ -502,8 +521,7 @@ export class JournalLogic extends Logic<
     if (!this.canChangeEntry() || !draft.version) {
       return;
     }
-    if (this.plugins.selection.isRunning) {
-      this.setState({ notice: infoNotice(WAIT_BEFORE_DELETE) });
+    if (this.waitsForTap(WAIT_BEFORE_DELETE)) {
       return;
     }
     const day = formatLogicalDate({ date: logicalDate, style: "friendly" });
@@ -574,10 +592,6 @@ export class JournalLogic extends Logic<
     });
   }
 
-  private timestamp(): string {
-    return new Date(this.deps.services.clock.now()).toISOString();
-  }
-
   private offlineOrError(): ConnectionState {
     return this.deps.services.device.isOnline() ? "error" : "offline";
   }
@@ -594,6 +608,14 @@ export class JournalLogic extends Logic<
     if (this.deps.services.device.isVisible()) {
       void this.refreshDay();
     }
+  }
+
+  private waitsForTap(text: string): boolean {
+    const waits = this.plugins.selection.isRunning;
+    if (waits) {
+      this.setState({ notice: infoNotice(text) });
+    }
+    return waits;
   }
 
   private isBusyWithChange(): boolean {
@@ -613,43 +635,20 @@ export class JournalLogic extends Logic<
     );
   }
 
-  private canChangeSelection(): boolean {
+  /** A tap waits for the answer before the next tap on one of the same items. */
+  private canChangeSelection(keys: readonly string[]): boolean {
     return (
       this.canChangeEntry() &&
       this.state.loadDayState !== "running" &&
-      !this.plugins.selection.isRunning
+      !this.plugins.selection.isBlocked(keys)
     );
   }
 
   private changeDraft(draft: Draft): void {
     this.setState({ draft });
-    this.deps.storage.days.writeDraft({
+    this.plugins.selection.storeDraft({
       logicalDate: this.state.selectedDate,
       draft,
-      savedAt: this.timestamp(),
     });
-  }
-
-  private settleSaved({ logicalDate }: { logicalDate: string }): void {
-    if (!this.hasLocalDraft) {
-      this.deps.storage.days.clearDraft({ logicalDate });
-    }
-    this.setState({ connection: "online", notice: null });
-  }
-
-  private settleFailed({
-    logicalDate,
-    hadLocalDraft,
-  }: {
-    logicalDate: string;
-    hadLocalDraft: boolean;
-  }): void {
-    this.deps.storage.days.settleDraft({
-      logicalDate,
-      draft: this.state.draft,
-      savedAt: this.timestamp(),
-      keep: hadLocalDraft,
-    });
-    this.hasLocalDraft = hadLocalDraft;
   }
 }

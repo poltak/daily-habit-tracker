@@ -47,6 +47,7 @@ function GoalHistoryPage({
       api: { goals: app.api.goals },
       goalId: goal.id,
       initialMonth,
+      pageNoticeEvents: app.pageNoticeEvents,
     }),
     [app, goal.id, initialMonth],
   );
@@ -74,18 +75,6 @@ function GoalHistoryPage({
         </div>
       </div>
       {settings}
-      {state.loadHistoryError && (
-        <div className="notice error" role="alert">
-          <p>{state.loadHistoryError}</p>
-          <button
-            type="button"
-            className="loading-retry"
-            onClick={() => void logic.loadHistory()}
-          >
-            Retry
-          </button>
-        </div>
-      )}
       <section className="calendar-card goal-history-card" aria-busy={loading}>
         <div className="calendar-heading">
           <button

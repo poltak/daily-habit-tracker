@@ -22,14 +22,14 @@ describe("SelectionPlugin tests", () => {
 
     const tapP = logic.chooseMood({ logicalDate: today, moodId: "mood-bad" });
     expect(logic.isRunning).toEqual(true);
-    expect(logic.state.pending).toEqual({ kind: "mood" });
+    expect(logic.state.pendingKeys).toEqual(["mood"]);
     await held.reached;
     held.release();
     const outcome = await tapP;
 
     expect(outcome).toEqual({ ok: true, result: undefined });
     expect(logic.isRunning).toEqual(false);
-    expect(logic.state.pending).toEqual(null);
+    expect(logic.state.pendingKeys).toEqual([]);
     expect(
       await backend.db
         .selectFrom("dayMoodSelections")
@@ -51,8 +51,7 @@ describe("SelectionPlugin tests", () => {
       ok: false,
       message: "Choose one of the five moods.",
     });
-    expect(logic.state.selectionState).toEqual("error");
-    expect(logic.state.pending).toEqual(null);
+    expect(logic.state.pendingKeys).toEqual([]);
     expect(
       await backend.db.selectFrom("dayMoodSelections").selectAll().execute(),
     ).toEqual([]);
@@ -124,5 +123,46 @@ describe("SelectionPlugin tests", () => {
       ok: false,
       message: "No connection. Check your internet connection and try again.",
     });
+  });
+
+  it("should keep a tap on each item while taps wait, and block only the items that a waiting tap changes", async () => {
+    const app = await setupTest();
+    const { backend, logic, transport } = app;
+    const today = todayOf(app);
+    const first = transport.holdNextRequest();
+    const second = transport.holdNextRequest();
+
+    const gymP = logic.chooseActivity({
+      logicalDate: today,
+      activityId: "activity-gym",
+      selected: true,
+      linkedGoalIds: ["goal-move"],
+    });
+    const moodP = logic.chooseMood({ logicalDate: today, moodId: "mood-bad" });
+    await first.reached;
+    await second.reached;
+
+    expect(logic.state.pendingKeys).toEqual([
+      "activity:activity-gym",
+      "goal:goal-move",
+      "mood",
+    ]);
+    expect(logic.isBlocked(["goal:goal-move"])).toEqual(true);
+    expect(logic.isBlocked(["activity:activity-walk"])).toEqual(false);
+    first.release();
+    second.release();
+    const outcomes = await Promise.all([gymP, moodP]);
+
+    expect(outcomes.map((outcome) => outcome.ok)).toEqual([true, true]);
+    expect(logic.isRunning).toEqual(false);
+    expect(
+      await backend.db
+        .selectFrom("dayMoodSelections")
+        .select("moodId")
+        .execute(),
+    ).toEqual([{ moodId: "mood-bad" }]);
+    expect(
+      await backend.db.selectFrom("goalCompletions").select("goalId").execute(),
+    ).toEqual([{ goalId: "goal-move" }]);
   });
 });

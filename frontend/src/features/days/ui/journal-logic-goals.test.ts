@@ -21,10 +21,10 @@ describe("JournalLogic tapping the switch of a goal", () => {
     const held = transport.holdNextRequest();
 
     const tapP = logic.toggleGoal({ goalId: "goal-read" });
-    expect(logic.plugins.selection.state.pending).toEqual({
-      kind: "goal",
-      id: "goal-read",
-    });
+    expect(logic.plugins.selection.state.pendingKeys).toEqual([
+      "goal:goal-read",
+      "activity:activity-reading",
+    ]);
     expect(logic.state.draft).toMatchObject({
       activityIds: ["activity-reading"],
       completedGoalIds: ["goal-read"],
@@ -36,8 +36,7 @@ describe("JournalLogic tapping the switch of a goal", () => {
     held.release();
     await tapP;
 
-    expect(logic.plugins.selection.state.selectionState).toEqual("success");
-    expect(logic.plugins.selection.state.pending).toEqual(null);
+    expect(logic.plugins.selection.state.pendingKeys).toEqual([]);
     expect(logic.state).toMatchObject({ connection: "online", notice: null });
     expect(logic.state.draft).toMatchObject({
       activityIds: ["activity-reading"],
@@ -182,7 +181,6 @@ describe("JournalLogic tapping the switch of a goal", () => {
 
     await logic.toggleGoal({ goalId: "goal-read" });
 
-    expect(logic.plugins.selection.state.selectionState).toEqual("pristine");
     expect(logic.state.connection).toEqual("offline");
     expect(logic.state.notice).toEqual({
       kind: "error",
@@ -198,7 +196,6 @@ describe("JournalLogic tapping the switch of a goal", () => {
 
     await logic.toggleGoal({ goalId: "goal-read" });
 
-    expect(logic.plugins.selection.state.selectionState).toEqual("error");
     expect(logic.state.draft).toMatchObject({
       activityIds: [],
       completedGoalIds: [],
@@ -228,13 +225,13 @@ describe("JournalLogic tapping the switch of a goal", () => {
     );
   });
 
-  it("should refuse a second tap while one waits, and a goal that the catalog lacks", async () => {
+  it("should refuse a second tap on the same goal while it waits, and a goal that the catalog lacks", async () => {
     const app = await setupTest();
     const { logic, transport } = app;
     const held = transport.holdNextRequest();
 
     const tapP = logic.toggleGoal({ goalId: "goal-read" });
-    await logic.toggleGoal({ goalId: "goal-move" });
+    await logic.toggleGoal({ goalId: "goal-read" });
     await held.reached;
     held.release();
     await tapP;

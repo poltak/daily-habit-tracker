@@ -25,6 +25,8 @@ export function CatalogSetupProvider({ children }: { children: ReactNode }) {
       services: { clock: app.services.clock, dialogs: app.services.dialogs },
       api: { catalog: app.api.catalog },
       catalogEvents: app.catalogEvents,
+      navigationLockEvents: app.navigationLockEvents,
+      pageNoticeEvents: app.pageNoticeEvents,
     }),
     [app],
   );

@@ -4,6 +4,7 @@ import {
   type LogicTestParams,
 } from "../../core/tests/full-application.js";
 import type { CatalogEvent } from "../types.js";
+import { CatalogReadPlugin } from "../../days/ui/catalog-read-plugin.js";
 import { CatalogSetupLogic } from "./catalog-setup-logic.js";
 
 function setupTest(params: LogicTestParams = {}) {
@@ -31,6 +32,29 @@ describe("CatalogSetupLogic loading", () => {
     expect(logic.state.activities).toHaveLength(12);
     expect(logic.state.goals).toHaveLength(2);
     expect(logic.state.loadCatalogState).toEqual("success");
+  });
+
+  it("should show the catalog that the log read, before its own read ends", async () => {
+    const app = await setupTest();
+    const { logic, transport } = app;
+    const log = new CatalogReadPlugin(app.frontend);
+    await log.initialize();
+    expect(logic.state.groups).toEqual([]);
+
+    await log.load();
+
+    expect(logic.state.groups).toHaveLength(5);
+    expect(logic.state.activities).toHaveLength(12);
+    expect(logic.state.goals).toHaveLength(2);
+    expect(logic.state.loadCatalogState).toEqual("pristine");
+    const held = transport.holdNextRequest();
+    const loadP = logic.load();
+    await held.reached;
+    expect(logic.state.loadCatalogState).toEqual("running");
+    expect(logic.state.groups).toHaveLength(5);
+    held.release();
+    expect(await loadP).toEqual(true);
+    expect(logic.state.groups).toHaveLength(5);
   });
 
   it("should say so when the catalog cannot be read", async () => {

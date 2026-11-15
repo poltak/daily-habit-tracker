@@ -8,14 +8,18 @@ import type {
 } from "@app/common/features/catalog/types";
 import { requireApiSuccess } from "../../api/client/api-client.js";
 import type { FrontendLogicProps } from "../../core/logic/types.js";
+import type { App } from "../../core/types.js";
 
-export type CatalogReadProps = FrontendLogicProps<never, never, "catalog">;
+export type CatalogReadProps = FrontendLogicProps<never, never, "catalog"> &
+  Pick<App, "catalogEvents">;
 
 interface CatalogReadState {
   moods: Mood[];
   groups: ActivityGroup[];
   activities: Activity[];
   goals: Goal[];
+  /** True after the first read. A failed read later does not reset it. */
+  catalogLoaded: boolean;
   loadCatalogState: TaskState;
   loadCatalogError: string | null;
 }
@@ -33,6 +37,7 @@ export class CatalogReadPlugin extends LogicPlugin<
         groups: [],
         activities: [],
         goals: [],
+        catalogLoaded: false,
         loadCatalogState: "pristine",
         loadCatalogError: null,
       },
@@ -49,7 +54,16 @@ export class CatalogReadPlugin extends LogicPlugin<
       if (response.status !== 200) {
         throw new Error("Could not connect to your journal.");
       }
-      this.setState(await response.json());
+      const catalog = await response.json();
+      this.setState({ ...catalog, catalogLoaded: true });
+      this.deps.catalogEvents.emitDetached({
+        type: "catalogRead",
+        catalog: {
+          groups: catalog.groups,
+          activities: catalog.activities,
+          goals: catalog.goals,
+        },
+      });
     });
     return this.state.loadCatalogState === "success";
   }

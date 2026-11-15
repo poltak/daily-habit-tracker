@@ -7,11 +7,14 @@ import {
 import type { CalendarEntryDay } from "@app/common/features/days/types";
 import { requireApiSuccess } from "../../api/client/api-client.js";
 import type { FrontendLogicProps } from "../../core/logic/types.js";
+import type { App } from "../../core/types.js";
+import { PageNoticePlugin } from "../../core/ui/page-notice-plugin.js";
 
-type CalendarProps = FrontendLogicProps<never, "clock", "calendar"> & {
-  /** The month to show first, as `YYYY-MM`. */
-  initialMonth: string;
-};
+type CalendarProps = FrontendLogicProps<never, "clock", "calendar"> &
+  Pick<App, "pageNoticeEvents"> & {
+    /** The month to show first, as `YYYY-MM`. */
+    initialMonth: string;
+  };
 
 interface CalendarState {
   month: string;
@@ -24,7 +27,12 @@ interface CalendarState {
 }
 
 /** One month of the calendar: the days that have an entry, and the mood of each. */
-export class CalendarLogic extends Logic<CalendarProps, CalendarState> {
+export class CalendarLogic extends Logic<
+  CalendarProps,
+  CalendarState,
+  never,
+  { pageNotice: PageNoticePlugin }
+> {
   constructor(deps: CalendarProps) {
     const { clock } = deps.services;
     const currentMonth = logicalDateInTimeZone({
@@ -33,6 +41,12 @@ export class CalendarLogic extends Logic<CalendarProps, CalendarState> {
     }).slice(0, 7);
     super({
       deps,
+      plugins: {
+        pageNotice: (pluginDeps) =>
+          new PageNoticePlugin({
+            pageNoticeEvents: pluginDeps.pageNoticeEvents,
+          }),
+      },
       initialState: {
         month: isMonth(deps.initialMonth) ? deps.initialMonth : currentMonth,
         days: [],
@@ -74,5 +88,12 @@ export class CalendarLogic extends Logic<CalendarProps, CalendarState> {
       }
       this.setState({ days: (await response.json()).days });
     });
+    if (this.state.loadMonthError) {
+      this.plugins.pageNotice.show({
+        notice: { kind: "error", text: this.state.loadMonthError },
+      });
+    } else if (this.state.loadMonthState === "success") {
+      this.plugins.pageNotice.clear();
+    }
   }
 }

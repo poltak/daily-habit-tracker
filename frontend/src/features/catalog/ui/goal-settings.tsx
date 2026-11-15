@@ -2,11 +2,9 @@ import { useMemo } from "react";
 import { useLogic } from "../../core/logic/use-logic.js";
 import { useFrontendApp } from "../../core/ui/frontend-app-context.js";
 import type { NoticeTarget } from "../types.js";
-import { CatalogNotice } from "./catalog-notice.js";
 import { GoalSetupCard } from "./goal-setup-card.js";
 import { GoalSetupLogic } from "./goal-setup-logic.js";
 import { IconPicker } from "./icon-picker.js";
-import "./catalog.css";
 
 interface GoalSettingsProps {
   goalId: string;
@@ -24,6 +22,8 @@ export function GoalSettings({ goalId, returnTo, onClose }: GoalSettingsProps) {
       services: { device: app.services.device, dialogs: app.services.dialogs },
       api: { catalog: app.api.catalog },
       catalogEvents: app.catalogEvents,
+      navigationLockEvents: app.navigationLockEvents,
+      pageNoticeEvents: app.pageNoticeEvents,
       goalId,
       returnTo,
     }),
@@ -31,11 +31,10 @@ export function GoalSettings({ goalId, returnTo, onClose }: GoalSettingsProps) {
   );
   const { logic, state } = useLogic({ LogicClass: GoalSetupLogic, deps });
   if (!state.goal) {
-    return <CatalogNotice notice={state.notice} />;
+    return null;
   }
   return (
     <>
-      <CatalogNotice notice={state.notice} />
       <GoalSetupCard
         logic={logic}
         state={state}

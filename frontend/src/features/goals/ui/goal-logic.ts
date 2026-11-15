@@ -7,12 +7,15 @@ import {
 import type { GoalHistory } from "@app/common/features/goals/types";
 import { requireApiSuccess } from "../../api/client/api-client.js";
 import type { FrontendLogicProps } from "../../core/logic/types.js";
+import type { App } from "../../core/types.js";
+import { PageNoticePlugin } from "../../core/ui/page-notice-plugin.js";
 
-type GoalProps = FrontendLogicProps<never, "clock", "goals"> & {
-  goalId: string;
-  /** The month to show first, as `YYYY-MM`. */
-  initialMonth: string;
-};
+type GoalProps = FrontendLogicProps<never, "clock", "goals"> &
+  Pick<App, "pageNoticeEvents"> & {
+    goalId: string;
+    /** The month to show first, as `YYYY-MM`. */
+    initialMonth: string;
+  };
 
 interface GoalState {
   month: string;
@@ -23,11 +26,22 @@ interface GoalState {
 }
 
 /** One goal: its month of completed days, and the result of each week of the month. */
-export class GoalLogic extends Logic<GoalProps, GoalState> {
+export class GoalLogic extends Logic<
+  GoalProps,
+  GoalState,
+  never,
+  { pageNotice: PageNoticePlugin }
+> {
   constructor(deps: GoalProps) {
     const { clock } = deps.services;
     super({
       deps,
+      plugins: {
+        pageNotice: (pluginDeps) =>
+          new PageNoticePlugin({
+            pageNoticeEvents: pluginDeps.pageNoticeEvents,
+          }),
+      },
       initialState: {
         month: isMonth(deps.initialMonth)
           ? deps.initialMonth
@@ -78,5 +92,10 @@ export class GoalLogic extends Logic<GoalProps, GoalState> {
       }
       this.setState({ history: await history.json() });
     });
+    if (this.state.loadHistoryError) {
+      this.plugins.pageNotice.show({
+        notice: { kind: "error", text: this.state.loadHistoryError },
+      });
+    }
   }
 }

@@ -21,8 +21,10 @@ interface IconPickerProps {
 
 /**
  * The dialog where the owner picks an icon. It is a modal `<dialog>`, so the
- * browser keeps the keyboard inside it, closes it with Escape, and returns the
- * focus to the button that opened it.
+ * browser keeps the keyboard inside it and closes it with Escape. The owner of
+ * this component removes it when it closes, and the browser does not return the
+ * focus from a dialog that leaves the page. So the effect below returns it to
+ * the button that opened the dialog.
  */
 export function IconPicker({
   kind,
@@ -39,10 +41,17 @@ export function IconPicker({
 
   useEffect(() => {
     const dialog = dialogRef.current;
+    const active = dialog?.ownerDocument.activeElement;
+    const opener = active instanceof HTMLElement ? active : null;
     if (dialog && !dialog.open) {
       dialog.showModal();
     }
     searchRef.current?.focus();
+    return () => {
+      if (opener?.isConnected) {
+        opener.focus({ preventScroll: true });
+      }
+    };
   }, []);
 
   const choices = logic.matches();

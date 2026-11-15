@@ -8,7 +8,9 @@ import type {
 } from "@app/common/features/catalog/types";
 import type { FrontendLogicProps } from "../../core/logic/types.js";
 import { failureMessage } from "../../core/logic/failure-message.js";
-import type { App } from "../../core/types.js";
+import type { App, PageView } from "../../core/types.js";
+import { LeaveLockPlugin } from "../../core/ui/leave-lock-plugin.js";
+import { PageNoticePlugin } from "../../core/ui/page-notice-plugin.js";
 import type { Notice } from "../../days/types.js";
 import {
   actionKey,
@@ -28,7 +30,7 @@ import {
 } from "./catalog-requests-plugin.js";
 
 type SetupProps = FrontendLogicProps<never, "clock" | "dialogs", "catalog"> &
-  Pick<App, "catalogEvents">;
+  Pick<App, "catalogEvents" | "navigationLockEvents" | "pageNoticeEvents">;
 
 /** The activity whose icon the dialog changes. */
 export interface IconTarget {
@@ -68,13 +70,26 @@ export class CatalogSetupLogic extends Logic<
   SetupProps,
   SetupState,
   never,
-  { requests: CatalogRequestsPlugin }
+  {
+    requests: CatalogRequestsPlugin;
+    leaveLock: LeaveLockPlugin;
+    pageNotice: PageNoticePlugin;
+  }
 > {
   constructor(deps: SetupProps) {
     super({
       deps,
       plugins: {
         requests: (pluginDeps) => new CatalogRequestsPlugin(pluginDeps),
+        leaveLock: (pluginDeps) =>
+          new LeaveLockPlugin({
+            navigationLockEvents: pluginDeps.navigationLockEvents,
+            reason: "setup",
+          }),
+        pageNotice: (pluginDeps) =>
+          new PageNoticePlugin({
+            pageNoticeEvents: pluginDeps.pageNoticeEvents,
+          }),
       },
       initialState: {
         groups: [],
@@ -95,9 +110,28 @@ export class CatalogSetupLogic extends Logic<
   }
 
   protected override async onInitialize(): Promise<void> {
+    this.registerCleanup(
+      this.subscribe(() => {
+        this.plugins.leaveLock.update({
+          busy: this.state.pendingKeys.length > 0,
+        });
+        this.plugins.pageNotice.follow({ notice: this.state.notice });
+      }),
+    );
     this.listen(this.deps.catalogEvents, (event) => {
+      if (event.type === "catalogRead") {
+        // A change in flight keeps its own view of the catalog.
+        if (this.state.pendingKeys.length === 0) {
+          this.adopt(event.catalog);
+        }
+        return;
+      }
       if (event.notice?.target === "settings") {
-        this.show({ kind: "success", text: event.notice.text });
+        // The sender is still open, and Setup opens next.
+        this.show(
+          { kind: "success", text: event.notice.text },
+          { view: "settings" },
+        );
       }
     });
   }
@@ -105,34 +139,46 @@ export class CatalogSetupLogic extends Logic<
   /** Read the catalog again. True when it is loaded. */
   async load(): Promise<boolean> {
     await this.executeTask("loadCatalog", async () => {
-      const catalog = await this.plugins.requests.read();
-      const records = new Map<string, object>([
-        ...catalog.groups.map(
-          (group) =>
-            [catalogKey({ kind: "group", id: group.id }), group] as const,
-        ),
-        ...catalog.activities.map(
-          (activity) =>
-            [
-              catalogKey({ kind: "activity", id: activity.id }),
-              activity,
-            ] as const,
-        ),
-        ...catalog.goals.map(
-          (goal) => [catalogKey({ kind: "goal", id: goal.id }), goal] as const,
-        ),
-      ]);
-      this.setState({
-        groups: catalog.groups,
-        activities: catalog.activities,
-        goals: catalog.goals,
-        overrides: commitCatalogOverrides({
-          overrides: this.state.overrides,
-          records,
-        }),
-      });
+      this.adopt(await this.plugins.requests.read());
     });
+    if (this.state.loadCatalogError) {
+      this.plugins.pageNotice.show({
+        notice: { kind: "error", text: this.state.loadCatalogError },
+      });
+    }
     return this.state.loadCatalogState === "success";
+  }
+
+  private adopt(catalog: {
+    groups: ActivityGroup[];
+    activities: Activity[];
+    goals: Goal[];
+  }): void {
+    const records = new Map<string, object>([
+      ...catalog.groups.map(
+        (group) =>
+          [catalogKey({ kind: "group", id: group.id }), group] as const,
+      ),
+      ...catalog.activities.map(
+        (activity) =>
+          [
+            catalogKey({ kind: "activity", id: activity.id }),
+            activity,
+          ] as const,
+      ),
+      ...catalog.goals.map(
+        (goal) => [catalogKey({ kind: "goal", id: goal.id }), goal] as const,
+      ),
+    ]);
+    this.setState({
+      groups: catalog.groups,
+      activities: catalog.activities,
+      goals: catalog.goals,
+      overrides: commitCatalogOverrides({
+        overrides: this.state.overrides,
+        records,
+      }),
+    });
   }
 
   isPending(key: string): boolean {
@@ -390,7 +436,8 @@ export class CatalogSetupLogic extends Logic<
     });
   }
 
-  private show(notice: Notice): void {
+  private show(notice: Notice, { view }: { view?: PageView } = {}): void {
+    this.plugins.pageNotice.show({ notice, ...(view ? { view } : {}) });
     this.setState({ notice });
   }
 

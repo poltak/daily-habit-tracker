@@ -1,8 +1,12 @@
 import { Logic, type TaskState } from "@app/common/features/core/logic/logic";
 import { requireApiSuccess } from "../../api/client/api-client.js";
 import type { FrontendLogicProps } from "../../core/logic/types.js";
+import type { App } from "../../core/types.js";
+import { LeaveLockPlugin } from "../../core/ui/leave-lock-plugin.js";
+import { PageNoticePlugin } from "../../core/ui/page-notice-plugin.js";
 
-type ConnectionsProps = FrontendLogicProps<never, "dialogs", "auth">;
+type ConnectionsProps = FrontendLogicProps<never, "dialogs", "auth"> &
+  Pick<App, "navigationLockEvents" | "pageNoticeEvents">;
 
 interface Connection {
   id: string;
@@ -29,11 +33,24 @@ interface ConnectionsState {
 /** The apps that the owner connected to the MCP endpoint, such as ChatGPT: list, and disconnect. */
 export class ConnectionsLogic extends Logic<
   ConnectionsProps,
-  ConnectionsState
+  ConnectionsState,
+  never,
+  { leaveLock: LeaveLockPlugin; pageNotice: PageNoticePlugin }
 > {
   constructor(deps: ConnectionsProps) {
     super({
       deps,
+      plugins: {
+        leaveLock: (pluginDeps) =>
+          new LeaveLockPlugin({
+            navigationLockEvents: pluginDeps.navigationLockEvents,
+            reason: "setup",
+          }),
+        pageNotice: (pluginDeps) =>
+          new PageNoticePlugin({
+            pageNoticeEvents: pluginDeps.pageNoticeEvents,
+          }),
+      },
       initialState: {
         connections: [],
         loadConnectionsState: "pristine",
@@ -46,11 +63,24 @@ export class ConnectionsLogic extends Logic<
   }
 
   protected override async onInitialize(): Promise<void> {
+    this.registerCleanup(
+      this.subscribe(() => {
+        this.plugins.leaveLock.update({
+          busy: this.state.removeConnectionState === "running",
+        });
+        this.plugins.pageNotice.follow({ notice: this.state.notice });
+      }),
+    );
     await this.loadConnections();
   }
 
   async loadConnections(): Promise<void> {
     await this.executeTask("loadConnections", () => this.readConnections());
+    if (this.state.loadConnectionsError) {
+      this.plugins.pageNotice.show({
+        notice: { kind: "error", text: this.state.loadConnectionsError },
+      });
+    }
   }
 
   /** Ask first. A no leaves the app connected. The app stops working at once after a yes. */

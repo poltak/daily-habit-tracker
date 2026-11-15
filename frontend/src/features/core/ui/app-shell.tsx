@@ -1,5 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
+import type { Notice } from "../../days/types.js";
 import { MaterialIcon } from "./material-icon.js";
+import { NoticeOutput } from "./notice-output.js";
 
 /** A page that the bottom navigation opens. */
 export type NavView = "log" | "calendar" | "insights" | "settings";
@@ -39,6 +41,10 @@ interface AppShellProps {
   connection: ConnectionState;
   /** The colour of the sky behind the header. The log takes it from the mood of the day. */
   dayColor?: string | undefined;
+  /** True while a page has a request in flight. The navigation stops until it ends. */
+  locked?: boolean;
+  /** The newest message of the page, above the page. The log shows its messages itself. */
+  notice?: Notice | null;
   onOpen: (view: NavView) => void;
   children: ReactNode;
 }
@@ -50,6 +56,8 @@ export function AppShell({
   actions,
   connection,
   dayColor,
+  locked = false,
+  notice = null,
   onOpen,
   children,
 }: AppShellProps) {
@@ -57,7 +65,7 @@ export function AppShell({
     ? ({ "--day-color": dayColor } as CSSProperties)
     : undefined;
   return (
-    <div className={`journal-shell view-${view ?? "none"}`} style={style}>
+    <div className={`app-shell view-${view ?? "none"}`} style={style}>
       <a className="skip-link" href="#journal-content">
         Skip to content
       </a>
@@ -66,6 +74,7 @@ export function AppShell({
           type="button"
           className="brand"
           aria-label="Go to log"
+          disabled={locked}
           onClick={() => onOpen("log")}
         >
           <span className="brand-mark" aria-hidden="true" />
@@ -84,9 +93,14 @@ export function AppShell({
         {actions}
       </header>
       <main className="content-shell" id="journal-content" tabIndex={-1}>
+        {notice && <NoticeOutput {...notice} />}
         {children}
       </main>
-      <nav className="bottom-nav" aria-label="Primary navigation">
+      <nav
+        className="bottom-nav"
+        aria-label="Primary navigation"
+        aria-busy={locked}
+      >
         <span className="nav-heading" aria-hidden="true">
           Your journal
         </span>
@@ -96,6 +110,7 @@ export function AppShell({
             type="button"
             className={view === page.view ? "active" : ""}
             aria-current={view === page.view ? "page" : undefined}
+            disabled={locked}
             onClick={() => onOpen(page.view)}
           >
             <span className="nav-icon">

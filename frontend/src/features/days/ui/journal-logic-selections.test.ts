@@ -27,8 +27,7 @@ describe("JournalLogic tapping a mood", () => {
     const held = transport.holdNextRequest();
 
     const tapP = logic.toggleMood({ moodId: "mood-good" });
-    expect(logic.plugins.selection.state.selectionState).toEqual("running");
-    expect(logic.plugins.selection.state.pending).toEqual({ kind: "mood" });
+    expect(logic.plugins.selection.state.pendingKeys).toEqual(["mood"]);
     expect(logic.state.draft.moodId).toEqual("mood-good");
     expect(
       JSON.parse(frontend.browserStorage.getItem(draftKey(today)) ?? "{}").draft
@@ -42,8 +41,7 @@ describe("JournalLogic tapping a mood", () => {
     held.release();
     await tapP;
 
-    expect(logic.plugins.selection.state.selectionState).toEqual("success");
-    expect(logic.plugins.selection.state.pending).toEqual(null);
+    expect(logic.plugins.selection.state.pendingKeys).toEqual([]);
     expect(frontend.services.device.leaveWarning).toEqual(false);
     expect(logic.state).toMatchObject({ connection: "online", notice: null });
     expect(logic.state.draft.moodId).toEqual("mood-good");
@@ -89,7 +87,6 @@ describe("JournalLogic tapping a mood", () => {
 
     await logic.toggleMood({ moodId: "mood-rad" });
 
-    expect(logic.plugins.selection.state.selectionState).toEqual("error");
     expect(logic.state.draft.moodId).toEqual("mood-good");
     expect(logic.state.connection).toEqual("offline");
     expect(logic.state.notice).toEqual({
@@ -136,7 +133,6 @@ describe("JournalLogic tapping a mood", () => {
     held.release();
     await chooseP;
 
-    expect(logic.plugins.selection.state.selectionState).toEqual("success");
     expect(logic.state.draft.moodId).toEqual("");
   });
 
@@ -154,14 +150,13 @@ describe("JournalLogic tapping a mood", () => {
     expect(logic.state.entry).toEqual(null);
   });
 
-  it("should refuse a second tap, and a change of the day, while a tap waits", async () => {
+  it("should refuse a second tap on the mood, and a change of the day, while a tap waits", async () => {
     const app = await setupTest();
     const { logic, transport } = app;
     const held = transport.holdNextRequest();
 
     const tapP = logic.toggleMood({ moodId: "mood-good" });
     await logic.toggleMood({ moodId: "mood-bad" });
-    await logic.toggleActivity({ activityId: "activity-walk" });
     await logic.chooseDate({ logicalDate: daysAgo(app, 1) });
     expect(logic.state.notice).toEqual({
       kind: "info",
@@ -187,10 +182,10 @@ describe("JournalLogic tapping an activity", () => {
     const held = transport.holdNextRequest();
 
     const tapP = logic.toggleActivity({ activityId: "activity-gym" });
-    expect(logic.plugins.selection.state.pending).toEqual({
-      kind: "activity",
-      id: "activity-gym",
-    });
+    expect(logic.plugins.selection.state.pendingKeys).toEqual([
+      "activity:activity-gym",
+      "goal:goal-move",
+    ]);
     expect(logic.state.draft).toMatchObject({
       activityIds: ["activity-gym"],
       completedGoalIds: ["goal-move"],
@@ -205,7 +200,6 @@ describe("JournalLogic tapping an activity", () => {
     held.release();
     await tapP;
 
-    expect(logic.plugins.selection.state.selectionState).toEqual("success");
     expect(logic.state.draft).toMatchObject({
       activityIds: ["activity-gym"],
       completedGoalIds: ["goal-move"],
@@ -289,7 +283,6 @@ describe("JournalLogic tapping an activity", () => {
 
     await logic.toggleActivity({ activityId: "activity-gym" });
 
-    expect(logic.plugins.selection.state.selectionState).toEqual("error");
     expect(logic.state.draft).toMatchObject({
       activityIds: [],
       completedGoalIds: [],

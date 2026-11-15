@@ -31,11 +31,11 @@ interface ActivitiesPanelProps {
   selectedActivityIds: readonly string[];
   query: string;
   openGroupIds: readonly string[];
-  /** The activity that waits for the server. */
-  pendingActivityId: string | null;
+  /** The activities that wait for the server. */
+  pendingActivityIds: ReadonlySet<string>;
   /** True while the day loads. */
   loading: boolean;
-  /** True while the day loads or fails to load, or a tap waits for the server. */
+  /** True while the day loads or fails to load. */
   unavailable: boolean;
   onQueryChange: (query: string) => void;
   onToggle: (activityId: string) => void;
@@ -49,7 +49,7 @@ export function ActivitiesPanel({
   selectedActivityIds,
   query,
   openGroupIds,
-  pendingActivityId,
+  pendingActivityIds,
   loading,
   unavailable,
   onQueryChange,
@@ -82,8 +82,8 @@ export function ActivitiesPanel({
               key={activity.id}
               type="button"
               className="selection-chip"
-              disabled={unavailable}
-              aria-busy={pendingActivityId === activity.id}
+              disabled={unavailable || pendingActivityIds.has(activity.id)}
+              aria-busy={pendingActivityIds.has(activity.id)}
               onClick={() => onToggle(activity.id)}
             >
               <MaterialIcon name={activity.icon} /> {activity.name}{" "}
@@ -158,7 +158,7 @@ export function ActivitiesPanel({
               <div className="activity-grid">
                 {groupActivities.map((activity) => {
                   const isSelected = selected.has(activity.id);
-                  const pending = pendingActivityId === activity.id;
+                  const pending = pendingActivityIds.has(activity.id);
                   return (
                     <button
                       key={activity.id}
@@ -166,7 +166,7 @@ export function ActivitiesPanel({
                       className={`activity-button ${isSelected ? "selected" : ""}`}
                       aria-pressed={isSelected}
                       aria-busy={pending}
-                      disabled={unavailable}
+                      disabled={unavailable || pending}
                       onClick={() => onToggle(activity.id)}
                     >
                       <span className="activity-icon">

@@ -1,30 +1,13 @@
 import { useEffect, useRef } from "react";
 import { actionKey, reorderKey } from "../utils/catalog-mutations.js";
-import { CatalogNotice } from "./catalog-notice.js";
 import { useCatalogSetup } from "./catalog-setup-context.js";
 import { IconPicker } from "./icon-picker.js";
 import { SetupActivitiesSection } from "./setup-activities-section.js";
 import { SetupGoalsSection } from "./setup-goals-section.js";
-import "./catalog.css";
 
 interface CatalogSectionsProps {
   onAddActivity: (groupId: string) => void;
   onConfigureGoal: (goalId: string) => void;
-}
-
-/** What the Setup page says about the catalog: the last change, or a failed read. */
-export function CatalogSetupNotice() {
-  const { state } = useCatalogSetup();
-  return (
-    <CatalogNotice
-      notice={
-        state.notice ??
-        (state.loadCatalogError
-          ? { kind: "error", text: state.loadCatalogError }
-          : null)
-      }
-    />
-  );
 }
 
 /** The activity groups and the goals of the Setup page. */

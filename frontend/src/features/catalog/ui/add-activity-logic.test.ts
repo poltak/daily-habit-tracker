@@ -162,15 +162,13 @@ describe("AddActivityLogic", () => {
     expect(logic.state.name).toEqual("Yoga");
   });
 
-  it("should not let the owner leave, or add again, while the activity is added", async () => {
+  it("should not add again while the activity is added", async () => {
     const { logic, transport, backend } = await setupTest();
     logic.setName({ name: "Yoga" });
-    expect(logic.canLeave()).toEqual(true);
     const held = transport.holdNextRequest();
 
     const adding = logic.add();
     await held.reached;
-    expect(logic.canLeave()).toEqual(false);
     expect(logic.state.notice?.kind).toEqual("info");
     expect(await logic.add()).toEqual(false);
     held.release();

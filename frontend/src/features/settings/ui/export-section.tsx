@@ -12,22 +12,15 @@ export function ExportSection() {
       storage: {},
       services: { downloads: app.services.downloads },
       api: { export: app.api.export },
+      navigationLockEvents: app.navigationLockEvents,
+      pageNoticeEvents: app.pageNoticeEvents,
     }),
     [app],
   );
   const { logic, state } = useLogic({ LogicClass: ExportLogic, deps });
   const busy = state.exportState === "running";
-  const notice =
-    state.exportError ?? (state.downloaded ? "Export downloaded." : null);
   return (
     <section className="settings-card export-card">
-      {notice && (
-        <output
-          className={`settings-notice ${state.exportError ? "error" : "success"}`}
-        >
-          {notice}
-        </output>
-      )}
       <div>
         <p className="eyebrow">Portability</p>
         <h2>Keep a copy of your data</h2>

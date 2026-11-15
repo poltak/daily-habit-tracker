@@ -4,9 +4,7 @@ import { useFrontendApp } from "../../core/ui/frontend-app-context.js";
 import { MaterialIcon } from "../../core/ui/material-icon.js";
 import type { NoticeTarget } from "../types.js";
 import { AddActivityLogic } from "./add-activity-logic.js";
-import { CatalogNotice } from "./catalog-notice.js";
 import { IconPicker } from "./icon-picker.js";
-import "./catalog.css";
 
 interface AddActivityPageProps {
   requestedGroupId: string | undefined;
@@ -28,6 +26,8 @@ export function AddActivityPage({
       services: { device: app.services.device },
       api: { catalog: app.api.catalog },
       catalogEvents: app.catalogEvents,
+      navigationLockEvents: app.navigationLockEvents,
+      pageNoticeEvents: app.pageNoticeEvents,
       requestedGroupId,
       returnTo,
     }),
@@ -38,12 +38,6 @@ export function AddActivityPage({
   useEffect(() => nameRef.current?.focus(), []);
   const activeGroups = state.groups.filter((group) => !group.archived);
   const locked = state.adding;
-
-  function leave() {
-    if (logic.canLeave()) {
-      onClose();
-    }
-  }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -59,7 +53,7 @@ export function AddActivityPage({
           type="button"
           className="back-button"
           disabled={locked}
-          onClick={leave}
+          onClick={onClose}
         >
           <MaterialIcon name="arrow_back" />{" "}
           {returnTo === "settings" ? "Setup" : "Log"}
@@ -77,7 +71,6 @@ export function AddActivityPage({
           </div>
         </div>
       </div>
-      <CatalogNotice notice={state.notice} />
       <form
         className="settings-card goal-config-card activity-create-card"
         aria-busy={locked}
@@ -147,7 +140,7 @@ export function AddActivityPage({
             type="button"
             className="secondary-button"
             disabled={locked}
-            onClick={leave}
+            onClick={onClose}
           >
             Cancel
           </button>

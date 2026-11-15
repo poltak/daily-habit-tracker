@@ -3,13 +3,15 @@ import type { ActivityGroup } from "@app/common/features/catalog/types";
 import type { FrontendLogicProps } from "../../core/logic/types.js";
 import { failureMessage } from "../../core/logic/failure-message.js";
 import type { App } from "../../core/types.js";
+import { LeaveLockPlugin } from "../../core/ui/leave-lock-plugin.js";
+import { PageNoticePlugin } from "../../core/ui/page-notice-plugin.js";
 import type { Notice } from "../../days/types.js";
 import type { NoticeTarget } from "../types.js";
 import { resolveActiveGroupId } from "../utils/active-group.js";
 import { CatalogRequestsPlugin } from "./catalog-requests-plugin.js";
 
 type AddActivityProps = FrontendLogicProps<never, "device", "catalog"> &
-  Pick<App, "catalogEvents"> & {
+  Pick<App, "catalogEvents" | "navigationLockEvents" | "pageNoticeEvents"> & {
     /** The group from the address, if it names one. */
     requestedGroupId: string | undefined;
     /** The page that opened the form, and that shows the notice after the add. */
@@ -36,13 +38,26 @@ export class AddActivityLogic extends Logic<
   AddActivityProps,
   AddActivityState,
   never,
-  { requests: CatalogRequestsPlugin }
+  {
+    requests: CatalogRequestsPlugin;
+    leaveLock: LeaveLockPlugin;
+    pageNotice: PageNoticePlugin;
+  }
 > {
   constructor(deps: AddActivityProps) {
     super({
       deps,
       plugins: {
         requests: (pluginDeps) => new CatalogRequestsPlugin(pluginDeps),
+        leaveLock: (pluginDeps) =>
+          new LeaveLockPlugin({
+            navigationLockEvents: pluginDeps.navigationLockEvents,
+            reason: "activity",
+          }),
+        pageNotice: (pluginDeps) =>
+          new PageNoticePlugin({
+            pageNoticeEvents: pluginDeps.pageNoticeEvents,
+          }),
       },
       initialState: {
         groups: [],
@@ -59,6 +74,12 @@ export class AddActivityLogic extends Logic<
   }
 
   protected override async onInitialize(): Promise<void> {
+    this.registerCleanup(
+      this.subscribe(() => {
+        this.plugins.leaveLock.update({ busy: this.state.adding });
+        this.plugins.pageNotice.follow({ notice: this.state.notice });
+      }),
+    );
     await this.executeTask("loadGroups", async () => {
       const catalog = await this.plugins.requests.read();
       this.setState({ groups: catalog.groups });
@@ -91,20 +112,6 @@ export class AddActivityLogic extends Logic<
 
   chooseIcon({ icon }: { icon: string }): void {
     this.setState({ icon, iconPickerOpen: false });
-  }
-
-  /** True when the owner can leave. The form waits while the activity is added. */
-  canLeave(): boolean {
-    if (!this.state.adding) {
-      return true;
-    }
-    this.setState({
-      notice: {
-        kind: "info",
-        text: "Wait for the activity update to finish before leaving this view.",
-      },
-    });
-    return false;
   }
 
   /** True when the activity is added. */

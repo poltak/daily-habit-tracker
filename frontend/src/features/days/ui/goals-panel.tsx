@@ -18,12 +18,10 @@ interface GoalsPanelProps {
   goals: readonly Goal[];
   activities: readonly Activity[];
   completedGoalIds: readonly string[];
-  /** The goals that wait for the server, because their activity was tapped. */
+  /** The goals that wait for the server. */
   pendingGoalIds: ReadonlySet<string>;
   /** True while the day loads. */
   loading: boolean;
-  /** True while any tap waits for the server. One tap runs at a time. */
-  busy: boolean;
   onOpen: (goalId: string) => void;
   onToggle: (goalId: string) => void;
 }
@@ -34,7 +32,6 @@ export function GoalsPanel({
   completedGoalIds,
   pendingGoalIds,
   loading,
-  busy,
   onOpen,
   onToggle,
 }: GoalsPanelProps) {
@@ -67,7 +64,7 @@ export function GoalsPanel({
               <button
                 type="button"
                 className="goal-checkbox"
-                disabled={unavailable || busy}
+                disabled={unavailable}
                 aria-label={`Mark ${goal.name} ${checked ? "not completed" : "completed"}`}
                 aria-pressed={checked}
                 onClick={() => onToggle(goal.id)}

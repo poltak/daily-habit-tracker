@@ -40,6 +40,27 @@ describe("JournalLogic when a page changes the catalog", () => {
     expect(logic.state.notice).toEqual(null);
   });
 
+  it("should keep the loaded catalog when its reload after a change fails", async () => {
+    const { frontend, logic, transport } = await setupTest();
+    await logic.initialize();
+    const catalog = logic.plugins.catalog;
+    expect(catalog.state.catalogLoaded).toEqual(true);
+
+    transport.goOffline();
+    await frontend.catalogEvents.emit({ type: "catalogChanged" });
+
+    expect(catalog.state.catalogLoaded).toEqual(true);
+    expect(catalog.state.moods).toHaveLength(5);
+    expect(catalog.state.loadCatalogState).toEqual("error");
+    expect(catalog.state.loadCatalogError).toEqual(
+      "No connection. Check your internet connection and try again.",
+    );
+    transport.goOnline();
+    await logic.loadJournal();
+    expect(catalog.state.loadCatalogState).toEqual("success");
+    expect(catalog.state.loadCatalogError).toEqual(null);
+  });
+
   it("should show the notice that a page leaves for the log, and no other", async () => {
     const { frontend, logic } = await setupTest();
     await logic.initialize();

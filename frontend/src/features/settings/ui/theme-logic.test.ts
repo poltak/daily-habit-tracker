@@ -40,6 +40,39 @@ describe("ThemeLogic tests", () => {
     expect(frontend.services.theme.applied.at(-1)).toEqual("dark");
   });
 
+  it("should follow a choice that another tab made", async () => {
+    const { logic, frontend } = await setupTest();
+    frontend.browserStorage.setItem("daymark-theme", "dark");
+
+    frontend.services.theme.changeInOtherTab({ key: "daymark-theme" });
+
+    expect(logic.state.preference).toEqual("dark");
+    expect(frontend.services.theme.applied.at(-1)).toEqual("dark");
+  });
+
+  it("should go back to the device theme when another tab clears the storage", async () => {
+    const { logic, frontend } = await setupTest();
+    logic.select({ preference: "dark" });
+    frontend.browserStorage.removeItem("daymark-theme");
+
+    frontend.services.theme.changeInOtherTab({ key: null });
+
+    expect(logic.state.preference).toEqual("system");
+    expect(frontend.services.theme.applied.at(-1)).toEqual("system");
+  });
+
+  it("should ignore a change of another key in another tab", async () => {
+    const { logic, frontend } = await setupTest();
+    logic.select({ preference: "dark" });
+    frontend.browserStorage.setItem("daymark-theme", "light");
+    const applied = frontend.services.theme.applied.length;
+
+    frontend.services.theme.changeInOtherTab({ key: "other-key" });
+
+    expect(logic.state.preference).toEqual("dark");
+    expect(frontend.services.theme.applied).toHaveLength(applied);
+  });
+
   it("should treat a saved value that is not a theme as the device choice", async () => {
     const { frontend } = await setupTest();
     frontend.browserStorage.setItem("daymark-theme", "purple");

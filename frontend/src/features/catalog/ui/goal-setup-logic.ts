@@ -8,6 +8,8 @@ import {
 import type { FrontendLogicProps } from "../../core/logic/types.js";
 import { failureMessage } from "../../core/logic/failure-message.js";
 import type { App } from "../../core/types.js";
+import { LeaveLockPlugin } from "../../core/ui/leave-lock-plugin.js";
+import { PageNoticePlugin } from "../../core/ui/page-notice-plugin.js";
 import type { Notice } from "../../days/types.js";
 import type { NoticeTarget } from "../types.js";
 import { deleteWarning } from "../utils/catalog-mutations.js";
@@ -18,7 +20,7 @@ type GoalSetupProps = FrontendLogicProps<
   "device" | "dialogs",
   "catalog"
 > &
-  Pick<App, "catalogEvents"> & {
+  Pick<App, "catalogEvents" | "navigationLockEvents" | "pageNoticeEvents"> & {
     goalId: string;
     /** The page that opened the goal, which shows the notice after an archive or a delete. */
     returnTo: NoticeTarget;
@@ -48,13 +50,26 @@ export class GoalSetupLogic extends Logic<
   GoalSetupProps,
   GoalSetupState,
   never,
-  { requests: CatalogRequestsPlugin }
+  {
+    requests: CatalogRequestsPlugin;
+    leaveLock: LeaveLockPlugin;
+    pageNotice: PageNoticePlugin;
+  }
 > {
   constructor(deps: GoalSetupProps) {
     super({
       deps,
       plugins: {
         requests: (pluginDeps) => new CatalogRequestsPlugin(pluginDeps),
+        leaveLock: (pluginDeps) =>
+          new LeaveLockPlugin({
+            navigationLockEvents: pluginDeps.navigationLockEvents,
+            reason: "goal",
+          }),
+        pageNotice: (pluginDeps) =>
+          new PageNoticePlugin({
+            pageNoticeEvents: pluginDeps.pageNoticeEvents,
+          }),
       },
       initialState: {
         goal: null,
@@ -75,6 +90,12 @@ export class GoalSetupLogic extends Logic<
   }
 
   protected override async onInitialize(): Promise<void> {
+    this.registerCleanup(
+      this.subscribe(() => {
+        this.plugins.leaveLock.update({ busy: this.isBusy });
+        this.plugins.pageNotice.follow({ notice: this.state.notice });
+      }),
+    );
     await this.executeTask("loadGoal", async () => {
       const catalog = await this.plugins.requests.read();
       const goal = catalog.goals.find(
@@ -142,20 +163,6 @@ export class GoalSetupLogic extends Logic<
     this.setState({ materialIcon: icon, iconPickerOpen: false });
   }
 
-  /** True when the owner can leave. The page waits while a request runs. */
-  canLeave(): boolean {
-    if (!this.isBusy) {
-      return true;
-    }
-    this.setState({
-      notice: {
-        kind: "info",
-        text: "Wait for the goal update to finish before leaving this goal.",
-      },
-    });
-    return false;
-  }
-
   async save(): Promise<void> {
     const { goal } = this.state;
     const draft = this.state;
@@ -186,6 +193,7 @@ export class GoalSetupLogic extends Logic<
       return;
     }
     this.setState({ action: "save", notice: null });
+    this.plugins.pageNotice.clear();
     try {
       const saved = await this.plugins.requests.patchGoal({
         id: goal.id,
@@ -284,6 +292,7 @@ export class GoalSetupLogic extends Logic<
       return false;
     }
     this.setState({ action, notice: null });
+    this.plugins.pageNotice.clear();
     try {
       await send(goal);
     } catch (error) {

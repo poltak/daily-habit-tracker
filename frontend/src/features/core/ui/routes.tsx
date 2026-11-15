@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import {
   Navigate,
   Outlet,
@@ -10,10 +10,7 @@ import {
 } from "react-router";
 import { AuthProvider, useAuth } from "../../auth/ui/auth-context.js";
 import { AddActivityPage } from "../../catalog/ui/add-activity-page.js";
-import {
-  CatalogSections,
-  CatalogSetupNotice,
-} from "../../catalog/ui/catalog-sections.js";
+import { CatalogSections } from "../../catalog/ui/catalog-sections.js";
 import { CatalogSetupProvider } from "../../catalog/ui/catalog-setup-context.js";
 import { GoalSettings } from "../../catalog/ui/goal-settings.js";
 import { AccountSection } from "../../auth/ui/account-section.js";
@@ -21,6 +18,7 @@ import { SessionGate } from "../../auth/ui/session-gate.js";
 import { SignInPage } from "../../auth/ui/sign-in-page.js";
 import { GoalPage } from "../../goals/ui/goal-page.js";
 import { CalendarPage } from "../../days/ui/calendar-page.js";
+import { CatalogReloadNotice } from "../../days/ui/catalog-reload-notice.js";
 import { JournalProvider, useJournal } from "../../days/ui/journal-context.js";
 import {
   LogDateActions,
@@ -35,6 +33,12 @@ import { useLogic, useLogicInstance } from "../logic/use-logic.js";
 import { AppShell, type NavView, type ShellView } from "./app-shell.js";
 import { useFrontendApp } from "./frontend-app-context.js";
 import { ErrorBoundary } from "./error-boundary.js";
+import { JournalLoadingShell } from "./journal-loading-shell.js";
+import {
+  NavigationLockProvider,
+  useNavigationLock,
+} from "./navigation-lock-context.js";
+import { PageNoticeProvider, usePageNotice } from "./page-notice-context.js";
 import { PageErrorFallback } from "./error-fallbacks.js";
 import type { ProtectedPageContext } from "./signed-in-user.js";
 
@@ -100,17 +104,29 @@ function subViewOfAddress({
   pathname: string;
   search: URLSearchParams;
 }): "add-activity" | null {
-  return pathname === "/" && search.get("view") === "add-activity"
+  // The old site also opened this form at `?view=activity`.
+  const requested = search.get("view");
+  return pathname === "/" &&
+    (requested === "add-activity" || requested === "activity")
     ? "add-activity"
     : null;
 }
 
 const ADD_ACTIVITY_TITLE = "Add activity";
 
+/** Scrolls to the top when it mounts. The frame gives it a new key for each page. */
+function ScrollToTop() {
+  const { device } = useFrontendApp().services;
+  useEffect(() => device.scrollToTop(), [device]);
+  return null;
+}
+
 /** The header and the navigation around the page in the outlet. */
 function JournalFrame() {
   const { logic: auth } = useAuth();
   const { logic, state } = useJournal();
+  const { logic: lock } = useNavigationLock();
+  const { logic: pageNotice, state: noticeState } = usePageNotice();
   const catalog = useLogicInstance(logic.plugins.catalog);
   const location = useLocation();
   const navigate = useNavigate();
@@ -119,6 +135,14 @@ function JournalFrame() {
   const view = subView
     ? null
     : viewOfAddress({ pathname: location.pathname, search });
+  const pageView = subView ?? view;
+  // Opening another page empties the message slot.
+  useEffect(
+    () => pageNotice.openView({ view: pageView }),
+    [pageNotice, pageView],
+  );
+  // Each page starts at its top, and so does another goal.
+  const viewKey = `${subView ?? view}:${search.get("goal") ?? ""}`;
   // The session gate renders this layout only for a signed-in user.
   const pageContext = useMemo<ProtectedPageContext>(
     () => ({ authEvents: auth.events }),
@@ -133,7 +157,7 @@ function JournalFrame() {
     <AppShell
       view={view}
       title={
-        view === "log" ? (
+        view === "log" && catalog.catalogLoaded ? (
           <LogDateSwitcher />
         ) : subView ? (
           ADD_ACTIVITY_TITLE
@@ -141,15 +165,36 @@ function JournalFrame() {
           VIEW_TITLES[view ?? "log"]
         )
       }
-      actions={view === "log" ? <LogDateActions /> : null}
+      actions={
+        view === "log" && catalog.catalogLoaded ? <LogDateActions /> : null
+      }
       connection={state.connection}
       dayColor={dayColor}
-      onOpen={(next) => navigate(VIEW_PATHS[next])}
+      locked={lock.locked}
+      notice={view === "log" ? null : noticeState.notice}
+      onOpen={(next) => {
+        if (lock.canLeave()) {
+          navigate(VIEW_PATHS[next]);
+        }
+      }}
     >
       {/* A page that fails leaves the header usable. Navigation clears the failure. */}
       <ErrorBoundary resetKey={location.key} Fallback={PageErrorFallback}>
-        <Outlet context={pageContext} />
+        {catalog.catalogLoaded ? (
+          <Outlet context={pageContext} />
+        ) : (
+          // Every page waits for the first read of the catalog, as the old site did.
+          <JournalLoadingShell
+            view={pageView}
+            error={
+              catalog.loadCatalogState === "error" ? (
+                <CatalogReloadNotice />
+              ) : null
+            }
+          />
+        )}
       </ErrorBoundary>
+      <ScrollToTop key={viewKey} />
     </AppShell>
   );
 }
@@ -158,10 +203,17 @@ function JournalFrame() {
 function useGoBack(fallback: string): () => void {
   const location = useLocation();
   const navigate = useNavigate();
-  return () =>
-    location.key === "default"
-      ? navigate(fallback, { replace: true })
-      : navigate(-1);
+  const { logic: lock } = useNavigationLock();
+  return () => {
+    if (!lock.canLeave()) {
+      return;
+    }
+    if (location.key === "default") {
+      navigate(fallback, { replace: true });
+    } else {
+      navigate(-1);
+    }
+  };
 }
 
 /** The goal page, with the catalog and the open day of the log. */
@@ -173,53 +225,45 @@ function GoalRoute({
   weekEndsOn: number;
 }) {
   const { logic, state } = useJournal();
+  const { logic: lock } = useNavigationLock();
   const catalog = useLogicInstance(logic.plugins.catalog);
   const location = useLocation();
   const navigate = useNavigate();
   const [search] = useSearchParams();
-  if (catalog.loadCatalogState === "error") {
-    return (
-      <div className="journal-loading">
-        <div className="notice error" role="alert">
-          <p>{catalog.loadCatalogError}</p>
-          <button
-            type="button"
-            className="loading-retry"
-            onClick={() => void logic.loadJournal()}
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    );
+  // The frame shows the loading shell until the first read of the catalog.
+  if (!state.selectedDate) {
+    return <JournalLoadingShell view="goal" />;
   }
-  // A reload after a change keeps the page, so its settings keep their notice.
-  if (catalog.moods.length === 0 || !state.selectedDate) {
-    return (
-      <div className="journal-loading" aria-busy="true">
-        <output className="sr-only">Loading goal…</output>
-      </div>
-    );
-  }
-  const goBack = () =>
+  const goBack = () => {
+    if (!lock.canLeave()) {
+      return;
+    }
     // The page that opened the goal is one step back. A goal opened by its address has none.
-    location.key === "default"
-      ? navigate("/", { replace: true })
-      : navigate(-1);
+    if (location.key === "default") {
+      navigate("/", { replace: true });
+    } else {
+      navigate(-1);
+    }
+  };
   return (
-    <GoalPage
-      goal={catalog.goals.find((goal) => goal.id === goalId && !goal.archived)}
-      settings={
-        <GoalSettings
-          goalId={goalId}
-          returnTo={search.get("from") === "settings" ? "settings" : "log"}
-          onClose={goBack}
-        />
-      }
-      initialMonth={state.selectedDate.slice(0, 7)}
-      weekEndsOn={weekEndsOn}
-      onBack={goBack}
-    />
+    <>
+      <CatalogReloadNotice />
+      <GoalPage
+        goal={catalog.goals.find(
+          (goal) => goal.id === goalId && !goal.archived,
+        )}
+        settings={
+          <GoalSettings
+            goalId={goalId}
+            returnTo={search.get("from") === "settings" ? "settings" : "log"}
+            onClose={goBack}
+          />
+        }
+        initialMonth={state.selectedDate.slice(0, 7)}
+        weekEndsOn={weekEndsOn}
+        onBack={goBack}
+      />
+    </>
   );
 }
 
@@ -232,7 +276,13 @@ function JournalViews() {
   const goBack = useGoBack(openedFromSetup ? "/?view=settings" : "/");
   const app = useFrontendApp();
   const weekDeps = useMemo(
-    () => ({ storage: {}, services: {}, api: { settings: app.api.settings } }),
+    () => ({
+      storage: {},
+      services: {},
+      api: { settings: app.api.settings },
+      navigationLockEvents: app.navigationLockEvents,
+      pageNoticeEvents: app.pageNoticeEvents,
+    }),
     [app],
   );
   // The calendar, the goal page and Insights group days into weeks that end on the stored day.
@@ -242,7 +292,9 @@ function JournalViews() {
   if (subView === "add-activity") {
     return (
       <AddActivityPage
-        requestedGroupId={search.get("group") ?? undefined}
+        requestedGroupId={
+          search.get("group") ?? search.get("groupId") ?? undefined
+        }
         returnTo={openedFromSetup ? "settings" : "log"}
         onClose={goBack}
       />
@@ -261,7 +313,6 @@ function JournalViews() {
     return (
       <SetupPage
         account={<AccountSection />}
-        catalogNotice={<CatalogSetupNotice />}
         catalog={
           <CatalogSections
             onAddActivity={(groupId) =>
@@ -300,6 +351,7 @@ function NotFoundPage() {
   return (
     <section className="page-section">
       <div className="page-intro">
+        <p className="eyebrow">Your journal</p>
         <h1>Page not found</h1>
         <p className="muted">This page could not be found.</p>
       </div>
@@ -316,20 +368,24 @@ export function AppRoutes() {
           <Route
             path="/sign-in"
             element={
-              <div className="app-shell">
+              <main className="auth-shell">
                 <SignInPage />
-              </div>
+              </main>
             }
           />
           <Route path="/login" element={<LoginRedirect />} />
           <Route element={<SessionGate />}>
             <Route
               element={
-                <JournalProvider>
-                  <CatalogSetupProvider>
-                    <JournalFrame />
-                  </CatalogSetupProvider>
-                </JournalProvider>
+                <PageNoticeProvider>
+                  <NavigationLockProvider>
+                    <JournalProvider>
+                      <CatalogSetupProvider>
+                        <JournalFrame />
+                      </CatalogSetupProvider>
+                    </JournalProvider>
+                  </NavigationLockProvider>
+                </PageNoticeProvider>
               }
             >
               <Route path="/" element={<JournalViews />} />

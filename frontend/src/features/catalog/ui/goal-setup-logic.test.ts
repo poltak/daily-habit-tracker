@@ -224,19 +224,14 @@ describe("GoalSetupLogic editing and saving", () => {
     expect(logic.isBusy).toEqual(false);
   });
 
-  it("should not let the owner leave, or save again, while the goal saves", async () => {
+  it("should not save again while the goal saves", async () => {
     const { logic, transport } = await setupTest();
-    expect(logic.canLeave()).toEqual(true);
     logic.setName({ name: "Read more" });
     const held = transport.holdNextRequest();
 
     const saving = logic.save();
     await held.reached;
     expect(logic.isBusy).toEqual(true);
-    expect(logic.canLeave()).toEqual(false);
-    expect(logic.state.notice?.text).toEqual(
-      "Wait for the goal update to finish before leaving this goal.",
-    );
     await logic.save();
     held.release();
     await saving;

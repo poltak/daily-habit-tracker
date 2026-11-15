@@ -10,7 +10,6 @@ import { monthCells } from "@app/common/features/days/utils/month-grid";
 import { useLogic } from "../../core/logic/use-logic.js";
 import { useFrontendApp } from "../../core/ui/frontend-app-context.js";
 import { MaterialIcon } from "../../core/ui/material-icon.js";
-import { errorNotice, noticeText } from "../utils/journal-messages.js";
 import { CalendarLogic } from "./calendar-logic.js";
 import { useJournal } from "./journal-context.js";
 import { MoodFace } from "../../core/ui/mood-face.js";
@@ -53,6 +52,7 @@ export function CalendarPage({ weekEndsOn }: { weekEndsOn: number }) {
       storage: {},
       services: { clock: app.services.clock },
       api: { calendar: app.api.calendar },
+      pageNoticeEvents: app.pageNoticeEvents,
       initialMonth: selectedDate.slice(0, 7),
     }),
     // oxlint-disable-next-line react/exhaustive-deps -- The month on show is the one of the open day at the moment the calendar opens.
@@ -73,11 +73,6 @@ export function CalendarPage({ weekEndsOn }: { weekEndsOn: number }) {
           or add its check-in.
         </p>
       </div>
-      {state.loadMonthError && (
-        <output className="notice error">
-          {noticeText(errorNotice(state.loadMonthError))}
-        </output>
-      )}
       <section className="calendar-card">
         <div className="calendar-heading">
           <button
@@ -149,6 +144,9 @@ export function CalendarPage({ weekEndsOn }: { weekEndsOn: number }) {
             );
           })}
         </div>
+        {loading && (
+          <output className="calendar-loading">Checking this month…</output>
+        )}
         <div className="calendar-legend">
           <span>
             <i className="legend-dot filled" /> Entry with mood
@@ -157,9 +155,6 @@ export function CalendarPage({ weekEndsOn }: { weekEndsOn: number }) {
             <i className="legend-dot" /> Empty
           </span>
         </div>
-        {loading && (
-          <output className="calendar-loading">Checking this month…</output>
-        )}
       </section>
     </section>
   );

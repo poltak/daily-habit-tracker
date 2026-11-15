@@ -1,4 +1,6 @@
 import { Navigate, Outlet, useLocation } from "react-router";
+import { AppShell } from "../../core/ui/app-shell.js";
+import { JournalLoadingShell } from "../../core/ui/journal-loading-shell.js";
 import { useAuth } from "./auth-context.js";
 export function SessionGate() {
   const { logic, state } = useAuth();
@@ -10,15 +12,38 @@ export function SessionGate() {
     state.loadSessionState === "pristine" ||
     state.loadSessionState === "running"
   ) {
-    return <output>Checking your session…</output>;
+    // The old site checked the session on the server and sent this shell at
+    // once, so the check shows the same frame as the first load of the data.
+    return (
+      <AppShell
+        view="log"
+        title="Your journal"
+        connection="checking"
+        onOpen={() => {}}
+      >
+        <JournalLoadingShell view="log" />
+      </AppShell>
+    );
   }
   if (state.loadSessionState === "error") {
     return (
-      <section>
-        <h1>Unable to check your session</h1>
-        <p role="alert">{state.loadSessionError}</p>
-        <button onClick={() => void logic.refresh()}>Try again</button>
-      </section>
+      <main className="auth-shell">
+        <section className="auth-panel">
+          <h1>Unable to check your session</h1>
+          <p className="auth-error" role="alert">
+            {state.loadSessionError}
+          </p>
+          <div className="auth-actions">
+            <button
+              type="button"
+              className="primary-button"
+              onClick={() => void logic.refresh()}
+            >
+              Try again
+            </button>
+          </div>
+        </section>
+      </main>
     );
   }
   return (
