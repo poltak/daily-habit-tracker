@@ -26,6 +26,11 @@
       "commit": "41d272b2b8d51d01e823d727c355876230df5d45",
       "subject": "Keep a visible focus outline on buttons and fix the notes list padding",
       "reason": "It changes only the shared UI kit of 76154bd, which Daymark leaves out to keep its production stylesheet"
+    },
+    {
+      "commit": "491afa105f5a412ed9cfab8b3dc71d7066034f06",
+      "subject": "Make the components page public and give its name fields separate state",
+      "reason": "It changes the component library page of the shared UI kit of 76154bd, which Daymark leaves out"
     }
   ],
   "conflicts": [
@@ -60,6 +65,18 @@
     {
       "commit": "41d272b2b8d51d01e823d727c355876230df5d45",
       "files": ["frontend/src/features/core/ui/components/button.tsx"]
+    },
+    {
+      "commit": "491afa105f5a412ed9cfab8b3dc71d7066034f06",
+      "files": [
+        "frontend/src/features/component-library/black-box-tests/component-library-page-object.ts",
+        "frontend/src/features/component-library/black-box-tests/component-library.spec.ts",
+        "frontend/src/features/component-library/ui/component-library-logic.test.ts",
+        "frontend/src/features/component-library/ui/component-library-logic.ts",
+        "frontend/src/features/component-library/ui/component-library-page.tsx",
+        "frontend/src/features/core/ui/components/info-tip.tsx",
+        "frontend/src/features/core/ui/routes.tsx"
+      ]
     }
   ]
 }
