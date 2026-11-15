@@ -7,6 +7,7 @@ import {
   expect,
   test as base,
   type Browser,
+  type CDPSession,
   type Page,
 } from "@playwright/test";
 import { PasskeySignInPageObject } from "../../auth/black-box-tests/passkey-sign-in-page-object.js";
@@ -84,7 +85,7 @@ function isRefused(error: unknown): boolean {
 }
 
 /** A Chromium virtual authenticator that answers as a phone does. */
-async function addPasskeyDevice(page: Page): Promise<void> {
+async function addPasskeyDevice(page: Page): Promise<CDPSession> {
   const session = await page.context().newCDPSession(page);
   await session.send("WebAuthn.enable");
   await session.send("WebAuthn.addVirtualAuthenticator", {
@@ -97,6 +98,16 @@ async function addPasskeyDevice(page: Page): Promise<void> {
       automaticPresenceSimulation: true,
     },
   });
+  return session;
+}
+
+/**
+ * Without this, `context.close()` can hang after a service worker and
+ * `no-store` answers: the open device keeps the context alive.
+ */
+async function removePasskeyDevice(session: CDPSession): Promise<void> {
+  await session.send("WebAuthn.disable").catch(() => {});
+  await session.detach().catch(() => {});
 }
 
 /**
@@ -125,9 +136,8 @@ export const test = base.extend<BlackBoxOptions & BlackBoxFixtures>({
     { page, browser, baseURL, authenticated, passkeyDevice },
     provide,
   ) => {
-    if (passkeyDevice || authenticated) {
-      await addPasskeyDevice(page);
-    }
+    const deviceSession =
+      passkeyDevice || authenticated ? await addPasskeyDevice(page) : null;
     await resetApp({ browser, origin: baseURL ?? "" });
     const uncaughtErrors: Error[] = [];
     page.on("pageerror", (error) => uncaughtErrors.push(error));
@@ -138,8 +148,14 @@ export const test = base.extend<BlackBoxOptions & BlackBoxFixtures>({
     await provide(page);
 
     // The Worker can stop when the browser drops an open request, so the
-    // test ends after the page's requests end.
-    await page.waitForLoadState("networkidle").catch(() => {});
+    // test ends after the page's requests end. A page that the service worker
+    // controls can keep a request open, so the wait has a limit.
+    await page
+      .waitForLoadState("networkidle", { timeout: 5000 })
+      .catch(() => {});
+    if (deviceSession) {
+      await removePasskeyDevice(deviceSession);
+    }
     expect(
       uncaughtErrors,
       "Normal use must not cause an error that no code caught",
@@ -153,9 +169,9 @@ export const test = base.extend<BlackBoxOptions & BlackBoxFixtures>({
       timezoneId: "UTC",
     });
     const device = await context.newPage();
-    await addPasskeyDevice(device);
+    const deviceSession = await addPasskeyDevice(device);
     await provide(device);
-    await device.waitForLoadState("networkidle").catch(() => {});
+    await removePasskeyDevice(deviceSession);
     await context.close();
   },
   visitorPage: async ({ browser, baseURL, page }, provide) => {

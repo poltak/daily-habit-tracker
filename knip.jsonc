@@ -47,6 +47,9 @@
       "entry": [
         "src/features/core/live/index.ts",
         "src/features/core/tests/index.ts",
+        // The browser loads the service worker by its address, so no module
+        // imports it.
+        "public/sw.js",
       ],
     },
   },
