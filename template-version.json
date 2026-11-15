@@ -86,6 +86,11 @@
       "commit": "6334d3442e7d5c96c3a05f436144cd153512a3f6",
       "subject": "Preserve generated overlay spacing and gallery columns",
       "reason": "It changes only the shared UI kit of 76154bd, which Daymark leaves out to keep its production stylesheet"
+    },
+    {
+      "commit": "a19ab2b6d34bed449091e1451ab344204fb3f11c",
+      "subject": "Keep the loading skeleton theme tokens",
+      "reason": "It changes only the shared UI kit of 76154bd, which Daymark leaves out to keep its production stylesheet"
     }
   ],
   "conflicts": [
@@ -276,6 +281,14 @@
         "docs/agents/ui-components.md",
         "frontend/src/features/component-library/ui/icon-examples.tsx",
         "frontend/src/features/core/ui/app.css"
+      ]
+    },
+    {
+      "commit": "a19ab2b6d34bed449091e1451ab344204fb3f11c",
+      "files": [
+        "docs/agents/ui-components.md",
+        "docs/agents/ui-shadcn.md",
+        "frontend/src/features/core/ui/worldbrain.css"
       ]
     }
   ]
