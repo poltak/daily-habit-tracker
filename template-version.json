@@ -31,6 +31,11 @@
       "commit": "491afa105f5a412ed9cfab8b3dc71d7066034f06",
       "subject": "Make the components page public and give its name fields separate state",
       "reason": "It changes the component library page of the shared UI kit of 76154bd, which Daymark leaves out"
+    },
+    {
+      "commit": "85c36468f7d776ca15404bf02d8b7c16ac798c12",
+      "subject": "Fix menu links, tab measuring, and comments about missing parts",
+      "reason": "It changes only the shared UI kit of 76154bd, which Daymark leaves out to keep its production stylesheet"
     }
   ],
   "conflicts": [
@@ -76,6 +81,15 @@
         "frontend/src/features/component-library/ui/component-library-page.tsx",
         "frontend/src/features/core/ui/components/info-tip.tsx",
         "frontend/src/features/core/ui/routes.tsx"
+      ]
+    },
+    {
+      "commit": "85c36468f7d776ca15404bf02d8b7c16ac798c12",
+      "files": [
+        "frontend/src/features/core/ui/components/field.tsx",
+        "frontend/src/features/core/ui/components/menu.tsx",
+        "frontend/src/features/core/ui/components/page-header.tsx",
+        "frontend/src/features/core/ui/components/tabs.tsx"
       ]
     }
   ]
