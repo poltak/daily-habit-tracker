@@ -1,0 +1,312 @@
+# Daymark decisions
+
+The project's own choices, with their reasons. Read this file when you read
+[decisions](../decisions.md). The parts of the template that Daymark leaves out
+are in [template parts left out](template-parts-left-out.md).
+
+## The port onto the template
+
+- The app was rebuilt on the template. The old app (a plain-DOM site on a
+  Worker) is deleted. Its data stays: the new app uses the same Worker name,
+  the same D1 database and the same tables. Its choices that still hold are in
+  the sections below.
+- The black-box tests were written against the old app first, so that the
+  rebuild had a fixed target. They know only what a user sees, so they run on
+  the new app with no change.
+- `frontend/playwright.config.ts` has one target: the app as one Worker. There
+  is no target switch.
+- The import tool `scripts/daylio_import.py` came from the old app. It reads a
+  `.daylio` backup only, and needs no file of the app.
+
+## The black-box tests
+
+- `scripts/black-box-next.mjs` builds the backend and the frontend, migrates a
+  fresh local D1 in `.wrangler/black-box/`, and starts the Worker with
+  `wrangler dev --local` on `NEXT_BLACK_BOX_PORT` (default 4354, outside the
+  4274 to 4314 range that another project uses at the same time). The setup
+  code is `black-box-setup-code`.
+- `wrangler dev` did not stop on the passkey sign-in request here. Calocount
+  saw a "Network connection lost" stop in the dev proxy with the same request.
+  If it comes back, run the Worker through Miniflare directly.
+- The Worker has one database for a whole run, so the fixture empties it
+  before each test through a reset route (see below).
+- The tests use the real clock. The Worker reads "today" from its own clock,
+  and the site reads it from the browser, so a browser clock alone would give
+  the two sides different days. Each browser is in UTC, so that the owner's
+  day and the browser's day match. A run across midnight UTC can fail.
+  `local-day.spec.ts` uses two other zones and computes the expected day in the
+  test, so it does not depend on the time of the run.
+- Passkeys come from a Chromium virtual authenticator that says yes to each
+  request (the `passkeyDevice` option and `otherDevicePage`). The setup code is
+  `setupCode` in the fixture. A test with `authenticated: true` (the default)
+  starts as the signed-in owner. A test with `authenticated: false` starts on
+  an empty instance.
+- The browser asks before it leaves a page that has a save in progress. A test
+  waits until the day is stored (the page objects wait for a button to take
+  clicks again) before it opens another address.
+
+## D1 and passkeys
+
+- **The backend runs on Cloudflare Workers with D1.** `core/database/` has a
+  Kysely dialect for a D1 binding (`d1-dialect.ts`), and `atomic` replaces
+  `transaction()`: a Logic class plans statements with the `plan*` methods of
+  Storage, and one D1 `batch()` runs them. The Worker entry is
+  `core/server/worker.ts`, and `core/live/index.ts` builds the App from the
+  Worker bindings.
+- **The tests run on `node:sqlite`.** `core/tests/node-sqlite-d1.ts` has the
+  shape of a D1 binding, with the limits of D1. It runs the files of
+  `backend/migrations` in the order of their names.
+- **`backend/migrations/0000` to `0010` are the SQL files of the old app
+  (its drizzle folder), under their old names.** The production D1 database
+  `daylio-clone` recorded those names as applied. Its tables keep their old
+  columns (`ADOPTED_TABLES` in `core/database/table-kinds.ts`). A new table or
+  change is a new file from `0011_<name>.sql` up, and a new table has the
+  columns of `BaseTable`.
+- **Sign-in is passkeys only, with the old app's rules.** The sign-in routes
+  keep the paths and the JSON of the old app under `/api/auth`, and the cookie
+  is `__Host-daymark_session` (`daymark_session` on `http://localhost`). The
+  tables `passkeys`, `auth_sessions`, `auth_challenges` and `auth_attempts` are
+  the old ones, which have no owner key (Daymark has one owner), so the
+  passkeys and the sessions of the owner keep working. A session lasts 180 days
+  of non-use. After a day of use it renews, and the answer sends the cookie
+  again. The secret `DAYMARK_SETUP_CODE` saves a passkey without a session,
+  also when passkeys exist, and 10 wrong codes of one network (50 of all
+  networks) in 15 minutes stop it. The last passkey cannot go.
+- **There is no local mode.** The old app skipped sign-in for requests to
+  `localhost`. The backend always needs a session, and a local run or a test
+  signs in with a passkey.
+- **The PostgreSQL migration system stays on disk, unused.** The migration
+  check reads it, and the project takes over those template paths later with
+  the template takeover of the D1 paths. `backend/tsconfig.json` leaves out the
+  two files that no longer compile, and `knip.jsonc` lists the unused ones.
+
+## One Worker on one origin
+
+- **The new app is one Cloudflare Worker.** It serves the API and the built
+  frontend (Workers static assets) on one origin. The page
+  calls the API on its own origin, so a deployment sends no CORS headers and
+  the cookie is first-party. `frontend/dist` is the assets directory. A path
+  that is not a file gets `index.html`, and the Worker answers `/api/*`,
+  `/health`, `/health/*`, `/oauth/*` and `/.well-known/*`.
+- **`wrangler.jsonc` is at the repository root.** The Deploy to Cloudflare
+  button reads the root, and `backend/` imports the workspace package
+  `common/`. The `cloudflare.bindings` description is in the root
+  `package.json`, and `.dev.vars.example` lists the secret. The config has the
+  same Worker name (`daylio-clone`) and the same D1 database as the old app
+  had, so the new app replaced the old one on the same data. `migrations_dir`
+  is `backend/migrations`, which holds the old files under their old names. The hourly cron calls
+  `AuthSessionLogic.deleteExpired`, which removes expired sessions, challenges,
+  attempts, OAuth codes and tokens, as the old `scheduled` handler does.
+- **The frontend is built with an empty `VITE_API_BASE_URL`.** `pnpm run build`
+  sets it, so the page uses its own origin whatever a local `.env` says.
+- **The sign-in page is at `/sign-in`, and `/login` redirects to it.** The old
+  site and the OAuth consent redirect (`/sign-in?returnTo=...`) use
+  `/sign-in`. The router keeps `/login` so that old links work, and the
+  redirect keeps the query. After sign-in, a `returnTo` that starts with
+  `/oauth/` is loaded as a new page, because the server draws the consent page.
+- **The Worker answers an unknown address with `index.html` and status 404.**
+  `wrangler.jsonc` sets `assets.run_worker_first` to `true`, so the Worker
+  (`backend/src/features/core/server/worker.ts`) sees every request. It serves
+  the files, the backend routes, and `index.html` with status 200 for the paths
+  in `APP_PAGES`. For another path that no file or backend route answers, it
+  sends `index.html` with status 404, and the router shows "Page not found".
+  `APP_PAGES` is the one list of pages. A feature that adds a page to the
+  router adds its path to `APP_PAGES`, and to nothing else. A page that is not
+  in the list loads with status 404.
+- **OAuth for agents is in the auth feature, and the MCP endpoint takes only
+  its access token.** `/api/mcp` is mounted before `/api`, so the owner's
+  session cookie does not work there. The discovery documents, `/oauth/*` and
+  the token rules are the old Worker's. The consent page sets its own
+  `X-Frame-Options: DENY` and `Referrer-Policy: same-origin`, so
+  `createHttpApp` skips `secureHeaders` on `/oauth/authorize`.
+- **The reset route is `POST /api/__black-box/reset`.** It empties each app
+  table between black-box tests, and adds the seed catalog of a new database
+  (five moods, five groups, twelve activities, two goals). It exists only when `DAYMARK_BLACK_BOX` is `true`, which only
+  `scripts/black-box-next.mjs` sets. `BlackBoxStorage` plans the deletes and
+  the seed rows, `BlackBoxLogic` runs them in one batch and refuses without the
+  setting, and the HTTP app mounts the handler only when `config.blackBox` is
+  on. An integration test shows that it is absent without the setting. The
+  seed rows are in `catalog/utils/seed-catalog.ts`, and `BlackBoxLogic` plans
+  them through `CatalogStorage.planSeedCatalog`.
+- **The black-box fixture signs in with passkeys.** For `authenticated: true`
+  it uses a virtual authenticator, opens the sign-in page, and saves the first
+  passkey with the setup code, as a real owner does, and gives the test that
+  page.
+- **The Worker runs with `wrangler dev` 4.158.0.** Version 4.92.0 stopped at
+  start-up with "Disallowed operation called within global scope", from the
+  Logic classes that the Worker builds once for each isolate. The root
+  `package.json` has 4.158.0 as a dev dependency.
+- **The build checks of the template** use the passkey sign-in on the Worker
+  (`core/tests/browser/`).
+- **`pnpm run dev` runs the Worker and Vite.** `scripts/dev.mjs` migrates the
+  local D1 and starts `wrangler dev` on `DEV_WORKER_PORT` (default 8787) and
+  the Vite dev server with hot reload. Vite proxies `/api`, `/health`,
+  `/oauth` and `/.well-known` to the Worker and keeps the `Host` header, so
+  passkeys and the origin check work on `localhost:5173`.
+
+## What the black-box tests do not cover
+
+- The import of a Daylio backup has no page. The site has no file field, and
+  the import runs with `scripts/daylio_import.py` and `POST /api/import`.
+- The MCP endpoint, the OAuth pages and routes, the content of the export file,
+  `/api/health` and the other routes that no page calls have API black-box
+  tests in `api-tests/` directories. See [rules](rules.md). The import of a
+  Daylio backup has them too, and sends the normalized JSON that
+  `scripts/daylio_import.py` makes.
+- Drafts in device storage are not reachable through the page: a mood or an
+  activity is stored on the server at once, so a draft stays only when a
+  request is lost, and the page clears it then. The UI Logic tests of the new
+  app cover the storage.
+- The service worker (`frontend/public/sw.js`) registers only in a production
+  build, so the Vite dev server does not get it. The black-box Worker serves
+  the built app, so `offline-shell.spec.ts` tests the offline shell there.
+- The refresh of the day when the window gets focus has no black-box test.
+  The app listens to the `focus` event of `window`, and `page.bringToFront()`
+  does not fire it in the Chromium of Playwright. The 15-second refresh has
+  one (`other-device.spec.ts`), and `journal-logic-refresh.test.ts` covers the
+  focus.
+- The navigation lock has no black-box test. A page holds it only while a
+  request is in flight, and no control that a black-box test may use holds a
+  request (`page.route` and `page.evaluate` are not allowed). The UI Logic
+  tests in `core/ui/navigation-lock-logic.test.ts` hold the request.
+
+## The navigation lock
+
+- **A page with a request in flight holds the navigation.** The Logic of the
+  page has a `LeaveLockPlugin` (`core/ui/leave-lock-plugin.ts`). When the Logic
+  is busy, the plugin sends `held` on `App.navigationLockEvents`, and when it is
+  done or cleaned up, it sends `released`. The old app locked the goal page, the
+  add-activity page and Setup in the same way, with the same three messages.
+- **`NavigationLockLogic` owns the lock.** `NavigationLockProvider` in
+  `core/ui/` creates it above the journal in `routes.tsx`. It keeps the list of
+  holders. The shell disables the navigation buttons while the list is not
+  empty, and sends the notice of the newest holder to the message slot. The back buttons of the
+  pages call `canLeave()` first.
+- **The back button of the browser needs a guard.** While a holder exists,
+  `BrowserHistoryService` refuses each move through the history. Its `popstate`
+  listener is added in the capture phase when `createApp` runs, which is before
+  React Router adds its own. It calls `stopImmediatePropagation()`, so the
+  router does not change its location and the page stays mounted. A page that
+  unmounted would clean up its Logic, and that cancels the request that the lock
+  waits for. Then the service calls `history.go(delta)` to undo the move, and
+  ignores the `popstate` event of that undo.
+- **The guard depends on `history.state.idx` of React Router.** `delta` is the
+  `idx` of the guarded page minus the `idx` of the page that the move opened.
+  If an entry has no `idx`, the service goes one step forward and logs a
+  warning. A change of the router that drops `idx` breaks the guard.
+
+## The message slot
+
+- **Each page except the log has one message slot.** The old app had one
+  `message` in its state, and the shell showed it as the first child of
+  `main`, above the page. The shell does the same now (`app-shell.tsx`). A
+  new message replaces the old one, and the log keeps its own messages.
+- **Pages send, one Logic keeps.** A Logic sends its message through a
+  `PageNoticePlugin` (`core/ui/page-notice-plugin.js`) on
+  `App.pageNoticeEvents`. `PageNoticeLogic` (`core/ui/`) keeps the newest one,
+  and `JournalFrame` tells it which page is open. A plugin takes the notice of
+  a Logic with `follow()`, or sends it with `show()`. `clear()` is for the
+  places where the old app emptied the slot.
+- **A change of page empties the slot,** unless the message is for the page
+  that opens. "Activity added." is for Setup, so the Setup Logic sends it with
+  `view: "settings"` while the form is still open.
+- **A view keeps its own error when the old one did.** The load error of the
+  catalog with a Retry button, the Insights errors and the sign-out error stay
+  in the page. The goal history had a Retry button only in the new app, so
+  its error goes to the slot, and the month buttons read the month again.
+
+## Changes to the old API that stay
+
+The port changed three details of the old API. None of them changes what a
+client can do, so they stay, and a later audit must not report them as gaps.
+
+- A request with a method that a route does not have gets 404. The old Worker
+  answered 405 with an `Allow` header.
+- `/api/auth/*` refusals have the shared error body (`error.code`,
+  `error.message`). The old Worker sent `{ error, code }`. Only the app's own
+  pages read these answers.
+- The origin check of a write runs before the session check, so a write from
+  another site without a session gets 403, not 401.
+
+## Sign-in headers and caches
+
+- **`/sign-in` and `/login` have anti-framing headers and `no-store`.** The
+  Worker adds `X-Frame-Options`, `Content-Security-Policy: frame-ancestors`,
+  `Referrer-Policy: same-origin` and `Cache-Control: no-store` to the asset
+  answer, as the old `_headers` file did.
+- **Every `/api/auth/*` answer has `Cache-Control: no-store`**, and so has the
+  303 from `/oauth/authorize` to `/sign-in`. A request with a stale session
+  cookie that gets a 401 also clears the cookie.
+- **The fixture removes the virtual passkey device before it closes a
+  context.** Without this, `context.close()` hung after the service worker and
+  the `no-store` answers.
+
+## The log, the days and the catalog
+
+- **The catalog read is `GET /api/catalog`.** It gives `{ moods, groups,
+activities, goals }` in the JSON of the old `/api/bootstrap`, without
+  `settings`, `today` and `yesterday`: the device knows its own day, and the
+  settings feature gives the week. The first read of a catalog with no mood
+  adds the starting catalog (five moods, five groups, twelve activities, two
+  goals), as the old app did on its first request, so that a new deployment
+  works. `CatalogStorage` and `CatalogLogic` have read methods only.
+- **The days routes keep the old paths and the JSON of a success.** They are
+  `GET /api/entries` (paging), `GET`, `PUT` and `DELETE /api/entries/:date`,
+  `PUT /api/day-selections/:date/mood` and `.../activities/:id`, and
+  `GET /api/calendar?month=`. `GET /api/entries/:date` answers 404 with the
+  same body when the day has no entry. A refusal has the shared error body
+  (`error.code`, `error.message`): 400 for a bad value, and 409 `CONFLICT` for
+  a save or a delete with a stale version.
+- **A save writes the entry in one batch.** The statement of the entry sets
+  the version to `NULL` when the row has another version than the caller read.
+  `NOT NULL` then stops the whole batch, and `DaysStorage.isVersionConflict`
+  turns that into the 409. `saveEntry` is the save of the page. `saveDay` is the
+  save of a whole day, with the goals that follow the activities. It has no
+  route: the MCP tool `save_day` calls it. `goal_completions` rows are written
+  by the day selections, by `saveDay` and by the goal route.
+- **The log is one `JournalLogic` for the whole session.** `JournalProvider`
+  owns it above the routes, so that the open day and the search stay when the
+  owner opens the calendar and comes back. The Logic has four plugins: the
+  catalog read, the taps (mood and activities), the save and the delete, and
+  the swipe on the date row. The calendar page owns a `CalendarLogic` for its
+  month.
+- **Four Services are new.** `clock` (the day on the clock of the device),
+  `dialogs` (the question before a delete), `device` (online, in view, and the
+  leave warning of the browser) and `timers` (the 15 second refresh and the one
+  minute check of the day). A test root gives fakes: `clock.advance`,
+  `dialogs.answerWith`, `device.setOnline`, `device.setVisible`, and
+  `timers.fire({ intervalMs })`.
+- **The draft on the device keeps the keys of the old app**
+  (`daymark:draft:v1:<date>` and `daymark:active-draft-date:v1`).
+  `DaysStorage` of the frontend reads and writes them through the injected
+  `localStorage`.
+- **The styles are the stylesheet of the old app, unchanged.**
+  `core/ui/styles/` holds the files `01-reset.css` to `05-insights.css`. They
+  are the old `reset.css`, `globals.css` (without the Tailwind import) and
+  the three Insights files, in the order of `vanilla/build.mjs`. Only the
+  limit of 20,000 bytes for a file splits `globals.css`. `main.tsx` imports
+  them in order. `.prettierignore` lists the folder, so that Prettier keeps
+  their text. The template styles of bare elements are gone. The markup uses
+  the old class names, `.app-shell` included. `06-port-additions.css` holds
+  the rules for UI that only the new app has, each with a comment.
+
+## MCP, the import and the export
+
+- **The MCP endpoint has no SDK.** It is a stateless JSON-RPC handler as in
+  the old app and in Calocount: each POST is one message or a batch, and the
+  answer is JSON. The tools read the days, the catalog and the settings
+  through their Logic classes. The summaries and the goal week results are
+  calculated in `mcp/utils/journal-calculations.ts`. The insights and goals
+  pages need the same rules, so a later merge can point this module at the
+  shared calculation.
+- **The import is one batch.** `POST /api/import` plans the catalog, the days
+  and the run record, and writes them with one `atomic` call. A statement
+  binds up to 200 records as JSON and reads them with `json_each`, so a backup
+  of several years is a few dozen statements. A refused backup changes
+  nothing. A batch that fails leaves a run with the status `failed`.
+- **The import keeps the old error body.** A refusal answers
+  `{ "error": "<text>" }` with status 400, because the client is a script
+  (`curl`) that reads that text. The other routes use the shared error body.
+- **The export reads each table through its Logic class.** The tables are not
+  read in one snapshot, so a save during an export can show in one table and
+  not in another.

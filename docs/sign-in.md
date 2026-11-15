@@ -2,8 +2,8 @@
 
 Daymark has one owner. The owner signs in with a passkey. MCP clients, such
 as Claude Code, sign in with OAuth 2.1, and the owner allows each client with
-a passkey session. The code is in `worker/auth/`. Both Workers call
-`withAuth` before their own routes.
+a passkey session. The code is in `backend/src/features/auth/`. The Worker checks
+the session or the access token before the routes of the app.
 
 The design is the same as in calocount (`calocount/docs/sign-in.md`). Daymark
 has no Cloudflare Access mode and no owner key, because it has one deployment
@@ -11,18 +11,10 @@ and one owner.
 
 ## Local development
 
-Requests to `localhost`, `127.0.0.1` and `[::1]` skip sign-in, so
-`pnpm run dev` and the integration tests need no passkey. A public host name
-always needs sign-in.
-
-To try passkeys locally, put these lines in `.dev.vars`:
-
-```sh
-DAYMARK_LOCAL_PASSKEYS=true
-DAYMARK_SETUP_CODE=a long local setup code
-```
-
-Then run `pnpm run dev` and open `http://localhost:3000`. Browsers allow
+There is no local mode: a request to `localhost` needs a session, as any other
+request does. Copy `.dev.vars.example` to `.dev.vars`, and set
+`DAYMARK_SETUP_CODE` to a long local phrase. Run `pnpm run dev`, open
+`http://localhost:5173`, type the setup code and save a passkey. Browsers allow
 passkeys on `localhost`, but not on `127.0.0.1`.
 
 ## Setup code
@@ -77,12 +69,15 @@ output of `openssl rand -base64 24`, and keep it in a password manager.
 ## Pages
 
 The pages and static files do not need sign-in. They hold no journal data:
-the app gets all data from `/api`. The service worker keeps the app shell for
-offline use. It does not keep `/sign-in` or the OAuth pages as the shell.
+the app gets all data from `/api`. The service worker (`frontend/public/sw.js`,
+registered only in a production build) keeps the app shell for offline use. It
+does not keep `/sign-in`, `/login` or the OAuth pages as the shell, and it
+never handles `/api/`, `/oauth/`, `/.well-known/`, `/health` or `/mcp`.
 
-`/sign-in` and the OAuth pages send `X-Frame-Options: DENY`,
+`/sign-in`, `/login` and the OAuth pages send `X-Frame-Options: DENY`,
 `Content-Security-Policy: frame-ancestors 'none'` and
-`Referrer-Policy: same-origin`. Do not change the referrer policy to
+`Referrer-Policy: same-origin`. `/sign-in` and `/login` also send
+`Cache-Control: no-store`. Do not change the referrer policy to
 `no-referrer`: with it, browsers send `Origin: null` with the consent form,
 and the same-origin check refuses the owner's answer.
 
@@ -100,8 +95,12 @@ and the same-origin check refuses the owner's answer.
 | `GET /api/auth/connections`, `DELETE /api/auth/connections/:id` | A session | List and disconnect OAuth apps |
 | `POST /api/mcp` | An OAuth access token | The MCP endpoint. A session cookie does not work here. |
 
-Every other `/api/*` route needs a session. `tests/worker-routes.test.mjs`
-checks this for each route file.
+Every `/api/auth/*` answer has `Cache-Control: no-store`. Every other
+`/api/*` route needs a session. `PUBLIC_ROUTES` in
+`frontend/src/features/core/tests/backend-http.test.ts` checks this for each
+route, and the API specs in `frontend/src/features/auth/api-tests/` check the
+headers. A request with a session cookie but no live session gets `401` and a
+`Set-Cookie` that clears the cookie.
 
 ## OAuth for the MCP endpoint
 
@@ -144,7 +143,7 @@ These steps keep the data. They change only the sign-in.
 1. Add the setup code to the Worker:
 
    ```sh
-   pnpm exec wrangler secret put DAYMARK_SETUP_CODE --config vanilla/wrangler.jsonc
+   pnpm exec wrangler secret put DAYMARK_SETUP_CODE
    ```
 
    Versions before passkey support do not read this value, so you can add it
@@ -161,7 +160,7 @@ These steps keep the data. They change only the sign-in.
 5. In Cloudflare Zero Trust, open **Access > Applications**, and delete the
    daymark application.
 6. Open the app in a private window. You must see the daymark sign-in page,
-   not Access. `curl https://<host>/api/bootstrap` must return `401`.
+   not Access. `curl https://<host>/api/catalog` must return `401`.
 7. Connect Claude Code again, as in the README. Do this after step 5, because
    Access blocks `/oauth/*` while it is in front.
 8. Delete the secrets `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` and `ALLOWED_EMAIL`.

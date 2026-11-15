@@ -1,0 +1,11 @@
+/* Rules for UI that only the new app has. The files 01 to 05 are copies of the old stylesheet and stay unchanged. */
+
+/* The icon picker is a modal dialog here, and the old one was a div. These rules remove the default style of a dialog. */
+dialog.icon-picker-backdrop { width: 100%; max-width: none; height: 100%; max-height: none; margin: 0; border: 0; color: inherit; overflow: hidden; }
+dialog.icon-picker-backdrop::backdrop { background: transparent; }
+/* The scrim takes the click outside the sheet, as the old backdrop did. */
+.icon-picker-scrim { position: absolute; inset: 0; }
+.icon-picker-backdrop > .icon-picker { position: relative; }
+
+/* Where the old app had a div or a p with role="status", the new markup has an <output>, because the lint asks for the native element. An <output> is inline, so these give back the block of the old element. */
+output.insights-card, output.inline-loading, output.calendar-loading { display: block; }
