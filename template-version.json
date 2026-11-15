@@ -46,6 +46,11 @@
       "commit": "5f067ec380024a8312dd03acb34486d225b5b4b0",
       "subject": "Document the shadcn component workflow",
       "reason": "It documents the shadcn workflow of the shared UI kit of 76154bd, which Daymark leaves out"
+    },
+    {
+      "commit": "b3be3a0518ecf94a8ba60d153ec259c77ae06ea8",
+      "subject": "Replace shared controls with shadcn base-mira parts",
+      "reason": "It moves the pages to the shadcn parts of the shared UI kit of 76154bd, which Daymark leaves out"
     }
   ],
   "conflicts": [
@@ -127,6 +132,32 @@
         ".agents/skills/ui-design/SKILL.md",
         "AGENTS.md",
         "docs/agents/ui-components.md"
+      ]
+    },
+    {
+      "commit": "b3be3a0518ecf94a8ba60d153ec259c77ae06ea8",
+      "files": [
+        "docs/agents/ui-components.md",
+        "docs/agents/ui-shadcn.md",
+        "frontend/src/features/auth/ui/session-gate.tsx",
+        "frontend/src/features/auth/ui/sign-up-page.tsx",
+        "frontend/src/features/component-library/black-box-tests/component-library-page-object.ts",
+        "frontend/src/features/component-library/black-box-tests/component-library.spec.ts",
+        "frontend/src/features/component-library/ui/component-library-page.tsx",
+        "frontend/src/features/core/ui/components/app-layout.tsx",
+        "frontend/src/features/core/ui/components/components-base.css",
+        "frontend/src/features/core/ui/components/components-layout.css",
+        "frontend/src/features/core/ui/components/dialog.tsx",
+        "frontend/src/features/core/ui/components/disclosure.tsx",
+        "frontend/src/features/core/ui/components/form.tsx",
+        "frontend/src/features/core/ui/components/info-tip.tsx",
+        "frontend/src/features/core/ui/components/page-header.tsx",
+        "frontend/src/features/core/ui/error-fallbacks.tsx",
+        "frontend/src/features/core/ui/routes.tsx",
+        "frontend/src/features/core/ui/shadcn.css",
+        "frontend/src/features/core/ui/worldbrain.css",
+        "lint/ui-foundation.test.mjs",
+        "lint/ui-legacy.mjs"
       ]
     }
   ]
