@@ -36,6 +36,11 @@
       "commit": "85c36468f7d776ca15404bf02d8b7c16ac798c12",
       "subject": "Fix menu links, tab measuring, and comments about missing parts",
       "reason": "It changes only the shared UI kit of 76154bd, which Daymark leaves out to keep its production stylesheet"
+    },
+    {
+      "commit": "9f78019da1bd5fd61e70d784f473c73955206a01",
+      "subject": "Add Base UI shadcn controls and split the theme",
+      "reason": "It adds Base UI shadcn controls to the shared UI kit of 76154bd, which Daymark leaves out"
     }
   ],
   "conflicts": [
@@ -90,6 +95,25 @@
         "frontend/src/features/core/ui/components/menu.tsx",
         "frontend/src/features/core/ui/components/page-header.tsx",
         "frontend/src/features/core/ui/components/tabs.tsx"
+      ]
+    },
+    {
+      "commit": "5379f8003cb8832de4418a729c80c11a495f0f50",
+      "files": ["docs/agents/README.md", "knip.jsonc"]
+    },
+    {
+      "commit": "f35b52cbe0e18d72c7b09b337e68d46fab20fc74",
+      "files": [
+        ".agents/skills/ui-design/SKILL.md",
+        "scripts/template-paths.json"
+      ]
+    },
+    {
+      "commit": "9f78019da1bd5fd61e70d784f473c73955206a01",
+      "files": [
+        ".prettierignore",
+        "frontend/src/features/core/ui/theme.css",
+        "frontend/src/features/core/utils/class-names.ts"
       ]
     }
   ]
