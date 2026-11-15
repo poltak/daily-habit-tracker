@@ -43,10 +43,12 @@ test.describe("insights", () => {
     await expect(insights.sectionLink("Activities")).toBeHidden();
   });
 
-  test("should summarize the recorded days", async ({ page }) => {
+  test("should summarize five days, rank the activities, list the sections and show the weekday means", async ({
+    page,
+  }) => {
     test.slow();
     const insights = new InsightsPageObject(page);
-    await recordFiveDays(page);
+    const today = await recordFiveDays(page);
 
     await insights.open();
 
@@ -60,16 +62,6 @@ test.describe("insights", () => {
         - text: activities recorded
     `);
     await expect(insights.emptyHistory).toBeHidden();
-  });
-
-  test("should rank the activities by the mood on the days that have them", async ({
-    page,
-  }) => {
-    test.slow();
-    const insights = new InsightsPageObject(page);
-    await recordFiveDays(page);
-
-    await insights.open();
 
     await expect(
       insights.sectionHeading("Which activities show up with better moods?"),
@@ -97,32 +89,6 @@ test.describe("insights", () => {
     );
     await expect(insights.pickedActivity("Gym")).toBeVisible();
     await expect(insights.pickedActivity("Music")).toBeHidden();
-  });
-
-  test("should show the detail of an activity that the owner picks", async ({
-    page,
-  }) => {
-    test.slow();
-    const insights = new InsightsPageObject(page);
-    await recordFiveDays(page);
-    await insights.open();
-    await expect(insights.activityDetail("Gym")).toBeVisible();
-    await expect(insights.moodGap).toHaveText("+1.83 mood points");
-
-    await insights.chooseActivity("Cook");
-
-    await expect(insights.activityDetail("Cook")).toBeVisible();
-    await expect(insights.moodGap).toHaveText("-1.83 mood points");
-    await expect(insights.pickedActivity("Cook")).toBeVisible();
-    await expect(insights.pickedActivity("Gym")).toBeHidden();
-  });
-
-  test("should list the sections of the analysis", async ({ page }) => {
-    test.slow();
-    const insights = new InsightsPageObject(page);
-    await recordFiveDays(page);
-
-    await insights.open();
 
     for (const name of [
       "Activities",
@@ -143,15 +109,6 @@ test.describe("insights", () => {
       insights.sectionHeading("Weekly and seasonal rhythms"),
     ).toBeVisible();
     await expect(insights.weekdayTable).toBeVisible();
-  });
-
-  test("should show the mean mood of each weekday in the period", async ({
-    page,
-  }) => {
-    test.slow();
-    const insights = new InsightsPageObject(page);
-    const today = await recordFiveDays(page);
-    await insights.open();
 
     // Rad, Good, Meh, Good, Bad: 5, 4, 3, 4, 2 on five different weekdays.
     const means = ["5.00", "4.00", "3.00", "4.00", "2.00"];
@@ -168,13 +125,22 @@ test.describe("insights", () => {
     }
   });
 
-  test("should count only the days of the period that the owner picks", async ({
+  test("should show the activity and the period that the owner picks", async ({
     page,
   }) => {
     test.slow();
     const insights = new InsightsPageObject(page);
     const today = await recordFiveDays(page);
     await insights.open();
+    await expect(insights.activityDetail("Gym")).toBeVisible();
+    await expect(insights.moodGap).toHaveText("+1.83 mood points");
+
+    await insights.chooseActivity("Cook");
+
+    await expect(insights.activityDetail("Cook")).toBeVisible();
+    await expect(insights.moodGap).toHaveText("-1.83 mood points");
+    await expect(insights.pickedActivity("Cook")).toBeVisible();
+    await expect(insights.pickedActivity("Gym")).toBeHidden();
 
     await insights.chooseCustomRange({
       from: LogPageObject.addDays(today, -1),
@@ -196,13 +162,6 @@ test.describe("insights", () => {
         - strong: "5"
         - text: recorded days
     `);
-  });
-
-  test("should say so when the period has no entries", async ({ page }) => {
-    test.slow();
-    const insights = new InsightsPageObject(page);
-    const today = await recordFiveDays(page);
-    await insights.open();
 
     await insights.chooseCustomRange({
       from: LogPageObject.addDays(today, -40),
@@ -211,15 +170,6 @@ test.describe("insights", () => {
 
     await expect(insights.emptyPeriod).toBeVisible();
     await expect(insights.sectionLink("Activities")).toBeHidden();
-  });
-
-  test("should refuse a period that ends before it starts", async ({
-    page,
-  }) => {
-    test.slow();
-    const insights = new InsightsPageObject(page);
-    const today = await recordFiveDays(page);
-    await insights.open();
 
     await insights.chooseCustomRange({
       from: today,

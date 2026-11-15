@@ -548,6 +548,14 @@
       "files": [
         "frontend/src/features/component-library/black-box-tests/containers.spec.ts"
       ]
+    },
+    {
+      "commit": "c1c880c7a0dedfcaa9d06325eabd52585ab9610a",
+      "files": [
+        ".agents/skills/write-black-box-test/SKILL.md",
+        "lint/testing-plugin.test.ts",
+        "lint/testing-plugin.ts"
+      ]
     }
   ],
   "unchanged": ["87496d340cf49d1706a96e5b0c9efbdab0be7570"]

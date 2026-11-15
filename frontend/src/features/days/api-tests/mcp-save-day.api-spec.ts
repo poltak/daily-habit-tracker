@@ -84,7 +84,7 @@ test.describe("save a day through MCP", () => {
     await expect(log.openGoalSwitch("Read")).toBeVisible();
   });
 
-  test("should refuse an unknown, an ambiguous and a missing record, and write nothing", async ({
+  test("should refuse an unknown or ambiguous record, arguments that do not fit and a day that has not started, and write nothing", async ({
     agent,
     ownerRequest,
     apiOrigin,
@@ -128,11 +128,7 @@ test.describe("save a day through MCP", () => {
       end_date: "2026-01-31",
     });
     expect(days.data).toMatchObject({ recorded_days: 0, days: [] });
-  });
 
-  test("should refuse arguments that do not fit the schema", async ({
-    agent,
-  }) => {
     const valid = { date: "2026-01-05", mood: 4, activities: [] };
     const refusals: Array<[Record<string, unknown>, string]> = [
       [
@@ -152,27 +148,25 @@ test.describe("save a day through MCP", () => {
     }
     const list = await agent.callTool("save_day", []);
     expect(list.text).toContain("must be an object");
-  });
 
-  test("should refuse a day that has not started", async ({ agent }) => {
     const later = LogPageObject.addDays(
       new Date().toISOString().slice(0, 10),
       2,
     );
 
-    const result = await agent.callTool("save_day", {
+    const notStarted = await agent.callTool("save_day", {
       date: later,
       mood: "Good",
       activities: [],
     });
 
-    expect(result.isError).toBe(true);
-    expect(result.text).toContain("That day has not started yet");
-    const days = await agent.callTool("get_days", {
+    expect(notStarted.isError).toBe(true);
+    expect(notStarted.text).toContain("That day has not started yet");
+    const laterDays = await agent.callTool("get_days", {
       start_date: later,
       end_date: later,
     });
-    expect(days.data).toMatchObject({ recorded_days: 0 });
+    expect(laterDays.data).toMatchObject({ recorded_days: 0 });
   });
 
   test("should keep a saved day unless the agent asks to replace it", async ({

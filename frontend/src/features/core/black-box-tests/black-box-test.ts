@@ -9,6 +9,7 @@ import {
   type Browser,
   type CDPSession,
   type Page,
+  type Request,
 } from "@playwright/test";
 import { PasskeySignInPageObject } from "../../auth/black-box-tests/passkey-sign-in-page-object.js";
 
@@ -141,6 +142,17 @@ export const test = base.extend<BlackBoxOptions & BlackBoxFixtures>({
     await resetApp({ browser, origin: baseURL ?? "" });
     const uncaughtErrors: Error[] = [];
     page.on("pageerror", (error) => uncaughtErrors.push(error));
+    const inFlight = new Set<Request>();
+    page.on("request", (request) => inFlight.add(request));
+    page.on("requestfinished", (request) => inFlight.delete(request));
+    page.on("requestfailed", (request) => inFlight.delete(request));
+    // A new document drops the requests of the old one, and Playwright then
+    // reports no end for them.
+    page.on("framenavigated", (frame) => {
+      if (frame === page.mainFrame()) {
+        inFlight.clear();
+      }
+    });
     if (authenticated) {
       await signInAsOwner(page);
     }
@@ -148,11 +160,16 @@ export const test = base.extend<BlackBoxOptions & BlackBoxFixtures>({
     await provide(page);
 
     // The Worker can stop when the browser drops an open request, so the
-    // test ends after the page's requests end. A page that the service worker
-    // controls can keep a request open, so the wait has a limit.
-    await page
-      .waitForLoadState("networkidle", { timeout: 5000 })
-      .catch(() => {});
+    // test ends after the page's requests end. `networkidle` is not used: it
+    // is one event of the document, and after a page change in the app it
+    // can stay away for the whole limit while no request is open.
+    const settled = Date.now() + 5000;
+    while (inFlight.size > 0 && Date.now() < settled) {
+      await Promise.race([
+        page.waitForEvent("requestfinished", { timeout: settled - Date.now() }),
+        page.waitForEvent("requestfailed", { timeout: settled - Date.now() }),
+      ]).catch(() => {});
+    }
     if (deviceSession) {
       await removePasskeyDevice(deviceSession);
     }

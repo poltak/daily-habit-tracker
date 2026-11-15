@@ -34,6 +34,13 @@ An agent never runs it. A push to `main` runs it in
 steps. `pnpm run test:import` runs its tests (`scripts/test_daylio_import.py`),
 and `pnpm run check` includes them.
 
+## Tests of the template tooling
+
+`pnpm run check` runs only the tests of the scripts that the project owns
+(`check:scripts`). The tests of the scripts that the template owns are not in
+it, because the template runs them. After a template sync, run
+`pnpm run test:scripts`.
+
 ## Black-box tests
 
 ```sh

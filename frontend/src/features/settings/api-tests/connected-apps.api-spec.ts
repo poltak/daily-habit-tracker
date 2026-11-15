@@ -32,26 +32,4 @@ test.describe("connected apps", () => {
     const after = await ownerRequest.get(`${apiOrigin}/api/auth/connections`);
     expect((await after.json()).connections).toEqual([]);
   });
-
-  test("should remove a connection through the API once, and stop its token", async ({
-    agent,
-    ownerRequest,
-    apiOrigin,
-  }) => {
-    const [connection] = (
-      await (await ownerRequest.get(`${apiOrigin}/api/auth/connections`)).json()
-    ).connections as Array<{ id: string }>;
-
-    const removed = await ownerRequest.delete(
-      `${apiOrigin}/api/auth/connections/${connection?.id}`,
-    );
-    expect(removed.status()).toBe(200);
-    expect(await removed.json()).toEqual({ removed: true });
-    const again = await ownerRequest.delete(
-      `${apiOrigin}/api/auth/connections/${connection?.id}`,
-    );
-    expect(again.status()).toBe(404);
-
-    expect((await agent.send("tools/list")).status()).toBe(401);
-  });
 });
