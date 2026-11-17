@@ -16,11 +16,10 @@ test.describe("move between days", () => {
 
     await expect(log.heading).toHaveText("How was yesterday?");
     await expect(log.dayLabel(yesterday)).toBeVisible();
-    await expect(log.dateField).toHaveValue(yesterday);
     await expect(log.nextDayButton).toBeEnabled();
     await log.goToNextDay();
     await expect(log.heading).toHaveText("How was your day?");
-    await expect(log.dateField).toHaveValue(today);
+    await expect(log.dayLabel(today)).toBeVisible();
     await expect(log.nextDayButton).toBeDisabled();
   });
 
@@ -56,10 +55,10 @@ test.describe("move between days", () => {
     await expect(log.heading).toHaveText(
       `How was ${LogPageObject.longDate(earlier)}?`,
     );
-    await expect(log.dateField).toHaveValue(earlier);
+    await expect(log.dayLabel(earlier)).toBeVisible();
     await log.goToToday();
     await expect(log.heading).toHaveText("How was your day?");
-    await expect(log.dateField).toHaveValue(today);
+    await expect(log.dayLabel(today)).toBeVisible();
   });
 
   test("should keep a separate entry for each day", async ({ page }) => {
@@ -111,19 +110,7 @@ test.describe("move between days", () => {
 
     await log.goto();
 
-    await expect(log.dateField).toHaveValue(today);
+    await expect(log.dayLabel(today)).toBeVisible();
     await expect(log.heading).toHaveText("How was your day?");
-  });
-
-  test("should not open a day that has not started", async ({ page }) => {
-    const log = new LogPageObject(page);
-    await log.goto();
-    const today = await log.currentDate();
-
-    await log.tryDay(LogPageObject.addDays(today, 2));
-
-    await expect(log.dateField).toHaveValue(today);
-    await expect(log.heading).toHaveText("How was your day?");
-    await expect(log.nextDayButton).toBeDisabled();
   });
 });

@@ -280,15 +280,19 @@ activities, goals }` in the JSON of the old `/api/bootstrap`, without
   (`daymark:draft:v1:<date>` and `daymark:active-draft-date:v1`).
   `DaysStorage` of the frontend reads and writes them through the injected
   `localStorage`.
-- **The styles are the stylesheet of the old app, unchanged.**
-  `core/ui/styles/` holds the files `01-reset.css` to `05-insights.css`. They
-  are the old `reset.css`, `globals.css` (without the Tailwind import) and
-  the three Insights files, in the order of `vanilla/build.mjs`. Only the
-  limit of 20,000 bytes for a file splits `globals.css`. `main.tsx` imports
-  them in order. `.prettierignore` lists the folder, so that Prettier keeps
-  their text. The template styles of bare elements are gone. The markup uses
-  the old class names, `.app-shell` included. `06-port-additions.css` holds
-  the rules for UI that only the new app has, each with a comment.
+- **The styles are the stylesheet of the old app.**
+  `core/ui/styles/` holds `01-reset.css`, `02-globals-a.css`,
+  `02-globals-b.css`, `02-globals-c.css`, `05-insights.css` and
+  `06-port-additions.css`. The first four are the old `reset.css` and
+  `globals.css` (without the Tailwind import), in the order of
+  `vanilla/build.mjs`. Only the limit of 20,000 bytes for a file splits
+  `globals.css`. `05-insights.css` holds the rules of the five short sections
+  of the Insights page. The old files for the relationship and rhythm sections
+  are gone. `main.tsx` imports the files in order. `.prettierignore` lists the
+  folder, so that Prettier keeps their text. The template styles of bare
+  elements are gone. The markup uses the old class names, `.app-shell`
+  included. `06-port-additions.css` holds the rules for UI that only the new
+  app has, each with a comment.
 
 ## MCP, the import and the export
 

@@ -16,16 +16,16 @@ for (const timeZone of ["Pacific/Kiritimati", "Etc/GMT+12"]) {
       const localToday = LogPageObject.todayIn(timeZone);
       await log.goto();
 
-      await expect(log.dateField).toHaveValue(localToday);
+      await expect(log.dayLabel(localToday)).toBeVisible();
       await expect(log.heading).toHaveText("How was your day?");
       await expect(log.dayLabel(localToday)).toBeVisible();
       await expect(log.nextDayButton).toBeDisabled();
       await log.logDay({ mood: "Good" });
       await log.goToPreviousDay();
       await expect(log.heading).toHaveText("How was yesterday?");
-      await expect(log.dateField).toHaveValue(
-        LogPageObject.addDays(localToday, -1),
-      );
+      await expect(
+        log.dayLabel(LogPageObject.addDays(localToday, -1)),
+      ).toBeVisible();
       await log.goToToday();
       await expect(log.chosenMood("Good")).toBeVisible();
       await expect(log.saveTitle).toHaveText("Your entry is saved");

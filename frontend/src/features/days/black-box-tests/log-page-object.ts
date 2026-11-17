@@ -46,6 +46,15 @@ export class LogPageObject {
     return `${WEEKDAYS[date.getUTCDay()]}, ${MONTHS[date.getUTCMonth()]} ${date.getUTCDate()}, ${date.getUTCFullYear()}`;
   }
 
+  static parseFriendlyDate(label: string): string {
+    const match = /^\w+, (\w+) (\d+), (\d{4})$/.exec(label);
+    if (!match || !MONTHS.includes(match[1]!)) {
+      throw new Error(`Invalid journal day label: ${label}`);
+    }
+    const month = String(MONTHS.indexOf(match[1]!) + 1).padStart(2, "0");
+    return `${match[3]}-${month}-${match[2]!.padStart(2, "0")}`;
+  }
+
   /** A date as a message writes it, such as "Nov 9". */
   static shortDate(iso: string): string {
     return LogPageObject.longDate(iso).replace(/^(\w{3})\w*/, "$1");
@@ -86,10 +95,6 @@ export class LogPageObject {
 
   get todayButton(): Locator {
     return this.page.getByRole("button", { name: "Today", exact: true });
-  }
-
-  get dateField(): Locator {
-    return this.page.getByLabel("Journal date");
   }
 
   /** The row of the header that the swipe starts on: the arrows and the day. */
@@ -378,13 +383,13 @@ export class LogPageObject {
   }
 
   async goToPreviousDay(): Promise<void> {
-    const before = await this.dateField.inputValue();
+    const before = await this.currentDate();
     await this.previousDayButton.click();
     await this.waitForDay(LogPageObject.addDays(before, -1));
   }
 
   async goToNextDay(): Promise<void> {
-    const before = await this.dateField.inputValue();
+    const before = await this.currentDate();
     await this.nextDayButton.click();
     await this.waitForDay(LogPageObject.addDays(before, 1));
   }
@@ -436,20 +441,51 @@ export class LogPageObject {
     await this.waitUntilLoaded();
   }
 
-  /** Open a day with the date field. The field takes `YYYY-MM-DD`. */
+  /** Open a day as the owner does: through the Calendar page. */
   async goToDay(iso: string): Promise<void> {
-    await this.dateField.fill(iso);
+    const current = await this.currentDate();
+    if (current === iso) {
+      return;
+    }
+    await this.page
+      .getByRole("navigation", { name: "Primary navigation" })
+      .getByRole("button", { name: "Calendar", exact: true })
+      .click();
+    const heading = this.page.getByRole("heading", {
+      level: 1,
+      name: "Calendar",
+    });
+    await heading.waitFor();
+    const monthHeading = this.page.getByRole("heading", { level: 2 }).first();
+    const target = new Date(`${iso}T12:00:00Z`);
+    const month = `${MONTHS[target.getUTCMonth()]} ${target.getUTCFullYear()}`;
+    // The calendar opens at the month of the day that the log shows.
+    const step =
+      iso.slice(0, 7) < current.slice(0, 7) ? "Previous month" : "Next month";
+    while ((await monthHeading.innerText()) !== month) {
+      const before = await monthHeading.innerText();
+      await this.page.getByRole("button", { name: step }).click();
+      await this.page
+        .getByRole("heading", { level: 2 })
+        .filter({ hasNotText: before })
+        .first()
+        .waitFor();
+    }
+    await this.page
+      .getByRole("button", {
+        name: new RegExp(`^${LogPageObject.friendlyDate(iso)},`),
+      })
+      .click();
+    await heading.waitFor({ state: "hidden" });
     await this.waitForDay(iso);
   }
 
-  /** Type a date in the date field, and do not wait for the day. */
-  async tryDay(iso: string): Promise<void> {
-    await this.dateField.fill(iso);
-  }
-
-  /** The date that the log shows now, as `YYYY-MM-DD`. */
   async currentDate(): Promise<string> {
-    return this.dateField.inputValue();
+    const label = await this.page
+      .getByRole("banner")
+      .getByText(/^\w+, \w+ \d+, \d{4}$/, { exact: true })
+      .innerText();
+    return LogPageObject.parseFriendlyDate(label);
   }
 
   /** Wait until the log shows `iso` and the day has loaded. */

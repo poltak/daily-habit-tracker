@@ -171,12 +171,12 @@ test.describe("summaries through MCP", () => {
     await expect(insights.emptyHistory).toBeHidden();
     await expect(insights.summary).toMatchAriaSnapshot(`
       - group "Selected period summary":
+        - strong: 100%
+        - text: good days
+        - strong: "4.50"
+        - text: average mood
         - strong: "2"
         - text: recorded days
-        - strong: 100%
-        - text: of days recorded
-        - strong: "2"
-        - text: activities recorded
     `);
   });
 });

@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  addDays,
-  dayOfWeek,
-} from "@app/common/features/core/utils/logical-date";
+import { addDays } from "@app/common/features/core/utils/logical-date";
+import { save, saveFiveDays, todayOf } from "./insights-test-setup.js";
 import {
   setupLogicTest,
   type FullApplication,
@@ -22,49 +20,6 @@ function setupTest(
     await seed?.(app);
     return new InsightsLogic(app.frontend);
   });
-}
-
-function todayOf(app: FullApplication): string {
-  return new Date(app.frontend.services.clock.now()).toISOString().slice(0, 10);
-}
-
-/** Save a day on the backend, as another device of the owner does. */
-function save(
-  app: FullApplication,
-  input: { logicalDate: string; moodId: string; activityIds?: string[] },
-) {
-  return app.backend.logic.days.saveEntry({
-    logicalDate: input.logicalDate,
-    input: {
-      moodId: input.moodId,
-      activityIds: input.activityIds ?? [],
-      completedGoalIds: [],
-    },
-  });
-}
-
-/** Five days up to today: Gym on the good days, Cook on the bad ones. */
-async function saveFiveDays(app: FullApplication) {
-  const today = todayOf(app);
-  const days = [
-    { back: 0, moodId: "mood-rad", activityIds: ["activity-gym"] },
-    { back: 1, moodId: "mood-good", activityIds: ["activity-gym"] },
-    { back: 2, moodId: "mood-meh", activityIds: ["activity-cook"] },
-    {
-      back: 3,
-      moodId: "mood-good",
-      activityIds: ["activity-gym", "activity-reading"],
-    },
-    { back: 4, moodId: "mood-bad", activityIds: ["activity-cook"] },
-  ];
-  for (const day of days) {
-    await save(app, {
-      logicalDate: addDays(today, -day.back),
-      moodId: day.moodId,
-      activityIds: day.activityIds,
-    });
-  }
-  return today;
 }
 
 describe("InsightsLogic loading the history", () => {
@@ -197,15 +152,13 @@ describe("InsightsLogic loading the history", () => {
 });
 
 describe("InsightsLogic the period", () => {
-  it("should count all the recorded days, the share of days and the activities", async () => {
+  it("should count all the recorded days", async () => {
     const app = await setupTest({ seed: saveFiveDays });
 
     const period = app.logic.period();
 
     expect(period).toMatchObject({
       validRange: true,
-      calendarDays: 5,
-      activityCount: 3,
       showAnalysis: true,
     });
     expect(period.days).toHaveLength(5);
@@ -269,7 +222,6 @@ describe("InsightsLogic the period", () => {
     logic.setCustomStart({ value: addDays(today, -1) });
     logic.setCustomEnd({ value: today });
     expect(logic.period().days).toHaveLength(2);
-    expect(logic.period().calendarDays).toEqual(2);
   });
 
   it("should refuse a range that ends before it starts, or after today", async () => {
@@ -313,236 +265,5 @@ describe("InsightsLogic the period", () => {
 
     expect(app.logic.state.data?.days).toHaveLength(6);
     expect(app.logic.period().days).toHaveLength(5);
-  });
-});
-
-describe("InsightsLogic the activities", () => {
-  it("should rank the activities by the mood on the days that have them", async () => {
-    const app = await setupTest({ seed: saveFiveDays });
-
-    const view = app.logic.relationships();
-
-    expect(view.activityId).toEqual("activity-gym");
-    const ranked = view.associations.map((association) => [
-      association.activityId,
-      association.recorded.sampleSize,
-      association.meanDifference?.toFixed(2) ?? null,
-    ]);
-    expect(ranked[0]).toEqual(["activity-gym", 3, "1.83"]);
-    expect(ranked[1]).toEqual(["activity-reading", 1, "0.50"]);
-    expect(ranked.find(([id]) => id === "activity-cook")).toEqual([
-      "activity-cook",
-      2,
-      "-1.83",
-    ]);
-    expect(ranked.map(([id]) => id).indexOf("activity-cook")).toEqual(2);
-    expect(ranked.find(([id]) => id === "activity-sleep")).toEqual([
-      "activity-sleep",
-      0,
-      null,
-    ]);
-    expect(view.selectedAssociation?.activityId).toEqual("activity-gym");
-    expect(view.calendarComparison?.anchorCounts).toEqual({
-      recorded: 3,
-      notRecorded: 2,
-    });
-  });
-
-  it("should compare the calendar days around an activity day", async () => {
-    const app = await setupTest({ seed: saveFiveDays });
-
-    app.logic.chooseActivity({ activityId: "activity-cook" });
-    const comparison = app.logic.relationships().calendarComparison;
-
-    expect(comparison?.activityId).toEqual("activity-cook");
-    expect(comparison?.offsets.map((offset) => offset.label)).toEqual([
-      "Previous calendar day",
-      "Same calendar day",
-      "Next calendar day",
-      "+2 calendar days",
-    ]);
-    const nextDay = comparison?.offsets[2];
-    expect(nextDay?.recorded.sampleSize).toEqual(2);
-    expect(nextDay?.notRecorded.sampleSize).toEqual(2);
-  });
-
-  it("should change the ranking with the year and the weekday, and fall back to all years", async () => {
-    const app = await setupTest({ seed: saveFiveDays });
-    const today = todayOf(app);
-    const { logic } = app;
-
-    logic.chooseRelationshipWeekday({ value: String(dayOfWeek(today)) });
-    expect(
-      logic
-        .relationships()
-        .associations.find(
-          (association) => association.activityId === "activity-gym",
-        )?.recorded.sampleSize,
-    ).toEqual(1);
-    logic.chooseRelationshipWeekday({ value: "all" });
-    logic.chooseRelationshipYear({ value: "1999" });
-    expect(logic.relationships().year).toEqual("all");
-    logic.chooseRelationshipYear({ value: today.slice(0, 4) });
-    expect(logic.relationships().year).toEqual(today.slice(0, 4));
-    expect(logic.relationships().associations).toHaveLength(12);
-  });
-
-  it("should pick another activity when the chosen one is not in the list", async () => {
-    const app = await setupTest({ seed: saveFiveDays });
-
-    app.logic.chooseActivity({ activityId: "activity-unknown" });
-
-    expect(app.logic.relationships().activityId).toEqual("activity-gym");
-  });
-
-  it("should suggest pairs only with ten known moods in each group, and fall back to a sparse pair", async () => {
-    const app = await setupTest({ seed: saveFiveDays });
-    const today = todayOf(app);
-    const { logic } = app;
-
-    const sparse = logic.relationships();
-    expect(sparse.suggestions).toEqual([]);
-    expect(sparse.selectedPair).toMatchObject({ adequate: false });
-    expect(sparse.pairActivityAId).not.toEqual(sparse.pairActivityBId);
-
-    for (let back = 5; back < 45; back += 1) {
-      await save(app, {
-        logicalDate: addDays(today, -back),
-        moodId:
-          ["mood-good", "mood-bad", "mood-meh", "mood-rad"][back % 4] ?? "",
-        activityIds: [
-          ...(back % 2 === 0 ? ["activity-gym"] : []),
-          ...(back % 4 < 2 ? ["activity-cook"] : []),
-        ],
-      });
-    }
-    await logic.load();
-    const rich = logic.relationships();
-
-    expect(rich.suggestions[0]).toMatchObject({
-      pairKey: "activity-cook::activity-gym",
-      adequate: true,
-    });
-    logic.choosePair({
-      activityAId: "activity-gym",
-      activityBId: "activity-reading",
-    });
-    expect(logic.relationships()).toMatchObject({
-      pairActivityAId: "activity-gym",
-      pairActivityBId: "activity-reading",
-    });
-    logic.chooseFirstOfPair({ activityId: "activity-cook" });
-    logic.chooseSecondOfPair({ activityId: "activity-cook" });
-    const fallback = logic.relationships();
-    expect(fallback.pairActivityAId).toEqual("activity-cook");
-    expect(fallback.pairActivityBId).not.toEqual("activity-cook");
-  });
-
-  it("should start the choices again after the period has no days", async () => {
-    const app = await setupTest({ seed: saveFiveDays });
-    const { logic } = app;
-    logic.chooseActivity({ activityId: "activity-cook" });
-    logic.chooseOverlayActivity({ activityId: "activity-gym" });
-    logic.choosePeriod({ preset: "custom" });
-    logic.setCustomStart({ value: "2001-01-01" });
-    expect(logic.state.activityId).toEqual("activity-cook");
-
-    logic.setCustomEnd({ value: "2001-01-31" });
-
-    expect(logic.period().showAnalysis).toEqual(false);
-    expect(logic.state).toMatchObject({
-      activityId: "",
-      overlayActivityId: "",
-    });
-    logic.choosePeriod({ preset: "all" });
-    expect(logic.relationships().activityId).toEqual("activity-gym");
-  });
-});
-
-describe("InsightsLogic the rhythms", () => {
-  it("should average the mood on each weekday and each month", async () => {
-    const app = await setupTest({ seed: saveFiveDays });
-
-    const view = app.logic.rhythms({ weekEndsOn: 0 });
-
-    expect(view.analysis.loggedCount).toEqual(5);
-    const weekdays = view.analysis.weekdays.filter(
-      (bucket) => bucket.count > 0,
-    );
-    expect(weekdays.map((bucket) => bucket.mean).toSorted()).toEqual([
-      2, 3, 4, 4, 5,
-    ]);
-    expect(
-      view.analysis.months.reduce((sum, bucket) => sum + bucket.count, 0),
-    ).toEqual(5);
-    expect(view.analysis.years).toHaveLength(1);
-    expect(view.overlayActivityName).toEqual(null);
-  });
-
-  it("should overlay an activity as a fraction of the logged days, and filter by year", async () => {
-    const app = await setupTest({ seed: saveFiveDays });
-    const { logic } = app;
-
-    logic.chooseOverlayActivity({ activityId: "activity-gym" });
-    const view = logic.rhythms({ weekEndsOn: 0 });
-
-    expect(view.overlayActivityName).toEqual("Gym");
-    const fractions = view.analysis.weekdays
-      .filter((bucket) => bucket.loggedCount > 0)
-      .map((bucket) => bucket.activityFrequency?.fraction);
-    expect(fractions.toSorted()).toEqual([0, 0, 1, 1, 1]);
-    logic.chooseRhythmYear({ value: "1999" });
-    expect(logic.rhythms({ weekEndsOn: 0 }).year).toEqual("");
-    logic.chooseRhythmYear({ value: todayOf(app).slice(0, 4) });
-    expect(logic.rhythms({ weekEndsOn: 0 }).year).toEqual(
-      todayOf(app).slice(0, 4),
-    );
-  });
-
-  it("should split the ended weeks into higher-mood and typical weeks, for the day on which a week ends", async () => {
-    // The clock of the test device follows the real clock.
-    const today = new Date().toISOString().slice(0, 10);
-    const lastSunday = addDays(today, -(dayOfWeek(today) || 7));
-    // The first week starts at the oldest recorded day, so the older week is whole only if its first day is recorded.
-    const weeks = [
-      { offsets: [0, 1, 2, 3], moodId: "mood-rad", activityId: "activity-gym" },
-      {
-        offsets: [7, 8, 9, 13],
-        moodId: "mood-bad",
-        activityId: "activity-cook",
-      },
-    ];
-    const app = await setupTest({
-      seed: async (seeded) => {
-        for (const week of weeks) {
-          for (const offset of week.offsets) {
-            await save(seeded, {
-              logicalDate: addDays(lastSunday, -offset),
-              moodId: week.moodId,
-              activityIds: [week.activityId],
-            });
-          }
-        }
-      },
-    });
-
-    const { bestWeeks } = app.logic.rhythms({ weekEndsOn: 0 });
-
-    expect(bestWeeks).toMatchObject({
-      weekRange: "Monday–Sunday",
-      qualifyingWeekCount: 2,
-      moodLoggedWeekCount: 2,
-      higher: { weekCount: 1, moodMean: 5 },
-      typical: { weekCount: 1, moodMean: 2 },
-    });
-    expect(bestWeeks.higherWeeks[0]?.weekEnd).toEqual(lastSunday);
-    expect(
-      bestWeeks.activityComparisons.find(
-        (comparison) => comparison.activityId === "activity-gym",
-      ),
-    ).toMatchObject({ higherFrequency: 1, typicalFrequency: 0, difference: 1 });
-    expect(app.logic.rhythms({ weekEndsOn: 3 }).bestWeeks.weekRange).toEqual(
-      "Thursday–Wednesday",
-    );
   });
 });

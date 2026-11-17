@@ -1,13 +1,18 @@
 import type { ReactNode } from "react";
 import type { PageView } from "../types.js";
 
-const TITLES: Record<PageView, string> = {
-  log: "How was your day?",
-  calendar: "Your calendar",
-  insights: "Your insights",
-  settings: "Your setup",
-  goal: "Goal history",
-  "add-activity": "Add activity",
+// The same eyebrow and title as each loaded page, so the text does not change when the data arrives.
+const INTROS: Record<PageView, { eyebrow: string; title: string }> = {
+  log: { eyebrow: "Your daily check-in", title: "How was your day?" },
+  calendar: { eyebrow: "Your history", title: "Calendar" },
+  insights: {
+    eyebrow: "A little perspective",
+    title: "Your everyday, over time.",
+  },
+  settings: { eyebrow: "Your setup", title: "Make it yours" },
+  // The name of the goal is not known before the data arrives.
+  goal: { eyebrow: "Goal history", title: "Your goal" },
+  "add-activity": { eyebrow: "Activities", title: "Add new activity" },
 };
 
 /**
@@ -29,10 +34,8 @@ export function JournalLoadingShell({
       {error ?? <output className="sr-only">Loading journal data…</output>}
       <section className="hero-card">
         <div>
-          <p className="eyebrow">
-            {shown === "log" ? "Daily journal" : "Your journal"}
-          </p>
-          <h1>{TITLES[shown]}</h1>
+          <p className="eyebrow">{INTROS[shown].eyebrow}</p>
+          <h1>{INTROS[shown].title}</h1>
           <div
             className="loading-placeholder loading-line"
             aria-hidden="true"

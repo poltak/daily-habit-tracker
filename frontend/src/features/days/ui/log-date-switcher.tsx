@@ -1,5 +1,4 @@
 import { formatLogicalDate } from "@app/common/features/core/utils/logical-date";
-import { useRef } from "react";
 import { addDays } from "@app/common/features/core/utils/logical-date";
 import { MaterialIcon } from "../../core/ui/material-icon.js";
 import { useLogicInstance } from "../../core/logic/use-logic.js";
@@ -11,7 +10,7 @@ export function LogDateSwitcher() {
   const swipe = useLogicInstance(logic.plugins.swipe);
   const { selectedDate, loadDayState } = state;
   if (!selectedDate) {
-    return "Your journal";
+    return null;
   }
   const loading = loadDayState === "running";
   const latest = logic.isLatestDay();
@@ -71,24 +70,13 @@ export function LogDateSwitcher() {
   );
 }
 
-/** The Today button, and the button and the field that pick a date. */
+/** The Today button returns to the current journal day. */
 export function LogDateActions() {
   const { logic, state } = useJournal();
-  const input = useRef<HTMLInputElement>(null);
   const loading = state.loadDayState === "running";
   if (!state.selectedDate) {
     return null;
   }
-  const openPicker = () => {
-    const field = input.current;
-    try {
-      field?.showPicker();
-    } catch {
-      // Older browsers do not expose showPicker(). A tap still opens their date control.
-      field?.focus();
-      field?.click();
-    }
-  };
   return (
     <div className="topbar-actions">
       <button
@@ -98,28 +86,6 @@ export function LogDateActions() {
       >
         Today
       </button>
-      <button
-        type="button"
-        className="topbar-calendar"
-        aria-label="Choose a date"
-        disabled={loading}
-        onClick={openPicker}
-      >
-        <MaterialIcon name="calendar_month" />
-      </button>
-      <input
-        ref={input}
-        className="topbar-calendar-input"
-        type="date"
-        tabIndex={-1}
-        aria-label="Journal date"
-        value={state.selectedDate}
-        max={state.today}
-        disabled={loading}
-        onChange={(event) =>
-          void logic.chooseDate({ logicalDate: event.target.value })
-        }
-      />
     </div>
   );
 }

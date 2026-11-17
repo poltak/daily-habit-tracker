@@ -36,9 +36,4 @@ export class NavigationPageObject {
   get connection(): Locator {
     return this.page.getByRole("status", { name: /^Connection: / });
   }
-
-  /** The title in the header of a page that is not the log. */
-  title(text: string): Locator {
-    return this.page.getByRole("banner").getByText(text, { exact: true });
-  }
 }

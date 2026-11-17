@@ -34,21 +34,21 @@ test.describe("navigation", () => {
       "aria-current",
       "page",
     );
-    await expect(navigation.title("Your calendar")).toBeVisible();
+    await expect(calendar.heading).toBeVisible();
 
     await insights.open();
     await expect(navigation.button("Insights")).toHaveAttribute(
       "aria-current",
       "page",
     );
-    await expect(navigation.title("Your insights")).toBeVisible();
+    await expect(insights.heading).toBeVisible();
 
     await setup.open();
     await expect(navigation.button("Setup")).toHaveAttribute(
       "aria-current",
       "page",
     );
-    await expect(navigation.title("Your setup")).toBeVisible();
+    await expect(setup.heading).toBeVisible();
 
     await log.open();
     await expect(navigation.button("Log")).toHaveAttribute(
@@ -101,7 +101,7 @@ test.describe("navigation", () => {
     await navigation.goBack();
 
     await expect(log.searchField).toHaveValue("walk");
-    await expect(log.dateField).toHaveValue(yesterday);
+    await expect(log.dayLabel(yesterday)).toBeVisible();
     await navigation.goForward();
     await expect(calendar.heading).toBeVisible();
   });

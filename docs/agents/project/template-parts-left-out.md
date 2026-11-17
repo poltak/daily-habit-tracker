@@ -39,7 +39,15 @@ Worker (`scripts/black-box-next.mjs`), and has no such backend. The tool, its
 `*.screens.ts` files and its workflow are removed. The `ui-review` skill is in
 the project because the gate files list it, but it refers to this tool, so it
 does not work.
-To use it, give it a fixture on the Worker first.
+
+Until `ui:screens` runs on the Worker, a UI review has no screens. The
+reviewer reports this as a coverage finding, and the author does not claim a
+visual pass. The author takes screens of each changed route and its sibling
+pages at 1280 px and 390 px, in the light and the dark theme, from the
+black-box Worker (`NEXT_BLACK_BOX_PORT`, with made-up rows only), and gives the
+reviewer the paths of the PNG files. A beads issue tracks the port of
+`ui:screens` to the Worker. The links to `ui-screens.md` in the template's
+documents point to the file that this removal took out.
 
 ## Scripts that the project owns
 

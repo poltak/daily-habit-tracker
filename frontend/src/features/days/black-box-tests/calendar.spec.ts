@@ -1,6 +1,5 @@
 import { expect } from "@playwright/test";
 import { test } from "../../core/black-box-tests/black-box-test.js";
-import { NavigationPageObject } from "../../core/black-box-tests/navigation-page-object.js";
 import { CalendarPageObject } from "./calendar-page-object.js";
 import { LogPageObject } from "./log-page-object.js";
 
@@ -45,9 +44,7 @@ test.describe("calendar", () => {
     await expect(calendar.monthHeading).toHaveText(month);
     await expect(calendar.nextMonthButton).toBeDisabled();
     await expect(calendar.day(today)).toBeEnabled();
-    await expect(
-      new NavigationPageObject(page).title("Your calendar"),
-    ).toBeVisible();
+    await expect(calendar.heading).toBeVisible();
   });
 
   test("should show an earlier month, and come back to the current one", async ({
@@ -103,7 +100,7 @@ test.describe("calendar", () => {
 
     await calendar.openDay(today);
 
-    await expect(log.dateField).toHaveValue(today);
+    await expect(log.dayLabel(today)).toBeVisible();
     await expect(log.chosenMood("Good")).toBeVisible();
     await expect(log.selectedActivity("Chores")).toBeVisible();
     await expect(log.saveTitle).toHaveText("Your entry is saved");
@@ -123,7 +120,7 @@ test.describe("calendar", () => {
 
     await calendar.openDay(earlier);
 
-    await expect(log.dateField).toHaveValue(earlier);
+    await expect(log.dayLabel(earlier)).toBeVisible();
     await expect(log.chosenMood("Awful")).toBeVisible();
   });
 });

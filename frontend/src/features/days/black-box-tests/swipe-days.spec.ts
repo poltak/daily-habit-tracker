@@ -17,11 +17,11 @@ test.describe("swipe between days", () => {
 
     await log.waitForDay(yesterday);
     await expect(log.heading).toHaveText("How was yesterday?");
-    await expect(log.dateField).toHaveValue(yesterday);
+    await expect(log.dayLabel(yesterday)).toBeVisible();
     await log.swipeDateSwitcher({ dx: -120 });
     await log.waitForDay(today);
     await expect(log.heading).toHaveText("How was your day?");
-    await expect(log.dateField).toHaveValue(today);
+    await expect(log.dayLabel(today)).toBeVisible();
   });
 
   test("should not open a day that has not started", async ({ page }) => {
@@ -31,7 +31,7 @@ test.describe("swipe between days", () => {
 
     await log.swipeDateSwitcher({ dx: -120 });
 
-    await expect(log.dateField).toHaveValue(today);
+    await expect(log.dayLabel(today)).toBeVisible();
     await expect(log.heading).toHaveText("How was your day?");
     // A later swipe works, so the first one did not leave the page stuck.
     await log.swipeDateSwitcher({ dx: 120 });
@@ -48,7 +48,7 @@ test.describe("swipe between days", () => {
     // Long enough to count, but more vertical than horizontal: a page scroll.
     await log.swipeDateSwitcher({ dx: 60, dy: 100 });
 
-    await expect(log.dateField).toHaveValue(today);
+    await expect(log.dayLabel(today)).toBeVisible();
     await expect(log.heading).toHaveText("How was your day?");
   });
 
@@ -64,10 +64,10 @@ test.describe("swipe between days", () => {
 
     await log.swipeDateSwitcher({ dx: 30 });
 
-    await expect(log.dateField).toHaveValue(today);
+    await expect(log.dayLabel(today)).toBeVisible();
     await expect(log.heading).toHaveText("How was your day?");
     await log.swipeDateSwitcher({ dx: 120 });
     await log.waitForDay(yesterday);
-    await expect(log.dateField).toHaveValue(yesterday);
+    await expect(log.dayLabel(yesterday)).toBeVisible();
   });
 });

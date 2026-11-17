@@ -15,12 +15,7 @@ export function SessionGate() {
     // The old site checked the session on the server and sent this shell at
     // once, so the check shows the same frame as the first load of the data.
     return (
-      <AppShell
-        view="log"
-        title="Your journal"
-        connection="checking"
-        onOpen={() => {}}
-      >
+      <AppShell view="log" connection="checking" onOpen={() => {}}>
         <JournalLoadingShell view="log" />
       </AppShell>
     );
