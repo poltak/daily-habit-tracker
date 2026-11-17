@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "daymark",
+  "project_id": "9cf646c1-0f25-470c-8518-ca3ca807f740"
+}
