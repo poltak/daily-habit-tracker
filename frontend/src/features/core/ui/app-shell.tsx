@@ -34,8 +34,8 @@ const CONNECTION_ICONS: Record<ConnectionState, string> = {
 interface AppShellProps {
   /** The page that is open, or `null` for an address with no page. */
   view: ShellView | null;
-  /** Fills the date area of the header: the day switcher on the log, a title elsewhere. */
-  title: ReactNode;
+  /** Fills the date area of the header: the day switcher on the log, nothing elsewhere. */
+  title?: ReactNode;
   /** The buttons at the right of the header. Only the log has them. */
   actions?: ReactNode;
   connection: ConnectionState;

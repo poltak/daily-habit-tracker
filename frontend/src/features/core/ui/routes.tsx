@@ -54,14 +54,6 @@ function LoginRedirect() {
   );
 }
 
-const VIEW_TITLES: Record<ShellView, string> = {
-  log: "Your journal",
-  calendar: "Your calendar",
-  insights: "Your insights",
-  settings: "Your setup",
-  goal: "Goal history",
-};
-
 /** The address that opens each page. The old site kept the page in `?view=`. */
 const VIEW_PATHS: Record<NavView, string> = {
   log: "/",
@@ -112,8 +104,6 @@ function subViewOfAddress({
     : null;
 }
 
-const ADD_ACTIVITY_TITLE = "Add activity";
-
 /** Scrolls to the top when it mounts. The frame gives it a new key for each page. */
 function ScrollToTop() {
   const { device } = useFrontendApp().services;
@@ -157,13 +147,7 @@ function JournalFrame() {
     <AppShell
       view={view}
       title={
-        view === "log" && catalog.catalogLoaded ? (
-          <LogDateSwitcher />
-        ) : subView ? (
-          ADD_ACTIVITY_TITLE
-        ) : (
-          VIEW_TITLES[view ?? "log"]
-        )
+        view === "log" && catalog.catalogLoaded ? <LogDateSwitcher /> : null
       }
       actions={
         view === "log" && catalog.catalogLoaded ? <LogDateActions /> : null
