@@ -37,7 +37,10 @@ export function MonthGridSection({ rows }: { rows: MonthRow[] }) {
                     className={`insights-share-${cell.bin}`}
                     title={cell.title}
                   >
-                    <span className="insights-cell-text">{cell.percent}%</span>
+                    <span className="insights-cell-text">
+                      {cell.percent}
+                      <span className="insights-cell-unit">%</span>
+                    </span>
                   </td>
                 ) : (
                   <td key={MONTH_NAMES[index]}>

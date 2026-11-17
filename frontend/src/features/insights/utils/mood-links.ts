@@ -80,7 +80,7 @@ export interface MoodLinkItem {
   /** The days with the activity that have a known mood. */
   days: number;
   difference: number;
-  /** The bar length from 0 to 1, against the largest difference of the list. */
+  /** The bar length from 0 to 1, against the largest difference of both lists. */
   length: number;
 }
 
@@ -138,7 +138,7 @@ export function buildMoodLinks({
       .toSorted(
         (a, b) => b.difference - a.difference || a.name.localeCompare(b.name),
       );
-    const shown = [
+    return [
       ...items
         .filter((item) => item.difference > 0)
         .slice(0, MOST_SHOWN_PER_SIDE),
@@ -146,15 +146,23 @@ export function buildMoodLinks({
         .filter((item) => item.difference < 0)
         .slice(-MOST_SHOWN_PER_SIDE),
     ];
-    const largest = Math.max(...shown.map((item) => Math.abs(item.difference)));
-    return shown.map((item) => ({
+  };
+  const whatYouDo = listOf(false);
+  const howYouFelt = feelings ? listOf(true) : null;
+  // Both lists sit in one card, so one scale keeps equal differences equal in length.
+  const largest = Math.max(
+    ...[...whatYouDo, ...(howYouFelt ?? [])].map((item) =>
+      Math.abs(item.difference),
+    ),
+  );
+  const scaled = (items: MoodLinkItem[]) =>
+    items.map((item) => ({
       ...item,
       length: Math.abs(item.difference) / largest,
     }));
-  };
   return {
     minDays: minimum,
-    whatYouDo: listOf(false),
-    howYouFelt: feelings ? listOf(true) : null,
+    whatYouDo: scaled(whatYouDo),
+    howYouFelt: howYouFelt && scaled(howYouFelt),
   };
 }

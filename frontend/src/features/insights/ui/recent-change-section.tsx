@@ -25,7 +25,10 @@ export function RecentChangeSection({ recent }: { recent: RecentChange }) {
         <>
           <p className="insights-help">
             How often each activity happened in the last 90 days, compared with
-            the time before. The mood figure is for the last 90 days.
+            the time before. The hollow dot is the time before and the filled
+            dot is the last 90 days: green when your mood was better on days
+            with the activity, red when it was worse. The mood figure is for the
+            last 90 days.
           </p>
           {recent.items.length === 0 ? (
             <p className="insights-help">

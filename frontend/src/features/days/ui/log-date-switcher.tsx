@@ -10,7 +10,7 @@ export function LogDateSwitcher() {
   const swipe = useLogicInstance(logic.plugins.swipe);
   const { selectedDate, loadDayState } = state;
   if (!selectedDate) {
-    return "Your journal";
+    return null;
   }
   const loading = loadDayState === "running";
   const latest = logic.isLatestDay();
