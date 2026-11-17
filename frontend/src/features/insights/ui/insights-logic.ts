@@ -3,13 +3,12 @@ import { logicalDateInTimeZone } from "@app/common/features/core/utils/logical-d
 import type { InsightsData } from "@app/common/features/insights/types";
 import { requireApiSuccess } from "../../api/client/api-client.js";
 import type { FrontendLogicProps } from "../../core/logic/types.js";
+import {
+  buildInsightsView,
+  type InsightsView,
+} from "../utils/insights-view.js";
 import { createMemo } from "../utils/memo.js";
 import { describePeriod, type InsightsPeriod } from "../utils/period.js";
-import {
-  buildRelationshipView,
-  type RelationshipView,
-} from "../utils/relationship-view.js";
-import { buildRhythmView, type RhythmView } from "../utils/rhythm-view.js";
 
 type InsightsProps = FrontendLogicProps<never, "clock", "insights">;
 
@@ -23,38 +22,14 @@ interface InsightsState {
   preset: string;
   customStart: string;
   customEnd: string;
-  /** A year, or `all`. */
-  relationshipYear: string;
-  /** A weekday number (0 is Sunday), or `all`. */
-  relationshipWeekday: string;
-  activityId: string;
-  pairActivityAId: string;
-  pairActivityBId: string;
-  /** A year, or an empty text for all years. */
-  rhythmYear: string;
-  /** An activity ID, or an empty text for no overlay. */
-  overlayActivityId: string;
 }
-
-const NO_CHOICES = {
-  relationshipYear: "all",
-  relationshipWeekday: "all",
-  activityId: "",
-  pairActivityAId: "",
-  pairActivityBId: "",
-  rhythmYear: "",
-  overlayActivityId: "",
-} as const;
 
 /**
  * The analysis of the whole saved history for a period that the owner picks.
- * The choices in the analysis stay while it shows, and start again after it
- * goes: a period without days, or a range that is not valid, hides it.
  */
 export class InsightsLogic extends Logic<InsightsProps, InsightsState> {
   private readonly periodMemo = createMemo<InsightsPeriod>();
-  private readonly relationshipMemo = createMemo<RelationshipView>();
-  private readonly rhythmMemo = createMemo<RhythmView>();
+  private readonly viewMemo = createMemo<InsightsView>();
 
   constructor(deps: InsightsProps) {
     const { clock } = deps.services;
@@ -71,7 +46,6 @@ export class InsightsLogic extends Logic<InsightsProps, InsightsState> {
         preset: "all",
         customStart: "",
         customEnd: "",
-        ...NO_CHOICES,
       },
     });
   }
@@ -103,60 +77,22 @@ export class InsightsLogic extends Logic<InsightsProps, InsightsState> {
     );
   }
 
-  /** The sections about activities. Call it only while the analysis shows. */
-  relationships(): RelationshipView {
-    const { data, relationshipYear, relationshipWeekday, activityId } =
-      this.state;
-    const { pairActivityAId, pairActivityBId } = this.state;
-    const period = this.period();
-    return this.relationshipMemo(
-      [
-        period.days,
-        data,
-        relationshipYear,
-        relationshipWeekday,
-        activityId,
-        pairActivityAId,
-        pairActivityBId,
-      ],
-      () =>
-        buildRelationshipView({
-          days: period.days,
-          moods: data?.moods ?? [],
-          activities: data?.activities ?? [],
-          groups: data?.groups ?? [],
-          choices: {
-            year: relationshipYear,
-            weekday: relationshipWeekday,
-            activityId,
-            pairActivityAId,
-            pairActivityBId,
-          },
-        }),
-    );
-  }
-
   /**
-   * The sections about weekdays, months and weeks. A week ends on
-   * `weekEndsOn`, a weekday number where 0 is Sunday. Call it only while the
-   * analysis shows.
+   * The five sections for the current period. A week ends on `weekEndsOn`, a
+   * weekday number where 0 is Sunday. Call it only for a valid range.
    */
-  rhythms({ weekEndsOn }: { weekEndsOn: number }): RhythmView {
-    const { data, today, rhythmYear, overlayActivityId } = this.state;
+  view({ weekEndsOn }: { weekEndsOn: number }): InsightsView {
+    const { data, preset } = this.state;
     const period = this.period();
-    return this.rhythmMemo(
-      [period.days, data, today, weekEndsOn, rhythmYear, overlayActivityId],
-      () =>
-        buildRhythmView({
-          days: period.days,
-          moods: data?.moods ?? [],
-          activities: data?.activities ?? [],
-          startDate: period.range.startDate,
-          endDate: period.range.endDate,
-          asOf: today,
-          weekEndsOn,
-          choices: { year: rhythmYear, activityId: overlayActivityId },
-        }),
+    return this.viewMemo([period, data, preset, weekEndsOn], () =>
+      buildInsightsView({
+        period,
+        preset,
+        moods: data?.moods ?? [],
+        activities: data?.activities ?? [],
+        groups: data?.groups ?? [],
+        weekEndsOn,
+      }),
     );
   }
 
@@ -166,7 +102,7 @@ export class InsightsLogic extends Logic<InsightsProps, InsightsState> {
    */
   choosePeriod({ preset }: { preset: string }): void {
     const { range } = this.period();
-    this.changePeriod({
+    this.setState({
       preset,
       ...(preset === "custom"
         ? { customStart: range.startDate, customEnd: range.endDate }
@@ -175,62 +111,10 @@ export class InsightsLogic extends Logic<InsightsProps, InsightsState> {
   }
 
   setCustomStart({ value }: { value: string }): void {
-    this.changePeriod({ customStart: value });
+    this.setState({ customStart: value });
   }
 
   setCustomEnd({ value }: { value: string }): void {
-    this.changePeriod({ customEnd: value });
-  }
-
-  chooseRelationshipYear({ value }: { value: string }): void {
-    this.setState({ relationshipYear: value });
-  }
-
-  chooseRelationshipWeekday({ value }: { value: string }): void {
-    this.setState({ relationshipWeekday: value });
-  }
-
-  chooseActivity({ activityId }: { activityId: string }): void {
-    this.setState({ activityId });
-  }
-
-  chooseFirstOfPair({ activityId }: { activityId: string }): void {
-    this.setState({ pairActivityAId: activityId });
-  }
-
-  chooseSecondOfPair({ activityId }: { activityId: string }): void {
-    this.setState({ pairActivityBId: activityId });
-  }
-
-  choosePair({
-    activityAId,
-    activityBId,
-  }: {
-    activityAId: string;
-    activityBId: string;
-  }): void {
-    this.setState({
-      pairActivityAId: activityAId,
-      pairActivityBId: activityBId,
-    });
-  }
-
-  chooseRhythmYear({ value }: { value: string }): void {
-    this.setState({ rhythmYear: value });
-  }
-
-  chooseOverlayActivity({ activityId }: { activityId: string }): void {
-    this.setState({ overlayActivityId: activityId });
-  }
-
-  private changePeriod(
-    change: Partial<
-      Pick<InsightsState, "preset" | "customStart" | "customEnd">
-    >,
-  ): void {
-    const { data, today, preset, customStart, customEnd } = this.state;
-    const next = { preset, customStart, customEnd, ...change };
-    const { showAnalysis } = describePeriod({ data, today, ...next });
-    this.setState(showAnalysis ? next : { ...next, ...NO_CHOICES });
+    this.setState({ customEnd: value });
   }
 }

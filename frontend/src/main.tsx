@@ -9,8 +9,6 @@ import "./features/core/ui/styles/01-reset.css";
 import "./features/core/ui/styles/02-globals-a.css";
 import "./features/core/ui/styles/02-globals-b.css";
 import "./features/core/ui/styles/02-globals-c.css";
-import "./features/core/ui/styles/03-insights-relationships.css";
-import "./features/core/ui/styles/04-insights-rhythms.css";
 import "./features/core/ui/styles/05-insights.css";
 import "./features/core/ui/styles/06-port-additions.css";
 import { createApp } from "./features/core/live/index.js";

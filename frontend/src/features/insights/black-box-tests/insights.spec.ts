@@ -27,6 +27,21 @@ async function recordFiveDays(page: Page): Promise<string> {
   return today;
 }
 
+const MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+
 test.describe("insights", () => {
   test("should invite the owner to record a day when the journal is empty", async ({
     page,
@@ -37,13 +52,17 @@ test.describe("insights", () => {
     await expect(insights.emptyHistory).toBeVisible();
     await expect(insights.summary).toMatchAriaSnapshot(`
       - group "Selected period summary":
+        - strong: —
+        - text: good days
+        - strong: —
+        - text: average mood
         - strong: "0"
         - text: recorded days
     `);
-    await expect(insights.sectionLink("Activities")).toBeHidden();
+    await expect(insights.sectionHeading("Good days by month")).toBeHidden();
   });
 
-  test("should summarize five days, rank the activities, list the sections and show the weekday means", async ({
+  test("should summarize five days in the month table, the activity lists and the weekdays", async ({
     page,
   }) => {
     test.slow();
@@ -52,95 +71,62 @@ test.describe("insights", () => {
 
     await insights.open();
 
+    // Rad, Good, Meh, Good and Bad score 5, 4, 3, 4 and 2.
     await expect(insights.summary).toMatchAriaSnapshot(`
       - group "Selected period summary":
+        - strong: 60%
+        - text: good days
+        - strong: "3.60"
+        - text: average mood
         - strong: "5"
         - text: recorded days
-        - strong: 100%
-        - text: of days recorded
-        - strong: "3"
-        - text: activities recorded
     `);
     await expect(insights.emptyHistory).toBeHidden();
 
+    await expect(insights.sectionHeading("Good days by month")).toBeVisible();
     await expect(
-      insights.sectionHeading("Which activities show up with better moods?"),
-    ).toBeVisible();
-    await expect(insights.rankedActivity("Gym")).toContainText(
-      "3 recorded · 2 not recorded",
-    );
-    await expect(insights.rankedActivity("Gym")).toContainText(
-      "+1.83 mood points",
-    );
-    await expect(insights.rankedActivity("Music")).toContainText(
-      "1 recorded · 4 not recorded",
-    );
-    await expect(insights.rankedActivity("Music")).toContainText(
-      "+0.50 mood points",
-    );
-    await expect(insights.rankedActivity("Cook")).toContainText(
-      "-1.83 mood points",
-    );
-    await expect(insights.rankedActivity("Sleep")).toContainText(
-      "0 recorded · 5 not recorded",
-    );
-    await expect(insights.rankedActivity("Sleep")).toContainText(
-      "No comparison",
-    );
-    await expect(insights.pickedActivity("Gym")).toBeVisible();
-    await expect(insights.pickedActivity("Music")).toBeHidden();
+      insights.monthCell({
+        month: MONTHS[Number(today.slice(5, 7)) - 1] ?? "",
+        year: today.slice(0, 4),
+      }),
+    ).toHaveText(/^\d+%$/);
 
-    for (const name of [
-      "Activities",
-      "Next day",
-      "Combinations",
-      "Rhythms",
-      "Best weeks",
-    ]) {
-      await expect(insights.sectionLink(name)).toBeVisible();
-    }
     await expect(
-      insights.sectionHeading("What happens around an activity day?"),
+      insights.sectionHeading("What goes with better and worse days"),
     ).toBeVisible();
+    await expect(insights.moodLinkItems("What you do")).toHaveCount(2);
     await expect(
-      insights.sectionHeading("Which pairs have a useful mood split?"),
-    ).toBeVisible();
+      insights.moodLinkItems("What you do").nth(0),
+    ).toHaveAccessibleName("Gym, 3 days, +1.83");
     await expect(
-      insights.sectionHeading("Weekly and seasonal rhythms"),
-    ).toBeVisible();
-    await expect(insights.weekdayTable).toBeVisible();
+      insights.moodLinkItems("What you do").nth(1),
+    ).toHaveAccessibleName("Cook, 2 days, \u22121.83");
+    await expect(insights.moodLinks("How you felt")).toBeHidden();
 
-    // Rad, Good, Meh, Good, Bad: 5, 4, 3, 4, 2 on five different weekdays.
-    const means = ["5.00", "4.00", "3.00", "4.00", "2.00"];
-    for (const [back, mean] of means.entries()) {
+    await expect(insights.sectionHeading("What changed lately")).toBeVisible();
+    await expect(insights.recentShortPeriod).toBeVisible();
+
+    await expect(insights.sectionHeading("Good days by weekday")).toBeVisible();
+    await expect(insights.weekdayItems).toHaveCount(7);
+    const shares = ["100%", "100%", "0%", "100%", "0%"];
+    for (const [back, share] of shares.entries()) {
       const weekday = new Date(
         `${LogPageObject.addDays(today, -back)}T12:00:00Z`,
       ).toLocaleDateString("en", {
         weekday: "long",
         timeZone: "UTC",
       });
-      await expect(insights.weekdayRow(weekday)).toHaveAccessibleName(
-        `${weekday} 1 1 ${mean}`,
+      await expect(insights.weekdayItem(weekday)).toHaveAccessibleName(
+        `${weekday} ${share}, 1 day`,
       );
     }
   });
 
-  test("should show the activity and the period that the owner picks", async ({
-    page,
-  }) => {
+  test("should show the period that the owner picks", async ({ page }) => {
     test.slow();
     const insights = new InsightsPageObject(page);
     const today = await recordFiveDays(page);
     await insights.open();
-    await expect(insights.activityDetail("Gym")).toBeVisible();
-    await expect(insights.moodGap).toHaveText("+1.83 mood points");
-
-    await insights.chooseActivity("Cook");
-
-    await expect(insights.activityDetail("Cook")).toBeVisible();
-    await expect(insights.moodGap).toHaveText("-1.83 mood points");
-    await expect(insights.pickedActivity("Cook")).toBeVisible();
-    await expect(insights.pickedActivity("Gym")).toBeHidden();
 
     await insights.chooseCustomRange({
       from: LogPageObject.addDays(today, -1),
@@ -149,16 +135,20 @@ test.describe("insights", () => {
 
     await expect(insights.summary).toMatchAriaSnapshot(`
       - group "Selected period summary":
+        - strong: 100%
+        - text: good days
+        - strong: "4.50"
+        - text: average mood
         - strong: "2"
         - text: recorded days
-        - strong: 100%
-        - text: of days recorded
-        - strong: "1"
-        - text: activities recorded
     `);
     await insights.choosePeriod("Last 90 days");
     await expect(insights.summary).toMatchAriaSnapshot(`
       - group "Selected period summary":
+        - strong: 60%
+        - text: good days
+        - strong: "3.60"
+        - text: average mood
         - strong: "5"
         - text: recorded days
     `);
@@ -169,7 +159,7 @@ test.describe("insights", () => {
     });
 
     await expect(insights.emptyPeriod).toBeVisible();
-    await expect(insights.sectionLink("Activities")).toBeHidden();
+    await expect(insights.sectionHeading("Good days by month")).toBeHidden();
 
     await insights.chooseCustomRange({
       from: today,
@@ -194,6 +184,10 @@ test.describe("insights", () => {
 
     await expect(insights.summary).toMatchAriaSnapshot(`
       - group "Selected period summary":
+        - strong: 100%
+        - text: good days
+        - strong: "4.00"
+        - text: average mood
         - strong: "1"
         - text: recorded days
     `);

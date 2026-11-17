@@ -3,16 +3,11 @@ import { useLogic } from "../../core/logic/use-logic.js";
 import { useFrontendApp } from "../../core/ui/frontend-app-context.js";
 import { MaterialIcon } from "../../core/ui/material-icon.js";
 import { InsightsLogic } from "./insights-logic.js";
-import { RelationshipSections } from "./relationship-sections.js";
-import { RhythmSections } from "./rhythm-sections.js";
-
-const SECTIONS = [
-  ["insights-activities", "Activities"],
-  ["insights-next-day", "Next day"],
-  ["insights-combinations", "Combinations"],
-  ["insights-rhythms", "Rhythms"],
-  ["insights-best-weeks", "Best weeks"],
-] as const;
+import { MonthGridSection } from "./month-grid-section.js";
+import { MoodLinksSection } from "./mood-links-section.js";
+import { RecentChangeSection } from "./recent-change-section.js";
+import { SummarySection } from "./summary-section.js";
+import { WeekdaySection } from "./weekday-section.js";
 
 function EmptyCard({ hasHistory }: { hasHistory: boolean }) {
   return (
@@ -50,14 +45,15 @@ export function InsightsPage({ weekEndsOn }: { weekEndsOn: number }) {
   const { data } = state;
   const period = logic.period();
   const { validRange, days } = period;
+  const view = data && validRange ? logic.view({ weekEndsOn }) : null;
   return (
     <div className="page-section insights-page">
       <div className="page-intro insights-intro">
         <p className="eyebrow">A little perspective</p>
         <h1>Your everyday, over time.</h1>
         <p className="muted">
-          Explore the activities, rhythms, and combinations that accompany your
-          moods.
+          See how your moods change over time, and what goes with your better
+          and worse days.
         </p>
       </div>
       {!data && !state.loadError && (
@@ -147,65 +143,18 @@ export function InsightsPage({ weekEndsOn }: { weekEndsOn: number }) {
               Choose a valid date range ending today or earlier.
             </p>
           )}
-          {validRange && (
-            <div
-              className="insights-summary"
-              // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- No element has this role without a visible border or legend.
-              role="group"
-              aria-label="Selected period summary"
-            >
-              <div>
-                <strong>{days.length.toLocaleString()}</strong>
-                <span>recorded days</span>
-              </div>
-              <div>
-                <strong>
-                  {period.calendarDays
-                    ? Math.round((days.length / period.calendarDays) * 100)
-                    : 0}
-                  <small>%</small>
-                </strong>
-                <span>of days recorded</span>
-              </div>
-              <div>
-                <strong>{period.activityCount}</strong>
-                <span>activities recorded</span>
-              </div>
-            </div>
-          )}
+          {view && <SummarySection summary={view.summary} />}
           {validRange && days.length === 0 && (
             <EmptyCard hasHistory={period.history.length > 0} />
           )}
         </>
       )}
-      {data && period.showAnalysis && (
+      {view && period.showAnalysis && (
         <>
-          <nav className="insights-jump-links" aria-label="Insight sections">
-            {SECTIONS.map(([id, label]) => (
-              <a key={id} href={`#${id}`}>
-                {label}
-                <span aria-hidden="true">↗</span>
-              </a>
-            ))}
-          </nav>
-          <p className="insights-method-note">
-            These are associations, not explanations. “Not recorded” means an
-            activity wasn’t selected on a recorded day; missing days are
-            excluded. Small samples can change quickly.
-          </p>
-          <RelationshipSections
-            logic={logic}
-            view={logic.relationships()}
-            moods={data.moods}
-            hasDays={days.length > 0}
-          />
-          <RhythmSections
-            logic={logic}
-            view={logic.rhythms({ weekEndsOn })}
-            moods={data.moods}
-            activities={data.activities}
-            groups={data.groups}
-          />
+          <MonthGridSection rows={view.months} />
+          <MoodLinksSection links={view.moodLinks} />
+          <RecentChangeSection recent={view.recent} />
+          <WeekdaySection weekdays={view.weekdays} />
         </>
       )}
     </div>

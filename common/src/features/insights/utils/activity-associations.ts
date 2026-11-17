@@ -1,57 +1,11 @@
 import type { Activity, Mood } from "../../catalog/types.js";
-import {
-  addDays,
-  dayOfWeek,
-  isLogicalDate,
-} from "../../core/utils/logical-date.js";
 import type { InsightsDay } from "../types.js";
 import {
   DEFAULT_MIN_OBSERVATIONS,
   difference,
   summaryWithSample,
 } from "./mood-cohorts.js";
-import {
-  ACTIVITY_CALENDAR_OFFSETS,
-  type ActivityCalendarComparison,
-  type ActivityCalendarOffset,
-  type ActivityMoodAssociation,
-  type RelationshipDayFilter,
-} from "./relationship-types.js";
-
-const OFFSET_LABELS: Record<ActivityCalendarOffset, string> = {
-  "-1": "Previous calendar day",
-  "0": "Same calendar day",
-  "1": "Next calendar day",
-  "2": "+2 calendar days",
-};
-
-/**
- * Apply local year and weekday filters without changing the caller's day list.
- * The weekday is computed from the logical date in UTC so it is stable across
- * browsers and does not accidentally move when a device timezone changes.
- */
-function filterRelationshipDays(
-  days: readonly InsightsDay[],
-  filter: RelationshipDayFilter,
-): InsightsDay[] {
-  return days.filter((day) => {
-    if (!isLogicalDate(day.logicalDate)) {
-      return false;
-    }
-    if (
-      filter.year !== undefined &&
-      filter.year !== null &&
-      Number(day.logicalDate.slice(0, 4)) !== filter.year
-    ) {
-      return false;
-    }
-    return (
-      filter.weekday === undefined ||
-      filter.weekday === null ||
-      dayOfWeek(day.logicalDate) === filter.weekday
-    );
-  });
-}
+import type { ActivityMoodAssociation } from "./relationship-types.js";
 
 function associationForActivity({
   days,
@@ -107,18 +61,15 @@ export function rankActivityMoodAssociations({
   days,
   moods,
   activities,
-  filter = {},
 }: {
   days: readonly InsightsDay[];
   moods: readonly Mood[];
   activities: readonly Pick<Activity, "id">[];
-  filter?: RelationshipDayFilter;
 }): ActivityMoodAssociation[] {
-  const filteredDays = filterRelationshipDays(days, filter);
   const associations = activities
     .map((activity) =>
       associationForActivity({
-        days: filteredDays,
+        days,
         moods,
         activityId: activity.id,
       }),
@@ -145,62 +96,4 @@ export function rankActivityMoodAssociations({
     }
     return a.activityId.localeCompare(b.activityId);
   });
-}
-
-/** One activity association, for an activity that the ranking left out. */
-export function compareActivityMood({
-  days,
-  moods,
-  activityId,
-}: {
-  days: readonly InsightsDay[];
-  moods: readonly Mood[];
-  activityId: string;
-}): ActivityMoodAssociation {
-  return associationForActivity({ days, moods, activityId });
-}
-
-/**
- * Compare exact calendar offsets around anchor days. A missing logical date is
- * omitted from that offset; the implementation never advances to the next
- * available row in the input.
- */
-export function compareActivityCalendarDays({
-  days,
-  moods,
-  activityId,
-}: {
-  days: readonly InsightsDay[];
-  moods: readonly Mood[];
-  activityId: string;
-}): ActivityCalendarComparison {
-  const anchors = days.filter((day) => isLogicalDate(day.logicalDate));
-  const byDate = new Map(anchors.map((day) => [day.logicalDate, day]));
-  const recordedAnchors = anchors.filter((day) =>
-    day.activityIds.includes(activityId),
-  );
-  const notRecordedAnchors = anchors.filter(
-    (day) => !day.activityIds.includes(activityId),
-  );
-  const targetsOf = (cohort: InsightsDay[], offset: number): InsightsDay[] =>
-    cohort.flatMap((anchor) => {
-      const target = byDate.get(addDays(anchor.logicalDate, offset));
-      return target ? [target] : [];
-    });
-  return {
-    activityId,
-    anchorCounts: {
-      recorded: recordedAnchors.length,
-      notRecorded: notRecordedAnchors.length,
-    },
-    offsets: ACTIVITY_CALENDAR_OFFSETS.map((offset) => ({
-      offset,
-      label: OFFSET_LABELS[offset],
-      recorded: summaryWithSample(targetsOf(recordedAnchors, offset), moods),
-      notRecorded: summaryWithSample(
-        targetsOf(notRecordedAnchors, offset),
-        moods,
-      ),
-    })),
-  };
 }

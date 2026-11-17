@@ -3,10 +3,7 @@ import type {
   InsightsData,
   InsightsDay,
 } from "@app/common/features/insights/types";
-import {
-  daysInInsightsRange,
-  insightsDateRange,
-} from "@app/common/features/insights/utils/date-range";
+import { insightsDateRange } from "@app/common/features/insights/utils/date-range";
 
 export interface InsightsPeriod {
   /** The recorded days up to today, oldest first. */
@@ -18,10 +15,6 @@ export interface InsightsPeriod {
   validRange: boolean;
   /** The recorded days in the range. */
   days: InsightsDay[];
-  /** The calendar days in the range. */
-  calendarDays: number;
-  /** The activities that the days in the range have. */
-  activityCount: number;
   /** The analysis shows only for a valid range with at least one day. */
   showAnalysis: boolean;
 }
@@ -71,10 +64,6 @@ export function describePeriod({
     range,
     validRange,
     days,
-    calendarDays: validRange
-      ? daysInInsightsRange(range.startDate, range.endDate)
-      : 0,
-    activityCount: new Set(days.flatMap((day) => day.activityIds)).size,
     showAnalysis: data !== null && validRange && days.length > 0,
   };
 }
